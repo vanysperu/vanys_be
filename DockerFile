@@ -1,0 +1,25 @@
+FROM node:20.11.0-slim
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+
+RUN apt-get install -y tzdata
+RUN cp /usr/share/zoneinfo/America/Lima /etc/localtime
+
+RUN apt-get update && apt-get install -y fonts-dejavu-core fonts-dejavu-extra && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN rm -rf node_modules
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+RUN mkdir dist/assets
+
+EXPOSE 5041
+
+CMD ["npm", "start", "PROD"]

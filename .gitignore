@@ -1,0 +1,47 @@
+# Dependency directories
+node_modules/
+dist/
+
+# Imágenes subidas a disco ANTES de que se guardaran en la base de datos
+# (hoy van a la tabla company_asset). Nunca se versionan.
+uploads/
+
+# Environment files (.env.example SÍ se versiona: no tiene valores reales)
+.env
+
+# Volcados de la base de datos: contienen datos reales y hashes de contraseñas.
+backups/
+
+# Artefactos locales de ejecución / pruebas (e2e-context.json guarda un token
+# de sesión real).
+*.log
+*.pid
+e2e-context.json
+
+# Configuración local de Claude Code de cada máquina.
+.claude/
+
+# TypeScript configuration
+
+# Visual Studio Code configuration
+.vscode/
+
+# Editor-specific files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Yarn
+yarn-error.log
+
+# npm
+npm-debug.log
