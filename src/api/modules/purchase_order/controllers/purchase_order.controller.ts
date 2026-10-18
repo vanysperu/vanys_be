@@ -54,13 +54,15 @@ export const createPurchaseOrderController = asyncHandler(async (req: Request, r
 export const listPurchaseOrdersController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { isSystem, companyId, userId } = user;
-  const { status, assignedToMe, quotationId, clientName, assigneeName } = req.query;
+  const { status, assignedToMe, quotationId, clientName, assigneeName, assignedTo: assignedToParam, dateFrom, dateTo } = req.query;
   const { page, limit, orderBy, orderDir } = parsePaginationParams(req.query);
 
   // "assignedToMe=1": cualquier usuario ve SUS propias órdenes sin
   // necesitar el módulo completo de compras — es lo que alimenta el
   // widget del Inicio, no requiere ser admin.
-  const assignedTo = assignedToMe ? userId : undefined;
+  // "assignedTo=<id>": filtro por persona desde la lista (selector de
+  // trabajador); "assignedToMe" tiene prioridad.
+  const assignedTo = assignedToMe ? userId : Number(assignedToParam) > 0 ? Number(assignedToParam) : undefined;
 
   // Filtro por columna de la tabla (cliente/asignado a) resuelto ahora
   // directo en la query (WHERE real), ya no en memoria sobre la página
@@ -73,6 +75,8 @@ export const listPurchaseOrdersController = asyncHandler(async (req: Request, re
     clientName: (clientName as string) || undefined,
     assigneeName: (assigneeName as string) || undefined,
     quotationId: quotationId ? Number(quotationId) : undefined,
+    dateFrom,
+    dateTo,
     page,
     limit,
     orderBy,
@@ -156,7 +160,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed } = req.body;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -173,13 +177,22 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       quantity,
       amount,
       notes,
+      allowExceed: allow_exceed === true,
       fundingSource: funding_source,
       paidByUserId,
       createdBy: user.userId,
     });
   } catch (err: unknown) {
+    // 409 con código estable y las cantidades: el frontend muestra la
+    // confirmación "¿seguro quieres comprar más?" y, si se acepta, reenvía
+    // la misma compra con allow_exceed: true.
     if (err instanceof PurchaseExceedsRemainingQuantityError) {
-      throw new AppError(400, err.message);
+      throw new AppError(
+        409,
+        err.message,
+        { ordered: err.ordered, already_purchased: err.alreadyPurchased, requested: err.requested },
+        "PURCHASE_EXCEEDS_REMAINING"
+      );
     }
     throw err;
   }

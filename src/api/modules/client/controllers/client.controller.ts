@@ -1,3 +1,4 @@
+import { buildBusinessDateRange, resolveIsDeletedFilter } from "../../../../core/utils/listFilters";
 import { Op, WhereOptions } from "sequelize";
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
@@ -21,9 +22,16 @@ const buildClientListWhere = (query: Record<string, unknown>): WhereOptions<Clie
   if (typeof query.documentNumber === "string" && query.documentNumber.trim()) {
     where.document_number = { [Op.like]: `%${query.documentNumber.trim()}%` };
   }
-  if (typeof query.status === "string" && query.status.trim()) {
-    where.is_deleted = query.status === "inactive";
+  if (typeof query.name === "string" && query.name.trim()) {
+    where.name = { [Op.like]: `%${query.name.trim()}%` };
   }
+  if (typeof query.email === "string" && query.email.trim()) {
+    where.email = { [Op.like]: `%${query.email.trim()}%` };
+  }
+  const isDeleted = resolveIsDeletedFilter(query.status);
+  if (isDeleted !== undefined) where.is_deleted = isDeleted;
+  const createdAt = buildBusinessDateRange(query.dateFrom, query.dateTo);
+  if (createdAt) where.created_at = createdAt;
   return where;
 };
 

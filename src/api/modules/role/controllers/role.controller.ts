@@ -22,6 +22,7 @@ export const listRolesController = asyncHandler(async (req: Request, res: Respon
   const name = typeof queryParams.name === "string" ? queryParams.name : undefined;
   const description = typeof queryParams.description === "string" ? queryParams.description : undefined;
   const isSystemFilter = typeof queryParams.isSystem === "string" ? queryParams.isSystem : undefined;
+  const status = queryParams.status;
 
   const resp = await getRolesList({
     page,
@@ -32,6 +33,7 @@ export const listRolesController = asyncHandler(async (req: Request, res: Respon
     name,
     description,
     isSystemFilter,
+    status,
   });
   let message = "Lista de roles obtenidas correctamente";
 

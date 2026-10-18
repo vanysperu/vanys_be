@@ -1,6 +1,6 @@
 import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
-import { nowUtc } from "../../../../../utils/dateUtils";
+import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
 import { createQuotationExpense } from "../../../quotation/services/create/quotation_expense.service";
 import { PurchaseOrderItemModel } from "../../model/purchase_order_item.model";
 import { PurchaseOrderItemPurchaseModel } from "../../model/purchase_order_item_purchase.model";
@@ -14,17 +14,30 @@ type ItemWithQuotationItem = {
   quotationItem?: (Pick<QuotationItemAttributes, "id"> & { product?: Pick<ProductAttributes, "id" | "name"> | null }) | null;
 };
 
-// Se lanza cuando la cantidad de la compra deja el total comprado por
-// encima de lo que el item pedía — el controller la mapea a un 400 claro
-// en vez de dejar pasar un gasto (y, si aplica, una deuda a un trabajador)
-// sin ningún límite.
-export class PurchaseExceedsRemainingQuantityError extends Error {}
+// Se lanza cuando la compra deja el total comprado por encima de lo que el
+// item pedía y NO se confirmó la compra adicional. El frontend la usa para
+// preguntar "la cantidad a comprar era X, ¿seguro quieres comprar más?" — si
+// la persona confirma, reenvía con allowExceed (pedido explícito del
+// usuario: comprar de más es válido, pero tiene que ser a propósito, nunca
+// por un error de tipeo que pase desapercibido).
+export class PurchaseExceedsRemainingQuantityError extends Error {
+  constructor(
+    message: string,
+    public readonly ordered: number,
+    public readonly alreadyPurchased: number,
+    public readonly requested: number
+  ) {
+    super(message);
+  }
+}
 
 export interface CreatePurchaseOrderItemPurchaseInput {
   itemId: number;
   quantity: number;
   amount: number;
   notes?: string | null;
+  // true = la persona ya confirmó que quiere comprar por encima de lo pedido.
+  allowExceed?: boolean;
   // "company" (por defecto) = flujo normal, nada cambia. "employee" = el
   // trabajador pagó de su bolsillo — paidByUserId es obligatorio en ese
   // caso (quién puso el dinero, no necesariamente quien registra la
@@ -64,6 +77,7 @@ const createPurchaseOrderItemPurchase = async ({
   quantity,
   amount,
   notes,
+  allowExceed = false,
   fundingSource = "company",
   paidByUserId,
   createdBy,
@@ -98,11 +112,10 @@ const createPurchaseOrderItemPurchase = async ({
     });
     if (!purchaseOrder) throw new Error("La orden de compra no existe");
 
-    // Tope: no se puede registrar más de lo que falta. Sin este chequeo se
-    // podía generar un gasto (y, si era plata del trabajador, una deuda)
-    // sin límite — ej. un item pide 10, ya hay 8 compradas, y alguien
-    // registra "compré 500 más" por error de tipeo, inflando el gasto real
-    // de la cotización sin ningún control.
+    // Comprar por encima de lo que falta exige confirmación explícita
+    // (allowExceed). Sin confirmar, se rechaza: un "compré 500" en vez de
+    // "50" por error de tipeo inflaría el gasto real de la cotización (y, si
+    // era plata del trabajador, su deuda) sin que nadie lo note.
     const previousPurchasesBefore = await DataBase.instance.purchase_order_item_purchase.findAll({
       where: { purchase_order_item_id: itemId },
       transaction,
@@ -111,25 +124,35 @@ const createPurchaseOrderItemPurchase = async ({
       (sum: number, row: PurchaseOrderItemPurchaseModel) => sum + row.quantity,
       0
     );
-    const remaining = item.quantity - totalPurchasedBefore;
-    if (quantity > remaining) {
+    const remaining = Math.max(item.quantity - totalPurchasedBefore, 0);
+    const exceeds = quantity > remaining;
+    if (exceeds && !allowExceed) {
       throw new PurchaseExceedsRemainingQuantityError(
         remaining > 0
-          ? `Solo faltan ${remaining} unidades por comprar de este producto`
-          : "Este producto ya está completamente comprado"
+          ? `La cantidad a comprar era ${item.quantity} y ya se compraron ${totalPurchasedBefore}: solo faltan ${remaining}.`
+          : `La cantidad a comprar era ${item.quantity} y ya está completa.`,
+        item.quantity,
+        totalPurchasedBefore,
+        quantity
       );
     }
 
     const productName = (item as unknown as ItemWithQuotationItem).quotationItem?.product?.name ?? "producto";
+    // Una compra adicional confirmada queda marcada en el gasto, para que
+    // quien revise los gastos de la cotización entienda por qué se compró
+    // más de lo pedido.
+    const extraNote = exceeds ? ` (compra adicional: ${quantity - remaining} por encima de lo pedido)` : "";
     const expense = await createQuotationExpense({
       quotationId: purchaseOrder.quotation_id,
       input: {
         description: notes
-          ? `Compra: ${productName} x${quantity} — ${notes}`
-          : `Compra: ${productName} x${quantity}`,
+          ? `Compra: ${productName} x${quantity}${extraNote} — ${notes}`
+          : `Compra: ${productName} x${quantity}${extraNote}`,
         amount,
         category: "compra",
-        spent_at: nowUtc().toISOString().slice(0, 10),
+        // Día calendario de Lima: antes era el día UTC, así que una compra
+        // registrada después de las 7 p. m. quedaba con fecha de mañana.
+        spent_at: todayInBusinessTz(),
       },
       createdBy,
       // MUY IMPORTANTE: sin esto, el gasto (y su evento del timeline) se
@@ -181,9 +204,8 @@ const createPurchaseOrderItemPurchase = async ({
     }
 
     // Cantidad total ya comprada (compras previas + esta) vs. lo pedido —
-    // solo se marca "purchased" cuando ya no falta nada. Ya sabemos el total
-    // exacto (totalPurchasedBefore + quantity, validado arriba contra el
-    // tope) sin volver a consultar la tabla.
+    // solo se marca "purchased" cuando ya no falta nada (también si se
+    // compró de más, confirmado).
     const totalPurchased = totalPurchasedBefore + quantity;
     const isComplete = totalPurchased >= item.quantity;
 

@@ -25,6 +25,7 @@ export const createCashMovementValidator = [
     .optional({ values: "null" })
     .isInt({ gt: 0 })
     .withMessage("La orden de compra debe ser un id válido"),
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
 
 const paramCashMovementIdValidator = param("id")

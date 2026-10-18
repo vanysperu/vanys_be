@@ -41,6 +41,7 @@ export const createPurchaseOrderItemPurchaseValidator = [
   body("quantity").isInt({ gt: 0 }).withMessage("La cantidad comprada debe ser un número entero positivo"),
   body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
+  body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   body("funding_source")
     .isIn(["company", "employee"])
     .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),

@@ -8,6 +8,9 @@ export interface QuotationPaymentAttributes {
   paid_at: string;
   notes: string | null;
   operation_number: string | null;
+  // Cuenta de la empresa (general_variable category="payment_account") a la
+  // que entró el pago; null = efectivo.
+  payment_account_id: number | null;
   is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
@@ -36,6 +39,7 @@ export function QuotationPaymentFactory(sequelize: Sequelize): QuotationPaymentS
       paid_at: { type: DataTypes.DATEONLY, allowNull: false },
       notes: { type: DataTypes.TEXT, allowNull: true },
       operation_number: { type: DataTypes.STRING(50), allowNull: true },
+      payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

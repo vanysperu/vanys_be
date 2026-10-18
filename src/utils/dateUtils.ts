@@ -71,3 +71,26 @@ export const formatInstantDateEsPe = (instant: Date | string): string =>
 // Instante real -> "dd/mm/aaaa, h:mm a. m." en hora de Lima.
 export const formatInstantDateTimeEsPe = (instant: Date | string): string =>
   businessDateTimeFormatter.format(new Date(instant));
+
+// Lima es UTC-5 todo el año (sin horario de verano), así que el offset es fijo.
+const BUSINESS_UTC_OFFSET = "-05:00";
+
+// Fecha "YYYY-MM-DD" + hora "HH:mm" escritas por el usuario (hora de Lima) ->
+// instante UTC real, para guardar en un DATETIME (ej. cuándo avisar un
+// recordatorio).
+export const businessLocalToUtc = (dateOnly: string, time: string): Date =>
+  new Date(`${dateOnly}T${time}:00${BUSINESS_UTC_OFFSET}`);
+
+const businessTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: BUSINESS_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+// Instante UTC -> { date: "YYYY-MM-DD", time: "HH:mm" } en hora de Lima, el
+// formato separado que se devuelve al cliente (CLAUDE.md: fechas UTC-5).
+export const utcToBusinessParts = (instant: Date | string): { date: string; time: string } => {
+  const value = new Date(instant);
+  return { date: toBusinessDateOnly(value), time: businessTimeFormatter.format(value) };
+};

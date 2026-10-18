@@ -17,8 +17,6 @@ const updateTechniqueById = async ({
   const safePayload = {
     name: technique.name,
     description: technique.description,
-    extra_type: technique.extra_type,
-    extra_value: technique.extra_value,
     price_unit: technique.price_unit,
     price_hundred: technique.price_hundred,
     price_half_thousand: technique.price_half_thousand,

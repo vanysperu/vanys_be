@@ -25,6 +25,16 @@ const SELF_SERVICE_ROUTES: { route: string; verb: string }[] = [
   { route: "/user/user-account", verb: "GET" },
 ];
 
+// Misma regla que verifyAccess, para una acción SECUNDARIA dentro de otro
+// endpoint (ej. registrar un adelanto al cambiar el estado de una
+// cotización): el usuario debe tener otorgada también la ruta de esa acción.
+export function hasRouteAccess(user: IToken, route: string, verb: string): boolean {
+  return (user?.allowedRoutes || []).some(
+    (allowedRoute) =>
+      routeToRegExp(allowedRoute.route).test(route) && allowedRoute.verb.trim().toUpperCase() === verb.toUpperCase()
+  );
+}
+
 export function verifyAccess(req: Request, res: Response, next: NextFunction) {
   const user = req?.user as IToken;
 

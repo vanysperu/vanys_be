@@ -1,6 +1,7 @@
 ﻿import { FindAttributeOptions, Transaction, WhereOptions, Order, FindAndCountOptions, Op } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { RoleAttributes } from "../../model/role.model";
+import { resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
 import { IListOptions } from '../../../../interfaces/IListOptions.interface'
 
 interface RoleListOptions extends IListOptions<RoleAttributes> {
@@ -11,13 +12,15 @@ interface RoleListOptions extends IListOptions<RoleAttributes> {
   description?: string;
   // "true"/"false" tal como llega del query param — match exacto, no LIKE.
   isSystemFilter?: string;
+  // "active"/"inactive" (o ambos) — role.status (true = activo).
+  status?: unknown;
 }
 
  const getRolesList = async (
   options?: RoleListOptions
 ) => {
   try {
-    let { where, page, limit, order, companyId, orderBy, orderDir, name, description, isSystemFilter } = options || {};
+    let { where, page, limit, order, companyId, orderBy, orderDir, name, description, isSystemFilter, status } = options || {};
 
     // Bug corregido: antes era `company_id = companyId` a secas, lo que
     // dejaba FUERA los roles globales/plantilla (company_id NULL, ej.
@@ -42,6 +45,11 @@ interface RoleListOptions extends IListOptions<RoleAttributes> {
     const isSystemWhere =
       isSystemFilter === "true" || isSystemFilter === "false" ? { is_system: isSystemFilter === "true" } : {};
 
+    // En roles el estado es la columna `status` (true = activo), al revés que
+    // el is_deleted de los demás catálogos.
+    const isDeleted = resolveIsDeletedFilter(status);
+    const statusWhere = isDeleted === undefined ? {} : { status: !isDeleted };
+
     // orderBy/orderDir (columna elegida en la tabla) tiene prioridad sobre el
     // `order` legacy que ya recibía este service — nunca se pierde el
     // comportamiento anterior si no se manda orderBy.
@@ -55,7 +63,7 @@ interface RoleListOptions extends IListOptions<RoleAttributes> {
     // deshabilitado. Se quita, mismo criterio que el resto de catálogos:
     // el listado trae ambos estados, el frontend pinta el badge.
     let queryOptions: FindAndCountOptions<RoleAttributes> = {
-      where: { ...where, ...companyWhere, ...nameWhere, ...descriptionWhere, ...isSystemWhere },
+      where: { ...where, ...companyWhere, ...nameWhere, ...descriptionWhere, ...isSystemWhere, ...statusWhere },
       attributes: {
         exclude: ["created_by", "updated_by", "updated_at"],
       },

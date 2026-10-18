@@ -127,6 +127,19 @@ const normalizeDdl = (ddl) =>
     .replace(/\butf8mb3\b/g, "utf8mb4")
     .replace(/ AUTO_INCREMENT=\d+/, "");
 
+// Tablas donde sequelize-cli anota qué migraciones/seeders ya corrieron. Un
+// MySQL en Windows guarda los nombres en minúscula (lower_case_table_names=1),
+// pero el MySQL/MariaDB de Hostinger corre en Linux y distingue mayúsculas:
+// si el .sql trae "sequelizemeta", sequelize-cli no la encuentra, crea una
+// "SequelizeMeta" vacía y al actualizar intenta correr TODAS las migraciones
+// de nuevo sobre tablas que ya existen. Se exportan con su nombre exacto.
+const CANONICAL_TABLE_NAMES = {
+  sequelizemeta: "SequelizeMeta",
+  sequelizedata: "SequelizeData",
+};
+
+const canonicalTableName = (name) => CANONICAL_TABLE_NAMES[name.toLowerCase()] ?? name;
+
 const dumpSchema = async (conn, schema) => {
   const [tables] = await conn.query(
     "SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
@@ -138,11 +151,16 @@ const dumpSchema = async (conn, schema) => {
   const rowCounts = {};
 
   for (const { name } of tables) {
+    const exportName = canonicalTableName(name);
     const [[createRow]] = await conn.query(`SHOW CREATE TABLE \`${name}\``);
-    ddlParts.push(`${normalizeDdl(createRow["Create Table"])};`);
+    const ddl = normalizeDdl(createRow["Create Table"]).replace(
+      `CREATE TABLE \`${name}\``,
+      `CREATE TABLE \`${exportName}\``
+    );
+    ddlParts.push(`${ddl};`);
 
     const [rows, fields] = await conn.query(`SELECT * FROM \`${name}\``);
-    rowCounts[name] = rows.length;
+    rowCounts[exportName] = rows.length;
     if (rows.length === 0) continue;
 
     const columns = fields.map((field) => `\`${field.name}\``).join(", ");
@@ -151,7 +169,7 @@ const dumpSchema = async (conn, schema) => {
         .slice(start, start + INSERT_BATCH_SIZE)
         .map((row) => `(${conn.escape(fields.map((field) => row[field.name]))})`)
         .join(",\n  ");
-      dataParts.push(`INSERT INTO \`${name}\` (${columns}) VALUES\n  ${values};`);
+      dataParts.push(`INSERT INTO \`${exportName}\` (${columns}) VALUES\n  ${values};`);
     }
   }
 
@@ -207,8 +225,11 @@ const verifyImport = async (conn, sql) => {
     "SELECT COUNT(*) AS admins FROM `user` u JOIN `user_role` ur ON ur.user_id = u.id WHERE ur.role_id = ?",
     [SUPERADMIN_ROLE_ID]
   );
+  // Sin este registro, una actualización posterior volvería a correr todas
+  // las migraciones (ver CANONICAL_TABLE_NAMES).
+  const [[{ migrations }]] = await conn.query("SELECT COUNT(*) AS migrations FROM `SequelizeMeta`");
   await dropSchema(conn, VERIFY_SCHEMA);
-  return { tables: Number(tables), admins: Number(admins) };
+  return { tables: Number(tables), admins: Number(admins), migrations: Number(migrations) };
 };
 
 async function buildProductionSql({ adminEmail, adminPassword, adminName = "Super", adminLastName = "Administrador" }) {
@@ -233,4 +254,4 @@ async function buildProductionSql({ adminEmail, adminPassword, adminName = "Supe
   }
 }
 
-module.exports = { buildProductionSql, normalizeDdl };
+module.exports = { buildProductionSql, normalizeDdl, CANONICAL_TABLE_NAMES };

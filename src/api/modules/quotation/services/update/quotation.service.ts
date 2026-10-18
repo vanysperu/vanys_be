@@ -4,6 +4,12 @@ import { nowUtc } from "../../../../../utils/dateUtils";
 import { computeQuotationTotal, QUOTATION_STATUS_LABEL, QuotationAttributes, QuotationStatus } from "../../model/quotation.model";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getIgvRate } from "../shared/tax_config";
+import { CreateQuotationPaymentInput, insertQuotationPayment } from "../create/quotation_payment.service";
+
+// Solo al aceptar se puede registrar un adelanto junto con el cambio de
+// estado (pedido explícito del usuario: al pasar a "Aceptada" preguntar si
+// el cliente pagó adelanto).
+export class AdvanceOnlyOnAcceptError extends Error {}
 
 // Cadena principal del flujo (flujo de estados, ver flujo de cotizacion +
 // estados.pdf). Desde cualquier punto de la cadena se puede avanzar al
@@ -159,11 +165,20 @@ const changeQuotationStatus = async ({
   quotationId,
   nextStatus,
   updatedBy,
+  advancePayment,
 }: {
   quotationId: number;
   nextStatus: QuotationStatus;
   updatedBy?: number;
+  // Adelanto opcional que se registra en la MISMA transacción del cambio de
+  // estado: si el pago falla (sobre-pago, cuenta inválida), la cotización
+  // no queda aceptada a medias.
+  advancePayment?: CreateQuotationPaymentInput;
 }) => {
+  if (advancePayment && nextStatus !== "accepted") {
+    throw new AdvanceOnlyOnAcceptError("El adelanto solo se puede registrar al aceptar la cotización");
+  }
+
   const current = await DataBase.instance.quotation.findOne({ where: { id: quotationId } });
   if (!current) throw new Error("La cotización no existe");
 
@@ -180,7 +195,8 @@ const changeQuotationStatus = async ({
     await assertNoMoneyInvolved(quotationId);
   }
 
-  // Escribe en 2 tablas (quotation, quotation_event) — todo o nada.
+  // Escribe en 2 tablas (quotation, quotation_event) — y, con adelanto, también
+  // en quotation_payment — todo o nada.
   return DataBase.instance.sequelize.transaction(async (transaction) => {
     const result = await DataBase.instance.quotation.update(
       { status: nextStatus, updated_by: updatedBy, updated_at: nowUtc() },
@@ -194,6 +210,16 @@ const changeQuotationStatus = async ({
       actorId: updatedBy,
       transaction,
     });
+
+    if (advancePayment) {
+      await insertQuotationPayment({
+        quotationId,
+        input: { ...advancePayment, notes: advancePayment.notes?.trim() || "Adelanto" },
+        createdBy: updatedBy,
+        transaction,
+        isAdvance: true,
+      });
+    }
 
     return result;
   });

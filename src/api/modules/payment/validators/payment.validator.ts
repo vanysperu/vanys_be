@@ -39,6 +39,7 @@ export const updatePaymentValidator = [
     if (!value) throw new Error("El número de operación es obligatorio para pagos que no son en efectivo");
     return true;
   }),
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
 
 export const disablePaymentValidator = [paramPaymentIdValidator];

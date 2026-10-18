@@ -10,6 +10,9 @@ export interface EmployeeDebtAttributes {
   amount: number;
   status: EmployeeDebtStatus;
   paid_at: string | null;
+  // Cuenta de la empresa (general_variable category="payment_account") desde
+  // la que se le repuso el dinero al trabajador; null = efectivo.
+  payment_account_id: number | null;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -37,6 +40,7 @@ export function EmployeeDebtFactory(sequelize: Sequelize): EmployeeDebtStatic {
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       status: { type: DataTypes.ENUM("pending", "paid"), allowNull: false, defaultValue: "pending" },
       paid_at: { type: DataTypes.DATEONLY, allowNull: true },
+      payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

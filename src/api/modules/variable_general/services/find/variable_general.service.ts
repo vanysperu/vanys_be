@@ -1,4 +1,5 @@
 import { Op, WhereOptions } from "sequelize";
+import { resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
 import { DataBase } from "../../../../../database";
 import { VariableGeneralAttributes, VariableGeneralModel } from "../../models/variable_general.model";
 import { buildPaginationMeta, getOffset } from "../../../../../core/utils/paginate";
@@ -68,9 +69,8 @@ const buildWhere = (filter: VariableGeneralListQuery["filter"]): WhereOptions<Va
   if (filter.name) {
     andConditions.push({ name: { [Op.like]: `%${filter.name}%` } });
   }
-  if (filter.status) {
-    where.is_deleted = filter.status === "inactive";
-  }
+  const isDeleted = resolveIsDeletedFilter(filter.status);
+  if (isDeleted !== undefined) where.is_deleted = isDeleted;
 
   if (andConditions.length > 0) {
     return { ...where, [Op.and]: andConditions };

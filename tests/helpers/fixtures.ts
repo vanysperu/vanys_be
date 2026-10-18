@@ -68,7 +68,6 @@ export async function createQuotationFixture(token: string, companyId: number) {
   const technique = await api.post("/customization-technique/create", {
     company_id: companyId,
     name: `TestTechnique${stamp}`,
-    extra_type: "fixed",
     price_unit: 5,
   });
 

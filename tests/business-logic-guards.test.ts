@@ -67,7 +67,7 @@ describe("Guardas de negocio encontradas en auditoría", () => {
   });
 
   describe("Sobre-compra (overbuy)", () => {
-    it("rechaza una compra cuya cantidad excede lo que falta del item", async () => {
+    it("sin confirmar, rechaza (409) una compra que excede lo que falta y devuelve el detalle para el modal", async () => {
       const api = authedRequest(token);
       const { quotationId, quotationItemId } = await createQuotationFixture(token, companyId);
       const { itemId } = await createPurchaseOrderFixture(token, companyId, userId, quotationId, quotationItemId, 10);
@@ -77,8 +77,39 @@ describe("Guardas de negocio encontradas en auditoría", () => {
         amount: 100,
         funding_source: "company",
       });
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/faltan|completamente comprado/i);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("PURCHASE_EXCEEDS_REMAINING");
+      expect(res.body.message).toMatch(/era 10/);
+      expect(res.body.errors).toEqual({ ordered: 10, already_purchased: 0, requested: 50 });
+    });
+
+    it("con allow_exceed (el usuario respondió Sí en el modal) registra la compra adicional y lo anota en el gasto", async () => {
+      const api = authedRequest(token);
+      const { quotationId, quotationItemId } = await createQuotationFixture(token, companyId);
+      const { itemId, purchaseOrderId } = await createPurchaseOrderFixture(
+        token,
+        companyId,
+        userId,
+        quotationId,
+        quotationItemId,
+        10
+      );
+
+      const res = await api.post(`/purchase-order/item/${itemId}/purchases`, {
+        quantity: 12,
+        amount: 120,
+        funding_source: "company",
+        allow_exceed: true,
+      });
+      expect(res.status).toBe(201);
+
+      const order = await api.get(`/purchase-order/find/${purchaseOrderId}`);
+      const item = order.body.data.items.find((row: { id: number }) => row.id === itemId);
+      expect(item.status).toBe("purchased");
+
+      const detail = await api.get(`/quotation/find/${quotationId}`);
+      const descriptions = detail.body.data.expenses.map((row: { description: string }) => row.description);
+      expect(descriptions.some((text: string) => /compra adicional: 2 por encima/.test(text))).toBe(true);
     });
 
     it("permite completar exactamente la cantidad pedida en varias compras parciales", async () => {
@@ -100,13 +131,14 @@ describe("Guardas de negocio encontradas en auditoría", () => {
       });
       expect(second.status).toBe(201);
 
-      // Una tercera compra, aunque sea de 1 unidad, ya no debe caber.
+      // Una tercera compra, aunque sea de 1 unidad, ya no cabe sin confirmar.
       const third = await api.post(`/purchase-order/item/${itemId}/purchases`, {
         quantity: 1,
         amount: 10,
         funding_source: "company",
       });
-      expect(third.status).toBe(400);
+      expect(third.status).toBe(409);
+      expect(third.body.message).toMatch(/ya está completa/);
     });
 
     it("dos compras parciales simultáneas que suman exactamente lo pedido dejan el item en 'purchased' (condición de carrera corregida)", async () => {

@@ -116,6 +116,40 @@ export const getQuotationValidator = [paramQuotationIdValidator];
 export const changeStatusValidator = [
   paramQuotationIdValidator,
   body("status").isIn(QUOTATION_STATUSES).withMessage("Estado inválido"),
+  // Adelanto opcional al aceptar (mismas reglas que un pago normal).
+  body("advance_payment").optional({ values: "null" }).isObject().withMessage("El adelanto no es válido"),
+  body("advance_payment.amount")
+    .if(body("advance_payment").exists({ values: "null" }))
+    .isFloat({ gt: 0, max: 99999999.99 })
+    .withMessage("El monto del adelanto debe ser mayor a 0"),
+  body("advance_payment.method")
+    .if(body("advance_payment").exists({ values: "null" }))
+    .isString()
+    .notEmpty()
+    .withMessage("El método de pago del adelanto es obligatorio")
+    .bail()
+    .isLength({ max: 50 })
+    .withMessage("Máximo 50 caracteres"),
+  body("advance_payment.paid_at")
+    .if(body("advance_payment").exists({ values: "null" }))
+    .isISO8601()
+    .withMessage("La fecha del adelanto es obligatoria"),
+  body("advance_payment.notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
+  body("advance_payment.operation_number")
+    .optional({ values: "null" })
+    .isString()
+    .isLength({ max: 50 })
+    .withMessage("Máximo 50 caracteres"),
+  body("advance_payment.operation_number").custom((value, { req }) => {
+    const advance = req.body.advance_payment as { method?: string } | null | undefined;
+    if (!advance || advance.method === CASH_PAYMENT_METHOD) return true;
+    if (!value) throw new Error("El número de operación es obligatorio para pagos que no son en efectivo");
+    return true;
+  }),
+  body("advance_payment.payment_account_id")
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La cuenta seleccionada no es válida"),
 ];
 
 export const changeItemStageValidator = [
@@ -167,6 +201,9 @@ export const createQuotationPaymentValidator = [
     if (!value) throw new Error("El número de operación es obligatorio para pagos que no son en efectivo");
     return true;
   }),
+  // Solo la forma: que la cuenta sea de la empresa, y si es obligatoria, lo
+  // valida el service (resolvePaymentAccountId).
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
 
 export const createQuotationExpenseValidator = [

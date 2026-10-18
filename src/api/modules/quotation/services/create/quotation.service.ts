@@ -43,12 +43,10 @@ export interface CreateQuotationItemInput {
   // Precio POR UNIDAD, obligatorio solo cuando pricing_mode="custom" — no
   // toca el catálogo del producto, es propio de este item.
   custom_price?: number | null;
-  // Extra POR UNIDAD de la técnica, solo aplica cuando pricing_mode="custom"
-  // y la técnica es extra_type="fixed" (percentage no lo necesita, ya
-  // escala desde custom_price). Si no se manda, cae a technique.price_unit
-  // como antes (pedido explícito del usuario: "cuando se le da
-  // personalizado debe darte para colocar el precio del producto y de la
-  // técnica").
+  // Precio POR UNIDAD de la técnica, solo aplica cuando pricing_mode="custom".
+  // Si no se manda, cae a technique.price_unit (pedido explícito del usuario:
+  // "cuando se le da personalizado debe darte para colocar el precio del
+  // producto y de la técnica").
   custom_technique_price?: number | null;
 }
 
@@ -75,49 +73,55 @@ export interface CreateQuotationInput {
   includes_igv?: boolean;
 }
 
-// Precio de la técnica por modo de precio ("fixed"): mismo criterio de
-// tarifa-por-volumen que el producto (CATALOG_PRICE_FIELD más abajo) — una
-// personalización por millar suele salir más barata por unidad que una
-// personalización de unidades sueltas. pricing_mode="custom" no tiene un
-// modo de catálogo propio (el producto ya usa un precio 100% libre), así
-// que la técnica cae a su price_unit como aproximación razonable. Si la
-// técnica no tiene cargado un precio para ese modo específico, el extra es
-// 0 (a diferencia del producto, la técnica es opcional — no todas
-// necesitan estar completas en los 4 modos).
-const resolveTechniqueTierExtra = (
+// Nombre legible de cada modo, para los mensajes de error.
+const PRICING_MODE_LABEL: Record<Exclude<QuotationItemPricingMode, "custom">, string> = {
+  unit: "por unidad",
+  hundred: "por ciento",
+  half_thousand: "por medio millar",
+  thousand: "por millar",
+};
+
+// Precio POR UNIDAD de la técnica en el modo elegido — mismo criterio que el
+// producto (pedido explícito del usuario: "debe funcionar igual que
+// productos"). Antes, si la técnica no tenía precio para ese modo, se sumaba
+// 0 en silencio y la cotización salía más barata de lo real; ahora se avisa,
+// igual que con el producto.
+//
+// En modo "custom" el producto lleva un precio libre; la técnica usa el
+// custom_technique_price del item, o su precio por unidad si no se mandó.
+const resolveTechniquePrice = (
   technique: CustomizationTechniqueModel,
   pricingMode: QuotationItemPricingMode,
   customTechniquePrice?: number | null
 ): number => {
   if (pricingMode === "custom") {
     if (customTechniquePrice !== null && customTechniquePrice !== undefined) return Number(customTechniquePrice);
-    return technique.price_unit === null || technique.price_unit === undefined ? 0 : Number(technique.price_unit);
+    if (technique.price_unit !== null && technique.price_unit !== undefined) return Number(technique.price_unit);
+    throw new MissingProductPriceError(`Indica el precio personalizado de la técnica "${technique.name}"`);
   }
+
   const value = technique[CATALOG_PRICE_FIELD[pricingMode]];
-  return value === null || value === undefined ? 0 : Number(value);
+  if (value === null || value === undefined) {
+    throw new MissingProductPriceError(
+      `La técnica "${technique.name}" no tiene cargado un precio ${PRICING_MODE_LABEL[pricingMode]}`
+    );
+  }
+  return Number(value);
 };
 
-// Precio del item = precio base del producto + el extra de la técnica
-// elegida — "fixed" es una tarifa POR MODO (igual que el producto),
-// "percentage" sigue siendo un % sobre el precio base (ya escala solo con
-// el modo, porque basePrice también cambia por modo).
+// Precio por unidad del item = precio del producto + precio de la técnica,
+// los dos en el MISMO modo. Ejemplo del usuario: jabón ciento S/0.90 +
+// serigrafía ciento S/0.95 = S/1.85 por unidad; × 10 unidades = S/18.50.
 //
 // MySQL/Sequelize devuelve DECIMAL como string (evita perder precisión de
 // punto flotante) — Number(...) es obligatorio antes de sumar, si no "+"
 // hace concatenación de texto en vez de suma ("50" + "15.00" = "5015.00").
 const resolveUnitPrice = (
   basePrice: number,
-  technique: CustomizationTechniqueModel | null,
+  technique: CustomizationTechniqueModel,
   pricingMode: QuotationItemPricingMode,
   customTechniquePrice?: number | null
-) => {
-  if (!technique) return basePrice;
-
-  if (technique.extra_type === "percentage") {
-    return basePrice + (basePrice * Number(technique.extra_value)) / 100;
-  }
-  return basePrice + resolveTechniqueTierExtra(technique, pricingMode, customTechniquePrice);
-};
+) => basePrice + resolveTechniquePrice(technique, pricingMode, customTechniquePrice);
 
 // La cantidad es siempre obligatoria — no hay "lote de respaldo": cada
 // modo de precio (unidad/ciento/medio millar/millar/personalizado) es solo
@@ -167,7 +171,9 @@ const resolveBasePrice = (
   const field = CATALOG_PRICE_FIELD[pricingMode];
   const price = product[field];
   if (price === null || price === undefined) {
-    throw new MissingProductPriceError(`El producto "${product.name}" no tiene cargado un precio ${pricingMode}`);
+    throw new MissingProductPriceError(
+      `El producto "${product.name}" no tiene cargado un precio ${PRICING_MODE_LABEL[pricingMode]}`
+    );
   }
   return Number(price);
 };

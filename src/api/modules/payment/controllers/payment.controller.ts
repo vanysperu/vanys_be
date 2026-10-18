@@ -3,7 +3,9 @@ import { IToken } from "../../../interfaces/IToken.interface";
 import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
-import { getPaymentsList } from "../services/find/payment.service";
+import { getPaymentsList, PaymentStatusFilter } from "../services/find/payment.service";
+
+const PAYMENT_STATUS_FILTERS: PaymentStatusFilter[] = ["active", "disabled", "all"];
 import { updatePaymentById } from "../services/update/payment.service";
 import { disableOrEnablePaymentById } from "../services/delete/payment.service";
 import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitScope";
@@ -15,18 +17,27 @@ import { PaymentExceedsBalanceError } from "../../quotation/services/create/quot
 // se confía del query/body, siempre sale del token (CLAUDE.md sección 10/11.1).
 export const listPaymentsController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { quotationId, method, dateFrom, dateTo, includeDisabled } = req.query;
+  const { quotationId, method, dateFrom, dateTo, includeDisabled, status, paymentAccountId, clientName } = req.query;
   const page = Number(req.query.page) || 1;
   const limit = Math.min(Number(req.query.limit) || 20, 100);
+
+  // `includeDisabled=true` se mantiene por compatibilidad: equivale a "all".
+  const requestedStatus = PAYMENT_STATUS_FILTERS.find((value) => value === status);
+  const statusFilter: PaymentStatusFilter = requestedStatus ?? (includeDisabled === "true" ? "all" : "active");
+
+  const accountFilter =
+    paymentAccountId === "cash" ? "cash" : Number(paymentAccountId) > 0 ? Number(paymentAccountId) : undefined;
 
   const resp = await getPaymentsList({
     companyId: user.isSystem ? null : user.companyId,
     businessUnitId: resolveBusinessUnitFilter(user),
     quotationId: quotationId ? Number(quotationId) : undefined,
     method: (method as string) || undefined,
+    paymentAccountId: accountFilter,
+    clientName: typeof clientName === "string" && clientName.trim() ? clientName.trim() : undefined,
     dateFrom: (dateFrom as string) || undefined,
     dateTo: (dateTo as string) || undefined,
-    includeDisabled: includeDisabled === "true",
+    status: statusFilter,
     page,
     limit,
   });

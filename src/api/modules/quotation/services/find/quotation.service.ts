@@ -3,6 +3,7 @@ import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
+import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
 
 interface QuotationListOptions extends IListOptions<QuotationAttributes> {
   companyId?: number | null;
@@ -11,6 +12,11 @@ interface QuotationListOptions extends IListOptions<QuotationAttributes> {
   businessUnitId?: number;
   status?: string;
   clientId?: number;
+  // Quién creó la cotización.
+  createdBy?: number;
+  // Rango de fecha de emisión (días de Lima, YYYY-MM-DD).
+  dateFrom?: unknown;
+  dateTo?: unknown;
   page: number;
   limit: number;
   orderBy: string;
@@ -18,15 +24,27 @@ interface QuotationListOptions extends IListOptions<QuotationAttributes> {
 }
 
 const getQuotationsList = async (options: QuotationListOptions): Promise<PaginatedResult<QuotationAttributes>> => {
-  const { where, page, limit, orderBy, orderDir, companyId, businessUnitId, status, clientId } = options;
+  const { where, page, limit, orderBy, orderDir, companyId, businessUnitId, status, clientId, createdBy, dateFrom, dateTo } =
+    options;
 
   const companyWhere = companyId === null || companyId === undefined ? {} : { company_id: companyId };
   const businessUnitWhere = businessUnitId === undefined ? {} : { business_unit_id: businessUnitId };
   const statusWhere = status ? { status } : {};
   const clientWhere = clientId ? { client_id: clientId } : {};
+  const createdByWhere = createdBy ? { created_by: createdBy } : {};
+  const createdAt = buildBusinessDateRange(dateFrom, dateTo);
+  const dateWhere = createdAt ? { created_at: createdAt } : {};
 
   const queryOptions: FindAndCountOptions<QuotationAttributes> = {
-    where: { ...where, ...companyWhere, ...businessUnitWhere, ...statusWhere, ...clientWhere },
+    where: {
+      ...where,
+      ...companyWhere,
+      ...businessUnitWhere,
+      ...statusWhere,
+      ...clientWhere,
+      ...createdByWhere,
+      ...dateWhere,
+    },
     order: [[orderBy, orderDir]],
     limit,
     offset: getOffset(page, limit),
@@ -53,7 +71,7 @@ const getQuotationById = async (id: number) => {
             association: "product",
             attributes: ["id", "name", "price_unit", "price_hundred", "price_half_thousand", "price_thousand"],
           },
-          { association: "technique", attributes: ["id", "name", "extra_type", "extra_value"] },
+          { association: "technique", attributes: ["id", "name"] },
           // "stage" es una fila de general_variable (category=production_stage):
           // name = nombre de la etapa, ref1 = color, ref2 = posición/orden.
           { association: "stage", attributes: ["id", "name", "ref1", "ref2"] },

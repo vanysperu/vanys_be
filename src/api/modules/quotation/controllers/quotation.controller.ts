@@ -11,13 +11,19 @@ import {
   TenantMismatchError,
 } from "../services/create/quotation.service";
 import {
+  AdvanceOnlyOnAcceptError,
   changeQuotationStatus,
   InvalidTransitionError,
   QuotationHasMoneyInvolvedError,
   updateQuotationById,
 } from "../services/update/quotation.service";
 import { changeItemStage } from "../services/update/quotation_item.service";
-import { createQuotationPayment, PaymentExceedsBalanceError } from "../services/create/quotation_payment.service";
+import {
+  createQuotationPayment,
+  CreateQuotationPaymentInput,
+  PaymentExceedsBalanceError,
+} from "../services/create/quotation_payment.service";
+import { hasRouteAccess } from "../../../../middlewares/user-access";
 import { createQuotationExpense } from "../services/create/quotation_expense.service";
 import { getQuotationById, getQuotationsList } from "../services/find/quotation.service";
 import { generateQuotationPdf } from "../services/pdf/quotation_pdf.service";
@@ -67,6 +73,13 @@ export const listQuotationsController = asyncHandler(async (req: Request, res: R
   const { page, limit, orderBy, orderDir } = parsePaginationParams(queryParams);
   const status = (queryParams.status as string) || undefined;
   const clientId = queryParams.clientId ? Number(queryParams.clientId) : undefined;
+  const createdBy = Number(queryParams.createdBy) > 0 ? Number(queryParams.createdBy) : undefined;
+
+  // Tienda: si el caller está limitado a una, manda esa (nunca la del query).
+  // Si no, puede filtrar por cualquiera — el filtro de empresa sigue
+  // aplicando, así que una tienda ajena simplemente no trae resultados.
+  const scopedBusinessUnitId = resolveBusinessUnitFilter(user);
+  const requestedBusinessUnitId = Number(queryParams.businessUnitId) > 0 ? Number(queryParams.businessUnitId) : undefined;
 
   const resp = await getQuotationsList({
     page,
@@ -74,9 +87,12 @@ export const listQuotationsController = asyncHandler(async (req: Request, res: R
     orderBy,
     orderDir,
     companyId: isSystem ? null : companyId,
-    businessUnitId: resolveBusinessUnitFilter(user),
+    businessUnitId: scopedBusinessUnitId ?? requestedBusinessUnitId,
     status,
     clientId,
+    createdBy,
+    dateFrom: queryParams.dateFrom,
+    dateTo: queryParams.dateTo,
   });
   const message = resp.data.length === 0 ? "No se encontraron cotizaciones" : "Lista de cotizaciones obtenida correctamente";
 
@@ -112,17 +128,37 @@ export const updateQuotationController = asyncHandler(async (req: Request, res: 
 export const changeQuotationStatusController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { id } = req.params;
-  const { status } = req.body as { status: QuotationStatus };
+  const { status, advance_payment: advancePayment } = req.body as {
+    status: QuotationStatus;
+    advance_payment?: CreateQuotationPaymentInput | null;
+  };
 
   if (!(await assertQuotationBelongsToCaller(Number(id), user))) {
     throw new AppError(403, "No tienes acceso a esta cotización");
   }
 
+  // Registrar el adelanto es registrar un pago: exige el mismo permiso que
+  // POST /quotation/:id/payments, no solo el de cambiar estado.
+  if (advancePayment && !hasRouteAccess(user, `/quotation/${id}/payments`, "POST")) {
+    throw new AppError(403, "No tienes permiso para registrar pagos");
+  }
+
   try {
-    const result = await changeQuotationStatus({ quotationId: Number(id), nextStatus: status, updatedBy: user.userId });
-    ok(res, 200, result, "Estado actualizado correctamente");
+    const result = await changeQuotationStatus({
+      quotationId: Number(id),
+      nextStatus: status,
+      updatedBy: user.userId,
+      advancePayment: advancePayment ?? undefined,
+    });
+    const message = advancePayment ? "Cotización aceptada y adelanto registrado" : "Estado actualizado correctamente";
+    ok(res, 200, result, message);
   } catch (err: unknown) {
-    if (err instanceof InvalidTransitionError || err instanceof QuotationHasMoneyInvolvedError) {
+    if (
+      err instanceof InvalidTransitionError ||
+      err instanceof QuotationHasMoneyInvolvedError ||
+      err instanceof AdvanceOnlyOnAcceptError ||
+      err instanceof PaymentExceedsBalanceError
+    ) {
       throw new AppError(400, err.message);
     }
     throw err;

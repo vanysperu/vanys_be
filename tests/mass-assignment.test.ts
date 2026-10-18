@@ -103,7 +103,6 @@ describe("Mass assignment — campos sensibles no editables vía body", () => {
     const created = await api.post("/customization-technique/create", {
       company_id: companyId,
       name: `MassAssignTech${wordStamp()}`,
-      extra_type: "fixed",
       price_unit: 5,
     });
     const techniqueId: number = created.body.data.id;

@@ -13,7 +13,8 @@
     "build": "tsc --build",
     "db:reset-factory": "node scripts/reset-to-factory.js",
     "db:seed-qa": "node scripts/seed-qa-fixtures.js",
-    "release": "node scripts/package-release.js"
+    "release": "node scripts/package-release.js",
+    "db:upgrade-production": "node scripts/upgrade-production.js"
   },
   "keywords": [],
   "author": "",

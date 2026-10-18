@@ -1,6 +1,10 @@
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
-import { assertPaymentWithinBalance, recalculateTotalPaid } from "../../../quotation/services/create/quotation_payment.service";
+import {
+  assertPaymentWithinBalance,
+  recalculateTotalPaid,
+  resolvePaymentAccountForQuotation,
+} from "../../../quotation/services/create/quotation_payment.service";
 import { logQuotationEvent } from "../../../quotation/services/timeline/quotation_event.service";
 
 export interface UpdatePaymentInput {
@@ -9,6 +13,7 @@ export interface UpdatePaymentInput {
   paid_at: string;
   notes?: string | null;
   operation_number?: string | null;
+  payment_account_id?: number | null;
 }
 
 // Un pago editado puede cambiar de monto — total_paid de la cotización
@@ -34,6 +39,20 @@ const updatePaymentById = async ({
       transaction,
     });
 
+    // Si se mantiene la misma cuenta que ya tenía, no se revalida: así se
+    // puede corregir el monto de un pago viejo aunque esa cuenta se haya
+    // deshabilitado después.
+    const keepsSameAccount =
+      payment.payment_account_id !== null && Number(input.payment_account_id) === payment.payment_account_id;
+    const paymentAccountId = keepsSameAccount
+      ? payment.payment_account_id
+      : await resolvePaymentAccountForQuotation({
+          quotationId: payment.quotation_id,
+          accountId: input.payment_account_id,
+          method: input.method,
+          transaction,
+        });
+
     await DataBase.instance.quotation_payment.update(
       {
         amount: input.amount,
@@ -41,6 +60,7 @@ const updatePaymentById = async ({
         paid_at: input.paid_at,
         notes: input.notes ?? null,
         operation_number: input.operation_number ?? null,
+        payment_account_id: paymentAccountId,
         updated_by: updatedBy ?? null,
         updated_at: nowUtc(),
       },

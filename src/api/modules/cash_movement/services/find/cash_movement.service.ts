@@ -1,6 +1,6 @@
-import { Op, QueryTypes, WhereOptions } from "sequelize";
+import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
-import { CashMovementAttributes, CashMovementDirection, CashMovementModel } from "../../model/cash_movement.model";
+import { CashMovementDirection } from "../../model/cash_movement.model";
 import { buildPaginationMeta, PaginatedResult } from "../../../../../core/utils/paginate";
 
 // Shape normalizado común a las 3 fuentes que se juntan en un solo listado
@@ -11,9 +11,11 @@ import { buildPaginationMeta, PaginatedResult } from "../../../../../core/utils/
 // (Pagos/Gastos de una cotización, y toda compra de una orden ya genera un
 // gasto, ver purchase_order_item_purchase.service.ts) — nunca se duplican,
 // solo se reflejan acá para tener un libro de caja único.
+export type CashMovementSource = "manual" | "quotation_payment" | "quotation_expense";
+
 export interface CashMovementListItem {
   id: string;
-  source: "manual" | "quotation_payment" | "quotation_expense";
+  source: CashMovementSource;
   // Solo los movimientos "manual" se pueden deshabilitar desde este módulo
   // — los otros dos se gestionan desde su propia pantalla de origen.
   source_id: number;
@@ -25,6 +27,17 @@ export interface CashMovementListItem {
   quotation_id: number | null;
   purchase_order_id: number | null;
   business_unit_id: number | null;
+  // Cuenta por la que entró/salió el dinero (null = efectivo). En los
+  // gastos de compras pagadas por un trabajador es la cuenta desde la que
+  // se le REPUSO (ver reimbursement_*).
+  payment_account_id: number | null;
+  payment_account_name: string | null;
+  // Solo en gastos de compras pagadas con plata de un trabajador: quién puso
+  // el dinero y si ya se le repuso (pedido explícito del usuario: "debería
+  // decirse que ese gasto lo hizo tal trabajador y se le repuso").
+  paid_by_employee_name: string | null;
+  reimbursement_status: "pending" | "paid" | null;
+  reimbursed_at: string | null;
   created_at: string;
 }
 
@@ -36,6 +49,9 @@ export interface CashMovementListFilter {
   businessUnitId?: number;
   direction?: CashMovementDirection;
   category?: string;
+  source?: CashMovementSource;
+  // Cuenta; "cash" = solo los movimientos en efectivo (sin cuenta).
+  paymentAccountId?: number | "cash";
   quotationId?: number;
   purchaseOrderId?: number;
   dateFrom?: string;
@@ -44,60 +60,87 @@ export interface CashMovementListFilter {
   limit: number;
 }
 
-interface RawPaymentRow {
+interface RawRow {
   id: number;
-  quotation_id: number;
+  direction: CashMovementDirection;
+  category: string | null;
   amount: string;
-  method: string | null;
-  notes: string | null;
-  paid_at: string;
-  created_at: Date;
+  description: string | null;
+  occurred_at: string;
+  quotation_id: number | null;
+  purchase_order_id: number | null;
   business_unit_id: number | null;
+  payment_account_id: number | null;
+  payment_account_name: string | null;
+  paid_by_employee_name?: string | null;
+  reimbursement_status?: "pending" | "paid" | null;
+  reimbursed_at?: string | null;
+  created_at: Date;
 }
 
-interface RawExpenseRow {
-  id: number;
-  quotation_id: number;
-  amount: string;
-  category: string | null;
-  description: string;
-  spent_at: string;
-  created_at: Date;
-  business_unit_id: number | null;
-  purchase_order_id: number | null;
-}
+// Condición de cuenta reutilizada por las 3 consultas. `column` es siempre
+// un nombre fijo del código, nunca un valor del usuario (que va bindeado).
+const accountCondition = (column: string, filter: CashMovementListFilter): string => {
+  if (filter.paymentAccountId === "cash") return `AND ${column} IS NULL`;
+  if (typeof filter.paymentAccountId === "number") return `AND ${column} = :paymentAccountId`;
+  return "";
+};
+
+const baseReplacements = (filter: CashMovementListFilter) => ({
+  companyId: filter.companyId,
+  businessUnitId: filter.businessUnitId ?? null,
+  quotationId: filter.quotationId ?? null,
+  purchaseOrderId: filter.purchaseOrderId ?? null,
+  category: filter.category ?? null,
+  direction: filter.direction ?? null,
+  paymentAccountId: typeof filter.paymentAccountId === "number" ? filter.paymentAccountId : null,
+  dateFrom: filter.dateFrom ?? null,
+  dateTo: filter.dateTo ?? null,
+});
+
+const toItem = (source: CashMovementSource, prefix: string, row: RawRow): CashMovementListItem => ({
+  id: `${prefix}-${row.id}`,
+  source,
+  source_id: row.id,
+  direction: row.direction,
+  category: row.category,
+  amount: Number(row.amount),
+  description: row.description,
+  occurred_at: row.occurred_at,
+  quotation_id: row.quotation_id,
+  purchase_order_id: row.purchase_order_id,
+  business_unit_id: row.business_unit_id,
+  payment_account_id: row.payment_account_id,
+  payment_account_name: row.payment_account_name,
+  paid_by_employee_name: row.paid_by_employee_name ?? null,
+  reimbursement_status: row.reimbursement_status ?? null,
+  reimbursed_at: row.reimbursed_at ?? null,
+  created_at: new Date(row.created_at).toISOString(),
+});
 
 const getManualMovements = async (filter: CashMovementListFilter): Promise<CashMovementListItem[]> => {
-  const where: WhereOptions<CashMovementAttributes> = { is_deleted: false };
-  if (filter.companyId !== null) where.company_id = filter.companyId;
-  if (filter.businessUnitId !== undefined) where.business_unit_id = filter.businessUnitId;
-  if (filter.direction) where.direction = filter.direction;
-  if (filter.category) where.category = filter.category;
-  if (filter.quotationId) where.quotation_id = filter.quotationId;
-  if (filter.purchaseOrderId) where.purchase_order_id = filter.purchaseOrderId;
-  if (filter.dateFrom || filter.dateTo) {
-    where.occurred_at = {
-      ...(filter.dateFrom ? { [Op.gte]: filter.dateFrom } : {}),
-      ...(filter.dateTo ? { [Op.lte]: filter.dateTo } : {}),
-    };
-  }
+  const rows = (await DataBase.instance.sequelize.query(
+    `
+      SELECT cm.id, cm.direction, cm.category, cm.amount, cm.description, cm.occurred_at, cm.quotation_id,
+             cm.purchase_order_id, cm.business_unit_id, cm.payment_account_id, pa.name AS payment_account_name,
+             cm.created_at
+      FROM cash_movement cm
+      LEFT JOIN general_variable pa ON pa.id = cm.payment_account_id
+      WHERE cm.is_deleted = false
+        AND (:companyId IS NULL OR cm.company_id = :companyId)
+        AND (:businessUnitId IS NULL OR cm.business_unit_id = :businessUnitId)
+        AND (:direction IS NULL OR cm.direction = :direction)
+        AND (:category IS NULL OR cm.category = :category)
+        AND (:quotationId IS NULL OR cm.quotation_id = :quotationId)
+        AND (:purchaseOrderId IS NULL OR cm.purchase_order_id = :purchaseOrderId)
+        AND (:dateFrom IS NULL OR cm.occurred_at >= :dateFrom)
+        AND (:dateTo IS NULL OR cm.occurred_at <= :dateTo)
+        ${accountCondition("cm.payment_account_id", filter)}
+    `,
+    { type: QueryTypes.SELECT, replacements: baseReplacements(filter) }
+  )) as RawRow[];
 
-  const rows = await DataBase.instance.cash_movement.findAll({ where, order: [["occurred_at", "DESC"]] });
-
-  return rows.map((row: CashMovementModel) => ({
-    id: `manual-${row.id}`,
-    source: "manual",
-    source_id: row.id,
-    direction: row.direction,
-    category: row.category,
-    amount: Number(row.amount),
-    description: row.description,
-    occurred_at: row.occurred_at,
-    quotation_id: row.quotation_id,
-    purchase_order_id: row.purchase_order_id,
-    business_unit_id: row.business_unit_id,
-    created_at: row.created_at.toISOString(),
-  }));
+  return rows.map((row) => toItem("manual", "manual", row));
 };
 
 const getQuotationPaymentMovements = async (filter: CashMovementListFilter): Promise<CashMovementListItem[]> => {
@@ -108,110 +151,79 @@ const getQuotationPaymentMovements = async (filter: CashMovementListFilter): Pro
 
   const rows = (await DataBase.instance.sequelize.query(
     `
-      SELECT qp.id, qp.quotation_id, qp.amount, qp.method, qp.notes, qp.paid_at, qp.created_at,
-             q.business_unit_id
+      SELECT qp.id, 'income' AS direction, qp.method AS category, qp.amount, qp.notes AS description,
+             qp.paid_at AS occurred_at, qp.quotation_id, NULL AS purchase_order_id, q.business_unit_id,
+             qp.payment_account_id, pa.name AS payment_account_name, qp.created_at
       FROM quotation_payment qp
       INNER JOIN quotation q ON q.id = qp.quotation_id
-      WHERE (:companyId IS NULL OR q.company_id = :companyId)
+      LEFT JOIN general_variable pa ON pa.id = qp.payment_account_id
+      WHERE qp.is_deleted = false
+        AND (:companyId IS NULL OR q.company_id = :companyId)
         AND (:businessUnitId IS NULL OR q.business_unit_id = :businessUnitId)
         AND (:quotationId IS NULL OR qp.quotation_id = :quotationId)
+        AND (:category IS NULL OR qp.method = :category)
         AND (:dateFrom IS NULL OR qp.paid_at >= :dateFrom)
         AND (:dateTo IS NULL OR qp.paid_at <= :dateTo)
-      ORDER BY qp.paid_at DESC
+        ${accountCondition("qp.payment_account_id", filter)}
     `,
-    {
-      type: QueryTypes.SELECT,
-      replacements: {
-        companyId: filter.companyId,
-        businessUnitId: filter.businessUnitId ?? null,
-        quotationId: filter.quotationId ?? null,
-        dateFrom: filter.dateFrom ?? null,
-        dateTo: filter.dateTo ?? null,
-      },
-    }
-  )) as RawPaymentRow[];
+    { type: QueryTypes.SELECT, replacements: baseReplacements(filter) }
+  )) as RawRow[];
 
-  return rows.map((row) => ({
-    id: `qp-${row.id}`,
-    source: "quotation_payment",
-    source_id: row.id,
-    direction: "income",
-    category: row.method,
-    amount: Number(row.amount),
-    description: row.notes,
-    occurred_at: row.paid_at,
-    quotation_id: row.quotation_id,
-    purchase_order_id: null,
-    business_unit_id: row.business_unit_id,
-    created_at: new Date(row.created_at).toISOString(),
-  }));
+  return rows.map((row) => toItem("quotation_payment", "qp", row));
 };
 
 const getQuotationExpenseMovements = async (filter: CashMovementListFilter): Promise<CashMovementListItem[]> => {
   if (filter.direction === "income") return [];
 
+  // Un gasto de compra pagada por un trabajador trae quién puso el dinero y
+  // el estado de su reposición (employee_debt). La "cuenta" de ese gasto es
+  // desde la que se le repuso, si ya se le repuso.
   const rows = (await DataBase.instance.sequelize.query(
     `
-      SELECT qe.id, qe.quotation_id, qe.amount, qe.category, qe.description, qe.spent_at, qe.created_at,
-             q.business_unit_id, poip.purchase_order_id
+      SELECT qe.id, 'expense' AS direction, qe.category, qe.amount, qe.description, qe.spent_at AS occurred_at,
+             qe.quotation_id, poi.purchase_order_id, q.business_unit_id,
+             ed.payment_account_id, pa.name AS payment_account_name,
+             CASE WHEN pop.funding_source = 'employee'
+                  THEN CONCAT(u.name, ' ', u.paternal_lastname) ELSE NULL END AS paid_by_employee_name,
+             ed.status AS reimbursement_status, ed.paid_at AS reimbursed_at,
+             qe.created_at
       FROM quotation_expense qe
       INNER JOIN quotation q ON q.id = qe.quotation_id
-      LEFT JOIN (
-        SELECT pop.quotation_expense_id, poi.purchase_order_id
-        FROM purchase_order_item_purchase pop
-        INNER JOIN purchase_order_item poi ON poi.id = pop.purchase_order_item_id
-      ) poip ON poip.quotation_expense_id = qe.id
+      LEFT JOIN purchase_order_item_purchase pop ON pop.quotation_expense_id = qe.id
+      LEFT JOIN purchase_order_item poi ON poi.id = pop.purchase_order_item_id
+      LEFT JOIN employee_debt ed ON ed.purchase_order_item_purchase_id = pop.id
+      LEFT JOIN user u ON u.id = pop.paid_by_user_id
+      LEFT JOIN general_variable pa ON pa.id = ed.payment_account_id
       WHERE (:companyId IS NULL OR q.company_id = :companyId)
         AND (:businessUnitId IS NULL OR q.business_unit_id = :businessUnitId)
         AND (:quotationId IS NULL OR qe.quotation_id = :quotationId)
-        AND (:purchaseOrderId IS NULL OR poip.purchase_order_id = :purchaseOrderId)
+        AND (:purchaseOrderId IS NULL OR poi.purchase_order_id = :purchaseOrderId)
         AND (:category IS NULL OR qe.category = :category)
         AND (:dateFrom IS NULL OR qe.spent_at >= :dateFrom)
         AND (:dateTo IS NULL OR qe.spent_at <= :dateTo)
-      ORDER BY qe.spent_at DESC
+        ${accountCondition("ed.payment_account_id", filter)}
     `,
-    {
-      type: QueryTypes.SELECT,
-      replacements: {
-        companyId: filter.companyId,
-        businessUnitId: filter.businessUnitId ?? null,
-        quotationId: filter.quotationId ?? null,
-        purchaseOrderId: filter.purchaseOrderId ?? null,
-        category: filter.category ?? null,
-        dateFrom: filter.dateFrom ?? null,
-        dateTo: filter.dateTo ?? null,
-      },
-    }
-  )) as RawExpenseRow[];
+    { type: QueryTypes.SELECT, replacements: baseReplacements(filter) }
+  )) as RawRow[];
 
-  return rows.map((row) => ({
-    id: `qe-${row.id}`,
-    source: "quotation_expense",
-    source_id: row.id,
-    direction: "expense",
-    category: row.category,
-    amount: Number(row.amount),
-    description: row.description,
-    occurred_at: row.spent_at,
-    quotation_id: row.quotation_id,
-    purchase_order_id: row.purchase_order_id,
-    business_unit_id: row.business_unit_id,
-    created_at: new Date(row.created_at).toISOString(),
-  }));
+  return rows.map((row) => toItem("quotation_expense", "qe", row));
 };
 
-// Junta las 3 fuentes, ordena por fecha (y created_at como desempate) y
-// pagina en memoria — volumen esperado de un libro de caja de una pyme,
+const SOURCE_LOADERS: Record<CashMovementSource, (filter: CashMovementListFilter) => Promise<CashMovementListItem[]>> = {
+  manual: getManualMovements,
+  quotation_payment: getQuotationPaymentMovements,
+  quotation_expense: getQuotationExpenseMovements,
+};
+
+// Junta las fuentes pedidas, ordena por fecha (y created_at como desempate)
+// y pagina en memoria — volumen esperado de un libro de caja de una pyme,
 // nunca millones de filas (CLAUDE.md sección 8: evitar sobre-ingeniería
 // para una escala que no existe).
 const getCashMovementsList = async (filter: CashMovementListFilter): Promise<PaginatedResult<CashMovementListItem>> => {
-  const [manual, payments, expenses] = await Promise.all([
-    getManualMovements(filter),
-    getQuotationPaymentMovements(filter),
-    getQuotationExpenseMovements(filter),
-  ]);
+  const sources: CashMovementSource[] = filter.source ? [filter.source] : ["manual", "quotation_payment", "quotation_expense"];
+  const results = await Promise.all(sources.map((source) => SOURCE_LOADERS[source](filter)));
 
-  const merged = [...manual, ...payments, ...expenses].sort((a, b) => {
+  const merged = results.flat().sort((a, b) => {
     if (a.occurred_at !== b.occurred_at) return a.occurred_at < b.occurred_at ? 1 : -1;
     return a.created_at < b.created_at ? 1 : -1;
   });

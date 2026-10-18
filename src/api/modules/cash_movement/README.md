@@ -45,7 +45,24 @@
 - El toggle toma un lock (`SELECT ... FOR UPDATE`) sobre la fila para que
   dos cambios simultáneos no registren logs contradictorios.
 
+- **Cuenta** de cada ingreso/egreso (`payment_account_id`, `null` =
+  efectivo): en movimientos manuales la elige el usuario; en pagos sale del
+  pago; en gastos de compras pagadas por un trabajador es la cuenta desde la
+  que se le **repuso**.
+- Gastos pagados con plata de un trabajador: la fila incluye
+  `paid_by_employee_name`, `reimbursement_status` (`pending`/`paid`) y
+  `reimbursed_at`, y la pantalla muestra "Pagado por X · pendiente de
+  reponer" o "Pagado por X · repuesto el <fecha> desde <cuenta>". Reponer
+  la deuda **no crea un egreso nuevo**: el gasto de la compra ya está en caja
+  como egreso, crear otro contaría dos veces la misma plata.
+- Los pagos anulados (`is_deleted`) ya no aparecen como ingreso.
+- Filtros de `list`: `direction`, `source` (`manual`/`quotation_payment`/
+  `quotation_expense`), `paymentAccountId` (id o `cash`), `category`,
+  `quotationId`, `purchaseOrderId`, `dateFrom`/`dateTo`.
+
 ## Campos especiales
+- `payment_account_id` (FK a `general_variable`, `SET NULL`) se agregó en
+  `20261018100100-add-payment-account-to-money-movements.js`.
 - `occurred_at` es `DATEONLY` (la fecha que declara el usuario, no el
   `created_at` del registro).
 - `amount` es `DECIMAL(10,2)`; el tope de los validators es 99 999 999.99.

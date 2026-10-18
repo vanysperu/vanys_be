@@ -56,6 +56,8 @@ export const listTechniquesController = asyncHandler(async (req: Request, res: R
     companyId: isSystem ? null : companyId,
     name,
     status,
+    dateFrom: req.query.dateFrom,
+    dateTo: req.query.dateTo,
   });
   const message = resp.data.length === 0 ? "No se encontraron técnicas" : "Lista de técnicas obtenida correctamente";
 

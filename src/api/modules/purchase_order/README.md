@@ -36,9 +36,16 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   compras alcanza la cantidad pedida.
 - El estado global de la orden (`pending`/`purchased`) se recalcula después
   de cada compra a partir de sus items — nunca se setea a mano.
-- No se puede comprar más de lo que falta: cada compra valida la cantidad
-  restante del item tomando un lock (`SELECT ... FOR UPDATE`) sobre el item
-  y la orden, para que dos compras simultáneas del mismo item no se pisen.
+- Comprar más de lo que falta **exige confirmación**: sin `allow_exceed: true`
+  la compra se rechaza con `409` y código `PURCHASE_EXCEEDS_REMAINING`
+  (`errors: { ordered, already_purchased, requested }`), y el frontend
+  muestra el modal "La cantidad a comprar era N, ¿seguro quieres comprar
+  más?". Si la persona acepta, se reenvía con `allow_exceed: true` y el gasto
+  queda anotado como "compra adicional: X por encima de lo pedido". La
+  validación toma un lock (`SELECT ... FOR UPDATE`) sobre el item y la orden,
+  para que dos compras simultáneas del mismo item no se pisen.
+- Filtros de `list`: `status`, `assignedTo`, `clientName`, `assigneeName`,
+  `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
 - Un item que **ya tiene compras registradas no se puede marcar
   `not_needed`**: la plata ya salió (y si fue del trabajador, ya existe su
   deuda), así que anularlo dejaría el gasto huérfano y la orden se cerraría

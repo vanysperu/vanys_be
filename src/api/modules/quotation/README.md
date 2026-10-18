@@ -67,6 +67,26 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
 - El subtotal es siempre `precio_por_unidad × cantidad`. Los 4 precios de
   catálogo (unidad/ciento/medio millar/millar) son **tarifas por volumen**,
   no precios de un lote cerrado.
+- El precio por unidad de un item es **precio del producto + precio de la
+  técnica en la MISMA escala** (ver
+  [`customization_technique`](../customization_technique/README.md)): jabón
+  ciento 0.90 + serigrafía ciento 0.95, 10 unidades = 18.50. Si el producto o
+  la técnica no tienen precio en esa escala, se rechaza la cotización.
+- **Adelanto al aceptar** (pedido explícito del usuario): `PUT /quotation/status/:id`
+  acepta un `advance_payment` opcional (mismos campos que un pago) SOLO cuando
+  `status = "accepted"`. El cambio de estado y el pago van en la MISMA
+  transacción: si el pago falla (sobre-pago, cuenta inválida), la cotización
+  no queda aceptada. Exige además el permiso de registrar pagos
+  (`POST /quotation/*/payments`). En el frontend, al pasar de Pendiente a
+  Aceptada (botón o arrastre en el Kanban) aparece el modal "¿El cliente pagó
+  adelanto?" con la mitad del total sugerida.
+- Un pago que no es en efectivo exige `payment_account_id` (cuenta de la
+  empresa a la que entró el dinero) cuando la empresa tiene cuentas activas
+  (`resolvePaymentAccountForQuotation`); la cuenta se valida contra la
+  empresa de la cotización.
+- Filtros de `list`: `status`, `clientId`, `createdBy`, `businessUnitId`
+  (solo si el usuario no está atado a una tienda), `dateFrom`/`dateTo`
+  (fecha de emisión, hora de Lima).
 - El IGV no es constante: sale de una Variable General por empresa
   (`getIgvRate`).
 

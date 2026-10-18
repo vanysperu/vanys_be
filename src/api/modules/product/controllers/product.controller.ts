@@ -62,6 +62,8 @@ export const listProductsController = asyncHandler(async (req: Request, res: Res
     name,
     sku,
     status,
+    dateFrom: req.query.dateFrom,
+    dateTo: req.query.dateTo,
   });
   const message = resp.data.length === 0 ? "No se encontraron productos" : "Lista de productos obtenida correctamente";
 

@@ -15,10 +15,16 @@ export interface PaymentListItem {
   paid_at: string;
   notes: string | null;
   operation_number: string | null;
+  payment_account_id: number | null;
+  // Nombre de la cuenta a la que entró (ej. "BCP Soles"); null = efectivo.
+  payment_account_name: string | null;
   is_deleted: boolean;
   business_unit_id: number | null;
   created_at: string;
 }
+
+// "active" (por defecto) = vigentes; "disabled" = anulados; "all" = ambos.
+export type PaymentStatusFilter = "active" | "disabled" | "all";
 
 export interface PaymentListFilter {
   // null = is_system (ve todo).
@@ -26,9 +32,13 @@ export interface PaymentListFilter {
   businessUnitId?: number;
   quotationId?: number;
   method?: string;
+  // Cuenta de destino; "cash" filtra los pagos sin cuenta (efectivo).
+  paymentAccountId?: number | "cash";
+  // Búsqueda por nombre del cliente (contiene).
+  clientName?: string;
   dateFrom?: string;
   dateTo?: string;
-  includeDisabled?: boolean;
+  status?: PaymentStatusFilter;
   page: number;
   limit: number;
 }
@@ -42,25 +52,40 @@ interface RawPaymentRow {
   paid_at: string;
   notes: string | null;
   operation_number: string | null;
+  payment_account_id: number | null;
+  payment_account_name: string | null;
   is_deleted: number | boolean;
   business_unit_id: number | null;
   created_at: Date;
 }
+
+const STATUS_CONDITION: Record<PaymentStatusFilter, string | null> = {
+  active: "qp.is_deleted = false",
+  disabled: "qp.is_deleted = true",
+  all: null,
+};
 
 const getPaymentsList = async (filter: PaymentListFilter): Promise<PaginatedResult<PaymentListItem>> => {
   const conditions: string[] = ["(:companyId IS NULL OR q.company_id = :companyId)"];
   if (filter.businessUnitId !== undefined) conditions.push("q.business_unit_id = :businessUnitId");
   if (filter.quotationId !== undefined) conditions.push("qp.quotation_id = :quotationId");
   if (filter.method) conditions.push("qp.method = :method");
+  if (filter.paymentAccountId === "cash") conditions.push("qp.payment_account_id IS NULL");
+  if (typeof filter.paymentAccountId === "number") conditions.push("qp.payment_account_id = :paymentAccountId");
+  if (filter.clientName) conditions.push("c.name LIKE :clientName");
   if (filter.dateFrom) conditions.push("qp.paid_at >= :dateFrom");
   if (filter.dateTo) conditions.push("qp.paid_at <= :dateTo");
-  if (!filter.includeDisabled) conditions.push("qp.is_deleted = false");
+  const statusCondition = STATUS_CONDITION[filter.status ?? "active"];
+  if (statusCondition) conditions.push(statusCondition);
 
   const replacements = {
     companyId: filter.companyId,
     businessUnitId: filter.businessUnitId ?? null,
     quotationId: filter.quotationId ?? null,
     method: filter.method ?? null,
+    paymentAccountId: typeof filter.paymentAccountId === "number" ? filter.paymentAccountId : null,
+    // Valor bindeado (nunca interpolado): el % va dentro del parámetro.
+    clientName: filter.clientName ? `%${filter.clientName}%` : null,
     dateFrom: filter.dateFrom ?? null,
     dateTo: filter.dateTo ?? null,
   };
@@ -71,16 +96,19 @@ const getPaymentsList = async (filter: PaymentListFilter): Promise<PaginatedResu
     `SELECT COUNT(*) AS total
      FROM quotation_payment qp
      INNER JOIN quotation q ON q.id = qp.quotation_id
+     INNER JOIN client c ON c.id = q.client_id
      WHERE ${whereClause}`,
     { type: QueryTypes.SELECT, replacements }
   )) as { total: number }[];
 
   const rows = (await DataBase.instance.sequelize.query(
     `SELECT qp.id, qp.quotation_id, c.name AS client_name, qp.amount, qp.method, qp.paid_at, qp.notes,
-            qp.operation_number, qp.is_deleted, q.business_unit_id, qp.created_at
+            qp.operation_number, qp.payment_account_id, pa.name AS payment_account_name,
+            qp.is_deleted, q.business_unit_id, qp.created_at
      FROM quotation_payment qp
      INNER JOIN quotation q ON q.id = qp.quotation_id
      INNER JOIN client c ON c.id = q.client_id
+     LEFT JOIN general_variable pa ON pa.id = qp.payment_account_id
      WHERE ${whereClause}
      ORDER BY qp.paid_at DESC, qp.created_at DESC
      LIMIT :limit OFFSET :offset`,
@@ -99,6 +127,8 @@ const getPaymentsList = async (filter: PaymentListFilter): Promise<PaginatedResu
     paid_at: row.paid_at,
     notes: row.notes,
     operation_number: row.operation_number,
+    payment_account_id: row.payment_account_id,
+    payment_account_name: row.payment_account_name,
     is_deleted: Boolean(row.is_deleted),
     business_unit_id: row.business_unit_id,
     created_at: new Date(row.created_at).toISOString(),

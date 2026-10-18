@@ -20,8 +20,8 @@ cuando se registra una compra con `funding_source: "employee"`.
 
 ## Botones/acciones vinculadas
 - employee_debt.pay.button ("Marcar como pagado" — liquida de una vez todas
-  las compras pendientes de ese trabajador, con `ConfirmDialog` porque es
-  irreversible).
+  las compras pendientes de ese trabajador; el diálogo pide de qué cuenta
+  salió el dinero para reponerle, por defecto efectivo).
 
 ## Reglas de negocio propias del módulo
 - Pedido explícito del usuario: al registrar una compra de una orden de
@@ -43,7 +43,18 @@ cuando se registra una compra con `funding_source: "employee"`.
   solo lectura: es una vista financiera de gestión, no una tarea operativa
   del día a día.
 
+- `list` filtra por `status` (`pending` por defecto — pedido explícito del
+  usuario —, `paid`, `all`), `userId` y `dateFrom`/`dateTo` (fecha de la
+  compra, hora de Lima). Cada fila trae `pending_amount`/`pending_count` y
+  `paid_amount`/`paid_count`/`last_paid_at`.
+- `pay` acepta `payment_account_id` (opcional, `null` = efectivo), validado
+  contra la empresa del trabajador. `paid_at` es el día calendario de Lima.
+  Caja usa esa cuenta y fecha para anotar los gastos como "repuestos" (ver
+  [`cash_movement`](../cash_movement/README.md)).
+
 ## Campos especiales
+- `payment_account_id` se agregó en
+  `20261018100100-add-payment-account-to-money-movements.js`.
 - `employee_debt.company_id` vive directo en la tabla (no solo derivado vía
   la compra) para poder listar/filtrar "a quién se le debe" sin un join de
   3 tablas en cada consulta — se setea desde `purchase_order.company_id` al

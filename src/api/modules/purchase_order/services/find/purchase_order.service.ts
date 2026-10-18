@@ -2,6 +2,7 @@ import { FindAndCountOptions, Op, WhereOptions } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { PurchaseOrderAttributes } from "../../model/purchase_order.model";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
+import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
 
 const ACTOR_ATTRIBUTES = ["id", "name", "paternal_lastname"];
 
@@ -18,6 +19,9 @@ export interface PurchaseOrderListFilter {
   clientName?: string;
   assigneeName?: string;
   quotationId?: number;
+  // Rango de fecha de creación (días de Lima, YYYY-MM-DD).
+  dateFrom?: unknown;
+  dateTo?: unknown;
   page: number;
   limit: number;
   orderBy: string;
@@ -35,6 +39,8 @@ const getPurchaseOrdersList = async ({
   clientName,
   assigneeName,
   quotationId,
+  dateFrom,
+  dateTo,
   page,
   limit,
   orderBy,
@@ -45,6 +51,9 @@ const getPurchaseOrdersList = async ({
   if (assignedTo) where.assigned_to = assignedTo;
   if (status) where.status = status;
   if (quotationId) where.quotation_id = quotationId;
+  // Rango de fecha de creación de la orden (días de Lima).
+  const createdAt = buildBusinessDateRange(dateFrom, dateTo);
+  if (createdAt) where.created_at = createdAt;
 
   // Ordenar por columnas propias de purchase_order (id, status, created_at,
   // assigned_to); ordenar por asociaciones (cliente/asignado) requeriría un

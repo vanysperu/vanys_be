@@ -4,10 +4,13 @@ import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import { createCashMovement } from "../services/create/cash_movement.service";
-import { getCashMovementById, getCashMovementsList } from "../services/find/cash_movement.service";
+import { CashMovementSource, getCashMovementById, getCashMovementsList } from "../services/find/cash_movement.service";
+
+const CASH_MOVEMENT_SOURCES: CashMovementSource[] = ["manual", "quotation_payment", "quotation_expense"];
 import { disableOrEnableCashMovementById } from "../services/delete/cash_movement.service";
 import { resolveBusinessUnitFilter, resolveTargetBusinessUnitId } from "../../../../core/rbac/businessUnitScope";
 import { DataBase } from "../../../../database";
+import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
@@ -32,6 +35,15 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
     }
   }
 
+  // Desde/hacia qué cuenta se movió el dinero (pedido explícito del usuario);
+  // vacío = efectivo. No es obligatoria: un ingreso/egreso de caja chica es
+  // efectivo por naturaleza.
+  const payment_account_id = await resolvePaymentAccountId({
+    accountId: req.body.payment_account_id,
+    companyId,
+    required: false,
+  });
+
   const movement = await createCashMovement({
     movement: {
       company_id: companyId,
@@ -43,6 +55,7 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
       occurred_at,
       quotation_id: quotation_id ?? null,
       purchase_order_id: purchase_order_id ?? null,
+      payment_account_id,
     },
     createdBy: user.userId,
   });
@@ -52,15 +65,18 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
 
 export const listCashMovementsController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { direction, category, quotationId, purchaseOrderId, dateFrom, dateTo } = req.query;
+  const { direction, category, quotationId, purchaseOrderId, dateFrom, dateTo, source, paymentAccountId } = req.query;
   const page = Number(req.query.page) || 1;
   const limit = Math.min(Number(req.query.limit) || 20, 100);
 
   const resp = await getCashMovementsList({
     companyId: user.isSystem ? null : user.companyId,
     businessUnitId: resolveBusinessUnitFilter(user),
-    direction: (direction as "income" | "expense") || undefined,
+    direction: direction === "income" || direction === "expense" ? direction : undefined,
     category: (category as string) || undefined,
+    source: CASH_MOVEMENT_SOURCES.find((value) => value === source),
+    paymentAccountId:
+      paymentAccountId === "cash" ? "cash" : Number(paymentAccountId) > 0 ? Number(paymentAccountId) : undefined,
     quotationId: quotationId ? Number(quotationId) : undefined,
     purchaseOrderId: purchaseOrderId ? Number(purchaseOrderId) : undefined,
     dateFrom: (dateFrom as string) || undefined,

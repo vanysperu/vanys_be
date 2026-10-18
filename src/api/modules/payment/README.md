@@ -46,7 +46,20 @@ ni anular.
   existente de cotizaciones) pero nunca editar ni anular; eso es exclusivo
   de Administrador/Super Administrador.
 
+- **Cuenta de destino** (pedido explícito del usuario: "no especifica a qué
+  banco fue realizado"): `payment_account_id` apunta a una fila de
+  `general_variable` con categoría `payment_account` (banco/Yape/Plin,
+  cargadas en "Documentos de la empresa"). `null` = efectivo. Si el método
+  no es efectivo y la empresa tiene cuentas activas, es obligatoria
+  (`PAYMENT_ACCOUNT_REQUIRED`); la cuenta debe ser de la misma empresa y no
+  estar deshabilitada. Editar un pago manteniendo su cuenta original no la
+  revalida (se puede corregir un pago viejo aunque esa cuenta ya no se use).
+- Filtros de `list`: `status` (`active`/`disabled`/`all`), `method`,
+  `paymentAccountId` (id o `cash`), `clientName`, `dateFrom`/`dateTo`.
+
 ## Campos especiales
+- `payment_account_id` (FK a `general_variable`, `SET NULL`) se agregó en
+  `20261018100100-add-payment-account-to-money-movements.js`.
 - `is_deleted` se agregó en la migración
   `20261011100000-add-is-deleted-to-quotation-payment.js` — la tabla
   original no soportaba anular un pago, solo crearlo.

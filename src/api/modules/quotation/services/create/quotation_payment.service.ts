@@ -2,6 +2,8 @@ import { Op, QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
+import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
+import { CASH_PAYMENT_METHOD } from "../../validators/quotation.validator";
 
 // Tolerancia de un céntimo para absorber artefactos de redondeo decimal
 // (ver computeQuotationTotal) — nunca para disfrazar un sobre-pago real.
@@ -53,6 +55,8 @@ const assertPaymentWithinBalance = async ({
 export interface CreateQuotationPaymentInput {
   amount: number;
   method?: string | null;
+  // Cuenta de la empresa a la que entró el pago; vacío = efectivo.
+  payment_account_id?: number | null;
   paid_at: string;
   notes?: string | null;
   operation_number?: string | null;
@@ -84,6 +88,94 @@ const recalculateTotalPaid = async (quotationId: number, transaction: Transactio
   );
 };
 
+// Cuenta a la que entró el pago, validada contra la empresa DUEÑA de la
+// cotización. Obligatoria salvo en efectivo (si la empresa tiene cuentas
+// configuradas) — ver resolvePaymentAccountId.
+const resolvePaymentAccountForQuotation = async ({
+  quotationId,
+  accountId,
+  method,
+  transaction,
+}: {
+  quotationId: number;
+  accountId: unknown;
+  method: string | null | undefined;
+  transaction: Transaction;
+}): Promise<number | null> => {
+  const quotation = await DataBase.instance.quotation.findOne({
+    where: { id: quotationId },
+    attributes: ["company_id"],
+    transaction,
+  });
+  if (!quotation) throw new Error("La cotización no existe");
+
+  return resolvePaymentAccountId({
+    accountId,
+    companyId: quotation.company_id,
+    required: method !== CASH_PAYMENT_METHOD,
+  });
+};
+
+// Inserta el pago, recalcula total_paid y deja el evento en el historial,
+// SIEMPRE dentro de una transacción que recibe de afuera — así lo reusan
+// tanto "registrar pago" como "pasar a Aceptada con adelanto" (que además
+// cambia el estado en la misma transacción: todo o nada).
+const insertQuotationPayment = async ({
+  quotationId,
+  input,
+  createdBy,
+  transaction,
+  isAdvance = false,
+}: {
+  quotationId: number;
+  input: CreateQuotationPaymentInput;
+  createdBy?: number;
+  transaction: Transaction;
+  // Adelanto al aceptar la cotización: solo cambia el texto del historial.
+  isAdvance?: boolean;
+}) => {
+  await assertPaymentWithinBalance({ quotationId, amount: input.amount, transaction });
+
+  const paymentAccountId = await resolvePaymentAccountForQuotation({
+    quotationId,
+    accountId: input.payment_account_id,
+    method: input.method,
+    transaction,
+  });
+
+  const payment = await DataBase.instance.quotation_payment.create(
+    {
+      id: 0,
+      quotation_id: quotationId,
+      amount: input.amount,
+      method: input.method ?? null,
+      paid_at: input.paid_at,
+      notes: input.notes ?? null,
+      operation_number: input.operation_number ?? null,
+      payment_account_id: paymentAccountId,
+      is_deleted: false,
+      created_by: createdBy ?? null,
+      created_at: nowUtc(),
+      updated_by: null,
+      updated_at: null,
+    },
+    { transaction }
+  );
+
+  await recalculateTotalPaid(quotationId, transaction);
+
+  const label = isAdvance ? "Adelanto registrado" : "Pago registrado";
+  await logQuotationEvent({
+    quotationId,
+    action: "payment_added",
+    description: `${label} por S/ ${Number(input.amount).toFixed(2)}`,
+    actorId: createdBy,
+    transaction,
+  });
+
+  return payment;
+};
+
 // Escribe en 3 tablas (quotation_payment, quotation, quotation_event) — se
 // envuelve en una transacción para que un fallo a mitad de camino no deje
 // el total_paid cacheado desincronizado del pago real.
@@ -95,40 +187,15 @@ const createQuotationPayment = async ({
   quotationId: number;
   input: CreateQuotationPaymentInput;
   createdBy?: number;
-}) => {
-  return DataBase.instance.sequelize.transaction(async (transaction) => {
-    await assertPaymentWithinBalance({ quotationId, amount: input.amount, transaction });
+}) =>
+  DataBase.instance.sequelize.transaction((transaction) =>
+    insertQuotationPayment({ quotationId, input, createdBy, transaction })
+  );
 
-    const payment = await DataBase.instance.quotation_payment.create(
-      {
-        id: 0,
-        quotation_id: quotationId,
-        amount: input.amount,
-        method: input.method ?? null,
-        paid_at: input.paid_at,
-        notes: input.notes ?? null,
-        operation_number: input.operation_number ?? null,
-        is_deleted: false,
-        created_by: createdBy ?? null,
-        created_at: nowUtc(),
-        updated_by: null,
-        updated_at: null,
-      },
-      { transaction }
-    );
-
-    await recalculateTotalPaid(quotationId, transaction);
-
-    await logQuotationEvent({
-      quotationId,
-      action: "payment_added",
-      description: `Pago registrado por S/ ${Number(input.amount).toFixed(2)}`,
-      actorId: createdBy,
-      transaction,
-    });
-
-    return payment;
-  });
+export {
+  createQuotationPayment,
+  insertQuotationPayment,
+  recalculateTotalPaid,
+  assertPaymentWithinBalance,
+  resolvePaymentAccountForQuotation,
 };
-
-export { createQuotationPayment, recalculateTotalPaid, assertPaymentWithinBalance };

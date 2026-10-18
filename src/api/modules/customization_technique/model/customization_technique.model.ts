@@ -1,23 +1,14 @@
 import { BuildOptions, DataTypes, Model, Sequelize } from "sequelize";
 
-export type ExtraType = "fixed" | "percentage";
-
 export interface CustomizationTechniqueAttributes {
   id: number;
   company_id: number;
   name: string;
   description: string | null;
-  extra_type: ExtraType;
-  // Solo aplica cuando extra_type="percentage" (porcentaje sobre el precio
-  // base del producto) — ya escala solo con el volumen porque el precio
-  // base también varía por modo, no necesita un precio por cada tarifa.
-  extra_value: number;
-  // Solo aplican cuando extra_type="fixed": igual que "product" (ver
-  // product.model.ts), la técnica puede tener un extra POR UNIDAD distinto
-  // según el volumen pedido (ej. personalizar por millar sale más barato
-  // por unidad que personalizar por unidad suelta) — pedido explícito del
-  // usuario tras notar que antes solo había un monto fijo sin importar el
-  // modo de precio elegido en el item.
+  // Igual que "product" (ver product.model.ts): un precio POR UNIDAD según el
+  // volumen pedido. El item cobra (precio del producto + precio de la técnica)
+  // en el mismo modo × cantidad. Ya no existe el modo porcentual (ver la
+  // migración remove-percentage-from-technique).
   price_unit: number | null;
   price_hundred: number | null;
   price_half_thousand: number | null;
@@ -49,8 +40,6 @@ export function CustomizationTechniqueFactory(sequelize: Sequelize): Customizati
       company_id: { type: DataTypes.BIGINT, allowNull: false },
       name: { type: DataTypes.STRING(255), allowNull: false },
       description: { type: DataTypes.TEXT, allowNull: true },
-      extra_type: { type: DataTypes.ENUM("fixed", "percentage"), allowNull: false, defaultValue: "fixed" },
-      extra_value: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
       price_unit: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_hundred: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_half_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },

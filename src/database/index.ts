@@ -51,6 +51,7 @@ import {
 import { CashMovementFactory, CashMovementStatic } from "../api/modules/cash_movement/model/cash_movement.model";
 import { EmployeeDebtFactory, EmployeeDebtStatic } from "../api/modules/employee_debt/model/employee_debt.model";
 import { employeeDebtAssociations } from "./associations/employee_debt";
+import { ReminderFactory, ReminderStatic } from "../api/modules/reminder/model/reminder.model";
 import { CompanyAssetFactory, CompanyAssetStatic } from "../api/modules/uploads/model/company_asset.model";
 
 export class DataBase {
@@ -89,6 +90,7 @@ export class DataBase {
   public purchase_order_item_purchase: PurchaseOrderItemPurchaseStatic;
   public cash_movement: CashMovementStatic;
   public employee_debt: EmployeeDebtStatic;
+  public reminder: ReminderStatic;
   public company_asset: CompanyAssetStatic;
 
   constructor() {
@@ -148,6 +150,7 @@ export class DataBase {
     this.purchase_order_item_purchase = PurchaseOrderItemPurchaseFactory(this.sequelize);
     this.cash_movement = CashMovementFactory(this.sequelize);
     this.employee_debt = EmployeeDebtFactory(this.sequelize);
+    this.reminder = ReminderFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
 
     this.associations();

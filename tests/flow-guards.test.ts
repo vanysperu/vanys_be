@@ -37,7 +37,6 @@ describe("Catálogo deshabilitado no se puede usar en cotizaciones nuevas", () =
     const technique = await api.post("/customization-technique/create", {
       company_id: companyId,
       name: `CatTechnique${stamp}`,
-      extra_type: "fixed",
       price_unit: 5,
     });
 
@@ -153,22 +152,21 @@ describe("Importes redondeados a 2 decimales", () => {
 
   const decimalsOf = (value: number) => (String(value).split(".")[1] ?? "").length;
 
-  it("no devuelve decimales basura con una técnica porcentual", async () => {
+  it("no devuelve decimales basura al sumar producto + técnica", async () => {
     const api = authedRequest(token);
     const stamp = wordStamp();
 
     const client = await api.post("/client/create", { company_id: companyId, name: `RoundClient${stamp}` });
-    // 19.99 * 1.10 = 21.989000000000004 en punto flotante.
+    // (0.1 + 0.2) * 3 = 0.9000000000000001 en punto flotante.
     const product = await api.post("/product/create", {
       company_id: companyId,
       name: `RoundProduct${stamp}`,
-      price_unit: 19.99,
+      price_unit: 0.1,
     });
     const technique = await api.post("/customization-technique/create", {
       company_id: companyId,
       name: `RoundTechnique${stamp}`,
-      extra_type: "percentage",
-      extra_value: 10,
+      price_unit: 0.2,
     });
 
     const created = await api.post("/quotation/create", {
