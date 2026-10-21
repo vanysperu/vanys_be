@@ -1,7 +1,7 @@
 # Módulo: customization_technique (Técnicas de personalización)
 
 ## Código de módulo (RBAC)
-`producto` (módulo 6, "Lista de precios") — las técnicas comparten módulo
+`producto` (módulo 6, "Productos") — las técnicas comparten módulo
 con los productos; sus vistas/botones cuelgan de la vista
 `producto.technique.list`.
 
@@ -17,7 +17,7 @@ Filtros de `list`: `name`, `status` (`active`/`inactive`, CSV), `dateFrom`/
 `dateTo` (fecha de creación, `YYYY-MM-DD` en hora de Lima).
 
 ## Vistas de frontend vinculadas
-- producto.technique.list (`/productos/tecnicas`, pestaña de "Lista de precios")
+- producto.technique.list (`/productos/tecnicas`, pestaña de "Productos")
 
 ## Botones/acciones vinculadas
 - producto.technique.create.button

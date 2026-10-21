@@ -1,7 +1,7 @@
-# Módulo: product (Lista de precios)
+# Módulo: product (Productos)
 
 ## Código de módulo (RBAC)
-`producto` (módulo 6, "Lista de precios"). Comparte módulo con las técnicas
+`producto` (módulo 6, "Productos"). Comparte módulo con las técnicas
 de personalización ([`customization_technique`](../customization_technique/README.md)).
 
 ## Endpoints
@@ -16,7 +16,7 @@ Filtros de `list`: `searchTerm`, `name`, `sku`, `status` (`active`/`inactive`,
 CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
 
 ## Vistas de frontend vinculadas
-- producto.list (`/productos`, pestaña "Productos" de "Lista de precios")
+- producto.list (`/productos`, pestaña "Productos" de la pantalla "Productos")
 
 ## Botones/acciones vinculadas
 - producto.create.button
