@@ -1,9 +1,28 @@
-import { FindAndCountOptions } from "sequelize";
+import { FindAndCountOptions, literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
+import { RECEIVABLE_MIN_BALANCE, RECEIVABLE_STATUSES } from "../../../receivable/services/find/receivable.service";
+
+// Totales de TODO lo filtrado (no solo de la página), calculados en la base.
+// El Panel principal los usaba sumando en el navegador las últimas 100
+// cotizaciones, con un criterio distinto al de "Por cobrar" (bug reportado
+// por el usuario: "que los campos tomen la info que deben").
+export interface QuotationListSummary {
+  // Mismo criterio que el módulo receivable (Por cobrar).
+  receivable_balance: number;
+  receivable_count: number;
+  // Vencidas: el cliente no respondió antes de la fecha de validez.
+  expired_balance: number;
+  expired_count: number;
+}
+
+// Estados fijos del código (no vienen del cliente); igual se escapan.
+const RECEIVABLE_CONDITION = () =>
+  `status IN (${RECEIVABLE_STATUSES.map((status) => DataBase.instance.sequelize.escape(status)).join(", ")})` +
+  ` AND total - total_paid >= ${RECEIVABLE_MIN_BALANCE}`;
 
 interface QuotationListOptions extends IListOptions<QuotationAttributes> {
   companyId?: number | null;
@@ -23,7 +42,9 @@ interface QuotationListOptions extends IListOptions<QuotationAttributes> {
   orderDir: "asc" | "desc";
 }
 
-const getQuotationsList = async (options: QuotationListOptions): Promise<PaginatedResult<QuotationAttributes>> => {
+const getQuotationsList = async (
+  options: QuotationListOptions
+): Promise<PaginatedResult<QuotationAttributes> & { summary: QuotationListSummary }> => {
   const { where, page, limit, orderBy, orderDir, companyId, businessUnitId, status, clientId, createdBy, dateFrom, dateTo } =
     options;
 
@@ -51,9 +72,29 @@ const getQuotationsList = async (options: QuotationListOptions): Promise<Paginat
     include: [{ association: "client", attributes: ["id", "name"] }],
   };
 
-  const { count, rows } = await DataBase.instance.quotation.findAndCountAll(queryOptions);
+  const receivable = RECEIVABLE_CONDITION();
+  const [{ count, rows }, summaryRow] = await Promise.all([
+    DataBase.instance.quotation.findAndCountAll(queryOptions),
+    DataBase.instance.quotation.findOne({
+      attributes: [
+        [literal(`COALESCE(SUM(CASE WHEN ${receivable} THEN total - total_paid ELSE 0 END), 0)`), "receivable_balance"],
+        [literal(`COUNT(CASE WHEN ${receivable} THEN 1 END)`), "receivable_count"],
+        [literal(`COALESCE(SUM(CASE WHEN status = 'expired' THEN total - total_paid ELSE 0 END), 0)`), "expired_balance"],
+        [literal(`COUNT(CASE WHEN status = 'expired' THEN 1 END)`), "expired_count"],
+      ],
+      where: queryOptions.where,
+      raw: true,
+    }) as Promise<Record<keyof QuotationListSummary, string | number> | null>,
+  ]);
 
-  return { data: rows, meta: buildPaginationMeta(count, page, limit) };
+  const summary: QuotationListSummary = {
+    receivable_balance: Number(summaryRow?.receivable_balance ?? 0),
+    receivable_count: Number(summaryRow?.receivable_count ?? 0),
+    expired_balance: Number(summaryRow?.expired_balance ?? 0),
+    expired_count: Number(summaryRow?.expired_count ?? 0),
+  };
+
+  return { data: rows, meta: buildPaginationMeta(count, page, limit), summary };
 };
 
 const ACTOR_ATTRIBUTES = ["id", "name", "paternal_lastname"];

@@ -72,6 +72,18 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   PDF omite la columna "Técnica" si ningún item lleva una. Ver
   [`product`](../product/README.md).
 - El PDF solo lista las cuentas de pago **activas** de la empresa.
+- Columnas del PDF por producto: con IGV, `P. unit. · Subtotal · IGV · Total`
+  (el IGV de cada línea es su parte proporcional del IGV real cobrado); sin
+  IGV, una sola columna `Total (sin IGV)`. En el resumen, el IGV se muestra
+  siempre (su % real o "No incluido") y cierra con "Total a pagar". Mismo
+  criterio que el detalle de la cotización en pantalla.
+- `GET /quotation/list` devuelve además un `summary` calculado en la base
+  sobre **todo lo filtrado** (no solo la página): `receivable_balance` /
+  `receivable_count` con el mismo criterio que el módulo
+  [`receivable`](../receivable/README.md) (estados de aceptada en adelante y
+  saldo ≥ S/ 0.01) y `expired_balance` / `expired_count`. El Panel principal
+  usa estos totales; antes sumaba en el navegador las últimas 100
+  cotizaciones e incluía las pendientes.
 - El precio por unidad de un item es **precio del producto + precio de la
   técnica en la MISMA escala** (ver
   [`customization_technique`](../customization_technique/README.md)): jabón

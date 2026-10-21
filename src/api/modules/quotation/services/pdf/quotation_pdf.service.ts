@@ -126,7 +126,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 9.5, fontWeight: 700, marginBottom: 4, textTransform: "uppercase" },
   infoGrid: { flexDirection: "row", justifyContent: "space-between" },
   table: { borderWidth: 1, borderColor: "#E4E4E9", borderRadius: 3 },
-  tableHeaderRow: { flexDirection: "row", backgroundColor: "#F4F3FF", paddingVertical: 6, paddingHorizontal: 6 },
+  // Gris azulado neutro (el lila anterior venía de la paleta vieja de Grulla).
+  tableHeaderRow: { flexDirection: "row", backgroundColor: "#EEF1F6", paddingVertical: 6, paddingHorizontal: 6 },
   tableRow: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: "#EEEEF2" },
   th: { fontSize: 8.5, fontWeight: 700, color: "#5B6072" },
   td: { fontSize: 9 },
@@ -139,8 +140,9 @@ const styles = StyleSheet.create({
   colQty: { flex: 0.7, textAlign: "right" },
   colMode: { flex: 1.1, textAlign: "right" },
   colPrice: { flex: 1.1, textAlign: "right" },
+  colSubtotal: { flex: 1.1, textAlign: "right" },
   colIgv: { flex: 1, textAlign: "right" },
-  colSubtotal: { flex: 1.2, textAlign: "right" },
+  colTotal: { flex: 1.2, textAlign: "right", fontWeight: 700 },
   totalsBox: { alignSelf: "flex-end", width: 220, marginTop: 10 },
   totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   totalsLabel: { fontSize: 9, color: "#5B6072" },
@@ -276,16 +278,18 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
         createElement(
           View,
           { style: { flexDirection: "row", gap: 6, marginBottom: 10 } },
+          // Mismo estilo para las dos etiquetas (la de diseño era lila, de la
+          // paleta vieja de Grulla).
           data.includes_delivery &&
             createElement(
               Text,
-              { style: { fontSize: 8, backgroundColor: "#E6EEFB", color: "#1F5FC0", padding: 4, borderRadius: 3 } },
+              { style: { fontSize: 8, backgroundColor: "#E6ECF7", color: "#002E77", padding: 4, borderRadius: 3 } },
               "Incluye delivery",
             ),
           data.includes_design &&
             createElement(
               Text,
-              { style: { fontSize: 8, backgroundColor: "#EFEBFF", color: "#5B3FD6", padding: 4, borderRadius: 3 } },
+              { style: { fontSize: 8, backgroundColor: "#E6ECF7", color: "#002E77", padding: 4, borderRadius: 3 } },
               "Incluye diseño",
             ),
         ),
@@ -356,8 +360,17 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             createElement(Text, { style: [styles.th, styles.colQty] }, "Cant."),
             createElement(Text, { style: [styles.th, styles.colMode] }, "Modo"),
             createElement(Text, { style: [styles.th, styles.colPrice] }, "P. unit."),
-            createElement(Text, { style: [styles.th, styles.colIgv] }, "IGV"),
-            createElement(Text, { style: [styles.th, styles.colSubtotal] }, "Subtotal"),
+            // Mismas columnas que el detalle en pantalla (pedido explícito
+            // del usuario: que se vea claro cuánto se paga por cada producto
+            // y su IGV). Antes salía "IGV" antes de un "Subtotal" sin IGV y
+            // no había total por producto.
+            ...(data.includes_igv
+              ? [
+                  createElement(Text, { style: [styles.th, styles.colSubtotal], key: "h-subtotal" }, "Subtotal"),
+                  createElement(Text, { style: [styles.th, styles.colIgv], key: "h-igv" }, "IGV"),
+                  createElement(Text, { style: [styles.th, styles.colTotal], key: "h-total" }, "Total"),
+                ]
+              : [createElement(Text, { style: [styles.th, styles.colTotal], key: "h-total" }, "Total (sin IGV)")]),
           ),
           ...data.items.map((item: QuotationPdfItem) => {
             // IGV por línea, derivado del real cobrado (total-subtotal),
@@ -366,6 +379,7 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             // (QuotationDetailDialog.tsx: nunca recalcula con el % actual
             // configurado, se basa en lo que de verdad se cobró).
             const lineIgv = data.includes_igv && data.subtotal > 0 ? (item.subtotal / data.subtotal) * (data.total - data.subtotal) : 0;
+            const lineTotal = Number(item.subtotal) + lineIgv;
 
             return createElement(
               View,
@@ -381,8 +395,13 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
                 PRICING_MODE_LABEL[item.pricing_mode] ?? item.pricing_mode,
               ),
               createElement(Text, { style: [styles.td, styles.colPrice] }, money(item.unit_price)),
-              createElement(Text, { style: [styles.td, styles.colIgv] }, data.includes_igv ? money(lineIgv) : "—"),
-              createElement(Text, { style: [styles.td, styles.colSubtotal] }, money(item.subtotal)),
+              ...(data.includes_igv
+                ? [
+                    createElement(Text, { style: [styles.td, styles.colSubtotal], key: "subtotal" }, money(item.subtotal)),
+                    createElement(Text, { style: [styles.td, styles.colIgv], key: "igv" }, money(lineIgv)),
+                  ]
+                : []),
+              createElement(Text, { style: [styles.td, styles.colTotal], key: "total" }, money(lineTotal)),
             );
           }),
         ),
@@ -396,13 +415,24 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
               createElement(Text, { style: styles.totalsLabel }, "Subtotal"),
               createElement(Text, { style: styles.totalsValue }, money(data.subtotal)),
             ),
-          data.includes_igv &&
+          // El IGV se muestra siempre (como en pantalla), con su % real o
+          // "No incluido", para que el cliente sepa si el total lo incluye.
+          createElement(
+            View,
+            { style: styles.totalsRow },
             createElement(
-              View,
-              { style: styles.totalsRow },
-              createElement(Text, { style: styles.totalsLabel }, "IGV"),
-              createElement(Text, { style: styles.totalsValue }, money(data.total - data.subtotal)),
+              Text,
+              { style: styles.totalsLabel },
+              data.includes_igv && data.subtotal > 0
+                ? `IGV (${Math.round(((data.total - data.subtotal) / data.subtotal) * 100)}%)`
+                : "IGV",
             ),
+            createElement(
+              Text,
+              { style: styles.totalsValue },
+              data.includes_igv ? money(data.total - data.subtotal) : "No incluido",
+            ),
+          ),
           // "Pagado"/"Saldo" ya NO se muestran acá (pedido explícito del
           // usuario: "en el pdf de la cotización no debe salir cuánto el
           // cliente ha pagado") — el PDF es un documento externo para el
@@ -412,8 +442,8 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
           createElement(
             View,
             { style: [styles.totalsRow, styles.balanceRow] },
-            createElement(Text, { style: styles.totalsLabel }, "Total"),
-            createElement(Text, { style: styles.totalsValue }, money(data.total)),
+            createElement(Text, { style: [styles.totalsLabel, { fontWeight: 700, color: "#1F2430" }] }, "Total a pagar"),
+            createElement(Text, { style: [styles.totalsValue, { fontSize: 11, color: data.brandColor }] }, money(data.total)),
           ),
         ),
       ),
@@ -533,7 +563,8 @@ export const generateQuotationPdf = async (quotationId: number): Promise<Buffer>
   // Mismo criterio que el frontend (useBrandTheme.ts): "blue" es la paleta
   // por defecto, si la empresa no tiene ninguna elegida o el código no
   // coincide con ningún tema activo, se cae al azul de siempre.
-  const DEFAULT_BRAND_COLOR = "#1B84FF";
+  // Azul de Vanys (seeder 20261021140000-vanys-default-theme.js).
+  const DEFAULT_BRAND_COLOR = "#002E77";
   const theme = await DataBase.instance.theme.findOne({ where: { code: company?.theme_color || "blue" } });
   const brandColor = theme?.primary_color || DEFAULT_BRAND_COLOR;
 

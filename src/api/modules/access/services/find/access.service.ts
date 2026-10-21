@@ -91,6 +91,7 @@ export const getMyAccess = async (
       companyId,
       roleName,
       businessUnitName,
+      businessUnitId,
       companyName,
       igvRate,
     };
@@ -178,6 +179,7 @@ export const getMyAccess = async (
     companyId,
     roleName,
     businessUnitName,
+    businessUnitId,
     companyName,
     igvRate,
   };

@@ -43,6 +43,9 @@ export interface MyAccessResponse {
   // Nombre de la tienda (business_unit) asignada al usuario, si tiene una.
   // El front usa esto (con fallback a companyName) en el bloque de usuario.
   businessUnitName: string | null;
+  // Id de esa tienda: el front la muestra fija (o preseleccionada) al crear
+  // una cotización. El alcance real lo sigue resolviendo el backend.
+  businessUnitId: number | null;
   // Nombre de la empresa del usuario (null solo para is_system sin empresa).
   // Sirve de fallback cuando el usuario no tiene tienda asignada.
   companyName: string | null;
