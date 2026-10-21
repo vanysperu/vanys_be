@@ -20,8 +20,8 @@ import {
 export const router: Router = Router();
 
 // Mismo criterio que module.routes.ts: catálogo compartido de plataforma.
-router.get("/list", verifyAccess, paginationValidator, allValidator, listResourcesController);
-router.get("/:id", verifyAccess, getResourceByIdValidator, allValidator, getResourceByIdController);
+router.get("/list", verifyAccess, requireSystemRole, paginationValidator, allValidator, listResourcesController);
+router.get("/:id", verifyAccess, requireSystemRole, getResourceByIdValidator, allValidator, getResourceByIdController);
 router.post("/create", verifyAccess, requireSystemRole, createResourceValidator, allValidator, createResourceController);
 router.put("/update/:id", verifyAccess, requireSystemRole, updateResourceValidator, allValidator, updateResourceController);
 router.put("/disable/:id", verifyAccess, requireSystemRole, disableResourceValidator, allValidator, disableResourceController);

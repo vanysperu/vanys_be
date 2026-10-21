@@ -25,6 +25,23 @@ export const createRoleDtoValidator = [
     .isString()
     .withMessage("La descripción debe ser una cadena de texto")
     .bail(),
+  // Empresa dueña del rol (solo la usa el Super Administrador, que es el
+  // único que crea roles). Sin empresa, el rol queda como plantilla
+  // compartida por todas. Antes llegaba sin validar al INSERT.
+  body("company_id")
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La empresa debe ser un número entero positivo")
+    .bail()
+    .custom(async (value: string) => {
+      const company = await DataBase.instance.company.findOne({
+        where: { id: Number(value), is_deleted: false },
+        attributes: ["id"],
+      });
+      if (!company) throw new Error("La empresa seleccionada no existe o está deshabilitada.");
+      return true;
+    })
+    .bail(),
 ];
 
 const paramRoleIdValidator = param("id")

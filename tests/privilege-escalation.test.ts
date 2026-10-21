@@ -1,6 +1,5 @@
 import { authedRequest, login, QA_COMPANY_ADMIN, wordStamp } from "./helpers/apiClient";
 
-const QA_SUPERADMIN = { email: "qa.superadmin@grulla.test", password: "Test1234" };
 const SUPERADMIN_ROLE_ID = 1; // is_system = true (seed-core-data.js)
 const GESTOR_ROLE_ID = 6;
 
@@ -100,73 +99,10 @@ describe("Escalada de privilegios por asignación de rol", () => {
 });
 
 /**
- * Hueco relacionado: `grantResourcesToRole` insertaba cualquier resource_id
- * del catálogo global. Un Administrador de empresa podía otorgarle a su
- * propio rol accesos de plataforma que su rol nunca tuvo. Ahora rige
- * "no puedes otorgar lo que tú no tienes".
+ * Hueco relacionado (otorgar a un rol accesos que el propio caller no tiene):
+ * la regla "no puedes otorgar lo que tú no tienes" sigue en
+ * grantResourcesToRole como defensa en profundidad, pero ya no se puede
+ * ejercitar por HTTP desde una empresa: crear roles y asignar accesos pasó a
+ * ser exclusivo del Super Administrador (requireSystemRole). Esa restricción
+ * se prueba en roles-access-system-only.test.ts.
  */
-describe("Otorgar accesos a un rol: no puedes dar lo que no tienes", () => {
-  let adminToken: string;
-  let superToken: string;
-  let ownRoleId: number;
-  let forbiddenResourceId: number;
-
-  beforeAll(async () => {
-    adminToken = (await login(QA_COMPANY_ADMIN.email, QA_COMPANY_ADMIN.password)).token;
-    superToken = (await login(QA_SUPERADMIN.email, QA_SUPERADMIN.password)).token;
-
-    // Rol propio de la empresa (el admin sí puede editar sus accesos).
-    const created = await authedRequest(adminToken).post("/role/create", {
-      name: `RolPrueba${wordStamp().slice(0, 8)}`,
-      description: "Rol creado por el test de escalada",
-    });
-    ownRoleId = created.body.data.id;
-
-    // Un resource que el propio admin NO tiene otorgado: se busca
-    // comparando el catálogo completo (solo visible para is_system) contra
-    // el árbol del rol Administrador plantilla.
-    const allResources = await authedRequest(superToken).get("/resource/list?page=1&limit=100");
-    const adminTree = await authedRequest(superToken).get("/roles/2/resources");
-
-    const grantedIds = new Set<number>(collectGrantedIds(adminTree.body.data));
-    const candidate = (allResources.body.data.data as { id: number }[]).find((r) => !grantedIds.has(r.id));
-    forbiddenResourceId = candidate!.id;
-  });
-
-  it("encuentra un acceso de plataforma que el Administrador no tiene (precondición)", () => {
-    expect(forbiddenResourceId).toBeGreaterThan(0);
-  });
-
-  it("ignora silenciosamente el intento de otorgar un acceso que el caller no posee", async () => {
-    const res = await authedRequest(adminToken).put(`/roles/${ownRoleId}/resources`, {
-      resourceIds: { add: [forbiddenResourceId], remove: [] },
-    });
-    expect(res.status).toBe(200);
-
-    // Lo importante no es el status, sino que NO se haya guardado.
-    const tree = await authedRequest(superToken).get(`/roles/${ownRoleId}/resources`);
-    expect(collectGrantedIds(tree.body.data)).not.toContain(forbiddenResourceId);
-  });
-});
-
-// El árbol viene anidado (módulos -> resources); se aplanan los ids que
-// figuran como otorgados, sea cual sea la forma exacta del nodo.
-function collectGrantedIds(tree: unknown): number[] {
-  const ids: number[] = [];
-
-  const walk = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-    if (node === null || typeof node !== "object") return;
-
-    const row = node as Record<string, unknown>;
-    if (typeof row.id === "number" && row.granted === true) ids.push(row.id);
-
-    Object.values(row).forEach(walk);
-  };
-
-  walk(tree);
-  return ids;
-}

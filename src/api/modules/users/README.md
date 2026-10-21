@@ -14,6 +14,11 @@
 | PUT    | /user/disable/:id       | disable (toggle)        | users           |
 | PUT    | /user/batch/disable     | disable masivo          | users           |
 | PATCH  | /user/change/password   | cambiar contraseña      | users           |
+| GET    | /role/list              | roles para el selector  | users (`users.roleOptions.endpoint`) |
+
+`GET /role/list` es del módulo `role`, pero su permiso vive acá: el
+formulario de Usuarios lo necesita para el selector de rol, y la pantalla de
+Roles y accesos es exclusiva del Super Administrador.
 
 ## Vistas de frontend vinculadas
 - users.list

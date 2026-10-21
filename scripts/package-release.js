@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Arma TODO lo necesario para publicar Grulla en el hosting (Hostinger,
+ * Arma TODO lo necesario para publicar Vanys en el hosting (Hostinger,
  * "Node.js Web App", sin VPS):
  *
  *   deploy/salida/
@@ -101,7 +101,7 @@ const writeProductionPackageJson = () => {
     name: "grulla",
     version: source.version,
     private: true,
-    description: "Grulla — sistema de cotizaciones (API + frontend en una sola app)",
+    description: "Vanys — sistema de cotizaciones (API + frontend en una sola app)",
     main: "dist/index.js",
     engines: source.engines,
     scripts: {
@@ -182,7 +182,7 @@ const smokeTestPackage = async () => {
 const renderEnvFile = ({ jwtSecret, cronSecret }) =>
   [
     "# =====================================================================",
-    "# Variables de entorno de Grulla en producción",
+    "# Variables de entorno de Vanys en producción",
     "# hPanel > tu app Node.js > Variables de entorno > Importar .env",
     "#",
     "# COMPLETA las 3 marcadas con <...> con los datos de la base que creaste",

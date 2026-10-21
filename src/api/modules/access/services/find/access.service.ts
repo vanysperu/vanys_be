@@ -6,6 +6,7 @@ import { ModuleModel } from "../../../module/models/module.model";
 import { ResourceModel } from "../../../resource/models/resource.model";
 import { RolesResourcesModel } from "../../../roles_resources/models/roles_resources.model";
 import { getIgvRate } from "../../../quotation/services/shared/tax_config";
+import { isSystemOnlyModule, isSystemOnlyResource } from "../../../../../core/rbac/systemOnlyModules";
 
 const getUserRoles = async (userId: number) => {
   const query = `
@@ -111,9 +112,21 @@ export const getMyAccess = async (
     grantedIds = new Set(grantedRows.map((row: RolesResourcesModel) => row.resource_id));
   }
 
-  const grantedResources = resources.filter((resource: ResourceModel) => grantedIds.has(resource.id));
+  // Los módulos exclusivos del Super Administrador (core/rbac/systemOnlyModules)
+  // nunca llegan al menú de un usuario de empresa, aunque su rol conserve
+  // filas viejas en roles_resources. La excepción ("Ver todas las tiendas")
+  // sigue llegando como botón, pero sin arrastrar su módulo al menú.
+  const moduleCodeById = new Map<number, string>(modules.map((module: ModuleModel) => [module.id, module.code]));
+  const grantedResources = resources.filter(
+    (resource: ResourceModel) =>
+      grantedIds.has(resource.id) && (isSystem || !isSystemOnlyResource(moduleCodeById.get(resource.module_id), resource.code))
+  );
 
-  const grantedModuleIds = new Set(grantedResources.map((resource: ResourceModel) => resource.module_id));
+  const grantedModuleIds = new Set(
+    grantedResources
+      .map((resource: ResourceModel) => resource.module_id)
+      .filter((moduleId: number) => isSystem || !isSystemOnlyModule(moduleCodeById.get(moduleId)))
+  );
   const grantedModules = modules.filter((module: ModuleModel) => grantedModuleIds.has(module.id));
 
   const views: MyAccessModuleItem[] = grantedModules

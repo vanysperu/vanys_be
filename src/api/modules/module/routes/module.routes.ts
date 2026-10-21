@@ -17,10 +17,10 @@ import {
 
 export const router: Router = Router();
 
-// Catálogo compartido de plataforma: cualquier empresa puede LEER (para armar
-// el árbol de accesos), pero solo un usuario is_system puede darlo de alta o
-// modificarlo — no es de una empresa en particular.
-router.get("/list", verifyAccess, paginationValidator, allValidator, listModulesController);
+// Catálogo compartido de plataforma, exclusivo del Super Administrador tanto
+// para leerlo como para modificarlo: los accesos de los roles ya solo los
+// administra él (core/rbac/systemOnlyModules.ts).
+router.get("/list", verifyAccess, requireSystemRole, paginationValidator, allValidator, listModulesController);
 router.post("/create", verifyAccess, requireSystemRole, createModuleValidator, allValidator, createModuleController);
 router.put("/update/:id", verifyAccess, requireSystemRole, updateModuleValidator, allValidator, updateModuleController);
 router.put("/disable/:id", verifyAccess, requireSystemRole, disableModuleValidator, allValidator, disableModuleController);

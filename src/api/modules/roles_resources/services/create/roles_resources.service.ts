@@ -1,5 +1,6 @@
 import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
+import { SYSTEM_ONLY_EXCEPTION_CODES, SYSTEM_ONLY_MODULE_CODES } from "../../../../../core/rbac/systemOnlyModules";
 
 /**
  * Otorga resources a un rol.
@@ -47,18 +48,33 @@ const grantResourcesToRole = async ({
          where ur.user_id = :callerUserId
        )`;
 
+  // Lo exclusivo del Super Administrador (core/rbac/systemOnlyModules) no se
+  // le otorga a NINGÚN rol, ni siquiera desde la cuenta del Super
+  // Administrador: un rol de empresa nunca debe verlo, y un rol is_system
+  // ya lo tiene todo sin necesitar filas en esta tabla. Se ignora en
+  // silencio, igual que la regla de arriba (el árbol ni siquiera lo ofrece).
   const query = `
     insert into roles_resources (role_id, resource_id, created_by, created_at)
     select :roleId, r.id, :createdBy, NOW() from resources r
+    inner join modules m on m.id = r.module_id
     where r.id in (:resourceIds) and r.id not in (
       select rr.resource_id from roles_resources rr
       where rr.role_id = :roleId
-    ) ${callerOwnedFilter}
+    )
+    and (m.code not in (:systemOnlyModuleCodes) or r.code in (:systemOnlyExceptionCodes))
+    ${callerOwnedFilter}
   `;
 
   return await DataBase.instance.sequelize.query(query, {
     type: QueryTypes.INSERT,
-    replacements: { roleId, resourceIds, createdBy: createdBy ?? null, callerUserId },
+    replacements: {
+      roleId,
+      resourceIds,
+      createdBy: createdBy ?? null,
+      callerUserId,
+      systemOnlyModuleCodes: [...SYSTEM_ONLY_MODULE_CODES],
+      systemOnlyExceptionCodes: [...SYSTEM_ONLY_EXCEPTION_CODES],
+    },
     transaction,
   });
 };

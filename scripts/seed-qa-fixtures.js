@@ -63,13 +63,15 @@ function hashPassword() {
   return { password, salt };
 }
 
+// Paleta por defecto ("blue" = azul marino + naranja de Vanys): la empresa de
+// pruebas se ve igual que una empresa real recién creada.
 async function upsertCompany(conn) {
   const [existing] = await conn.query("SELECT id FROM `company` WHERE ruc = ?", [COMPANY_RUC]);
   if (existing.length) return existing[0].id;
 
   const [result] = await conn.query(
     `INSERT INTO \`company\` (ruc, business_name, description, theme_color, is_deleted, created_at)
-     VALUES (?, ?, 'Empresa dedicada a la suite de pruebas E2E (Playwright)', 'violet', false, NOW())`,
+     VALUES (?, ?, 'Empresa dedicada a la suite de pruebas E2E (Playwright)', 'blue', false, NOW())`,
     [COMPANY_RUC, COMPANY_NAME],
   );
   return result.insertId;

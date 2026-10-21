@@ -1,4 +1,4 @@
-﻿import { FindAttributeOptions, Transaction, WhereOptions, Order, FindAndCountOptions, Op } from "sequelize";
+﻿import { FindAttributeOptions, Transaction, WhereOptions, Order, FindAndCountOptions, Op, literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { RoleAttributes } from "../../model/role.model";
 import { resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
@@ -66,6 +66,11 @@ interface RoleListOptions extends IListOptions<RoleAttributes> {
       where: { ...where, ...companyWhere, ...nameWhere, ...descriptionWhere, ...isSystemWhere, ...statusWhere },
       attributes: {
         exclude: ["created_by", "updated_by", "updated_at"],
+        // Nombre de la empresa dueña del rol (NULL = plantilla compartida):
+        // el Super Administrador ve los roles de todas las empresas en una
+        // sola tabla y necesita distinguirlos. Subconsulta por PK, sin join
+        // que altere el conteo de la paginación.
+        include: [[literal("(SELECT c.business_name FROM company c WHERE c.id = role.company_id)"), "company_name"]],
       },
       order: resolvedOrder,
     };

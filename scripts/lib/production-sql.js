@@ -179,7 +179,7 @@ const dumpSchema = async (conn, schema) => {
 const renderSqlFile = ({ ddl, data, adminEmail }) =>
   [
     "-- =====================================================================",
-    "-- Grulla — base de datos de PRODUCCIÓN",
+    "-- Vanys — base de datos de PRODUCCIÓN",
     "-- Esquema completo + catálogo de fábrica + Super Administrador inicial.",
     `-- Generado: ${new Date().toISOString()}`,
     `-- Super Administrador: ${adminEmail} (contraseña temporal: ver CREDENCIALES-INICIALES.txt)`,
