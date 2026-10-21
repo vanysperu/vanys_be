@@ -32,6 +32,9 @@ Filtros de `list`: `name`, `status` (`active`/`inactive`, CSV), `dateFrom`/
   `(precio del producto en esa escala + precio de la técnica en esa escala) × cantidad`.
   Ej.: jabón ciento S/ 0.90 + serigrafía ciento S/ 0.95, 10 unidades →
   (0.90 + 0.95) × 10 = S/ 18.50.
+- Solo se usa en productos que **requieren personalización** (ver
+  [`product`](../product/README.md)); un producto sin personalización se
+  cotiza sin técnica.
 - Si la técnica no tiene cargado el precio de la escala elegida, la
   cotización se rechaza con un mensaje claro (nunca se asume 0).
 - En modo `custom` de la cotización, el precio de la técnica es el que se

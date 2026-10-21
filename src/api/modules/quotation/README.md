@@ -67,6 +67,11 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
 - El subtotal es siempre `precio_por_unidad × cantidad`. Los 4 precios de
   catálogo (unidad/ciento/medio millar/millar) son **tarifas por volumen**,
   no precios de un lote cerrado.
+- Si el producto **no requiere personalización** (`product.requires_customization
+  = false`), el item va sin técnica y su precio es solo el del producto; el
+  PDF omite la columna "Técnica" si ningún item lleva una. Ver
+  [`product`](../product/README.md).
+- El PDF solo lista las cuentas de pago **activas** de la empresa.
 - El precio por unidad de un item es **precio del producto + precio de la
   técnica en la MISMA escala** (ver
   [`customization_technique`](../customization_technique/README.md)): jabón

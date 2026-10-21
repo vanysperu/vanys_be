@@ -38,13 +38,10 @@ export const createQuotationValidator = [
     .withMessage("Los días de producción deben ser un número entero entre 1 y 365"),
   body("items").isArray({ min: 1 }).withMessage("La cotización debe tener al menos un producto"),
   body("items.*.product_id").isInt({ gt: 0 }).withMessage("Cada item necesita un producto válido"),
-  // La técnica de personalización pasa a ser obligatoria por producto
-  // (pedido explícito del usuario) — ya no hay "sin técnica".
+  // Opcional en la forma: si es obligatoria o no depende del producto
+  // (requires_customization), y eso lo valida el service.
   body("items.*.technique_id")
-    .not()
-    .isEmpty()
-    .withMessage("Cada item necesita una técnica de personalización")
-    .bail()
+    .optional({ values: "null" })
     .isInt({ gt: 0 })
     .withMessage("La técnica debe ser un id válido"),
   // La cantidad es siempre obligatoria: cada modo de precio es una tarifa

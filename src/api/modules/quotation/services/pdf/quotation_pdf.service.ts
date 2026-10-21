@@ -221,6 +221,9 @@ const isWalletAccount = (account: QuotationPdfData["paymentAccounts"][number]) =
 const QuotationDocument = (props: { data: QuotationPdfData }) => {
   const { data } = props;
   const logoDataUri = data.logoDataUri;
+  // Si ningún item lleva técnica (productos sin personalización), la columna
+  // "Técnica" se omite entera; si se mezclan, los que no llevan muestran "—".
+  const showTechnique = data.items.some((item) => Boolean(item.technique));
   // Helper para no repetir `[styles.sectionTitle, { color: data.brandColor }]`
   // en cada uno de los ~8 títulos de sección del documento.
   const sectionTitle = (label: string) =>
@@ -347,7 +350,9 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             View,
             { style: styles.tableHeaderRow },
             createElement(Text, { style: [styles.th, styles.colProduct] }, "Producto"),
-            createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica"),
+            // Sin ningún producto personalizado, la columna "Técnica" no aparece
+            // (pedido explícito del usuario: "no va a salir ni en los pdf").
+            showTechnique ? createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica") : null,
             createElement(Text, { style: [styles.th, styles.colQty] }, "Cant."),
             createElement(Text, { style: [styles.th, styles.colMode] }, "Modo"),
             createElement(Text, { style: [styles.th, styles.colPrice] }, "P. unit."),
@@ -366,7 +371,9 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
               View,
               { style: styles.tableRow, key: item.id },
               createElement(Text, { style: [styles.td, styles.colProduct] }, item.product?.name ?? "—"),
-              createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—"),
+              showTechnique
+                ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
+                : null,
               createElement(Text, { style: [styles.td, styles.colQty] }, String(item.quantity)),
               createElement(
                 Text,
@@ -517,7 +524,9 @@ export const generateQuotationPdf = async (quotationId: number): Promise<Buffer>
 
   const company = await DataBase.instance.company.findOne({ where: { id: plain.company_id ?? undefined } });
   const paymentAccounts = await DataBase.instance.variable_general.findAll({
-    where: { category: "payment_account", company_id: plain.company_id },
+    // Solo cuentas activas: una cuenta deshabilitada ya no debe ofrecérsele
+    // al cliente para pagar (antes salían todas, incluidas las dadas de baja).
+    where: { category: "payment_account", company_id: plain.company_id, is_deleted: false },
     order: [["id", "ASC"]],
   });
 

@@ -33,6 +33,7 @@ describe("Catálogo deshabilitado no se puede usar en cotizaciones nuevas", () =
       company_id: companyId,
       name: `CatProduct${stamp}`,
       price_unit: 20,
+      requires_customization: true,
     });
     const technique = await api.post("/customization-technique/create", {
       company_id: companyId,
@@ -162,6 +163,7 @@ describe("Importes redondeados a 2 decimales", () => {
       company_id: companyId,
       name: `RoundProduct${stamp}`,
       price_unit: 0.1,
+      requires_customization: true,
     });
     const technique = await api.post("/customization-technique/create", {
       company_id: companyId,

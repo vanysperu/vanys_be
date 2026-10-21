@@ -25,7 +25,9 @@ describe("Módulo de pagos", () => {
     expect(created.status).toBe(201);
     const paymentId: number = created.body.data.id;
 
-    const list = await api.get("/payment/list");
+    // Acotado a esta cotización: con muchos pagos de otras corridas, el pago
+    // (fechado 11/10) podía quedar fuera de la primera página.
+    const list = await api.get(`/payment/list?quotationId=${quotationId}`);
     expect(list.status).toBe(200);
     const found = list.body.data.data.find((row: { id: number }) => row.id === paymentId);
     expect(found).toBeDefined();
@@ -92,7 +94,7 @@ describe("Módulo de pagos", () => {
     const found = list.body.data.data.find((row: { id: number }) => row.id === paymentId);
     expect(found).toBeUndefined(); // is_deleted=true no sale en el listado por defecto
 
-    const listWithDisabled = await api.get("/payment/list?includeDisabled=true");
+    const listWithDisabled = await api.get(`/payment/list?includeDisabled=true&quotationId=${quotationId}`);
     const foundDisabled = listWithDisabled.body.data.data.find((row: { id: number }) => row.id === paymentId);
     expect(foundDisabled.is_deleted).toBe(true);
 

@@ -23,6 +23,9 @@ export interface ProductAttributes {
   price_hundred: number | null;
   price_half_thousand: number | null;
   price_thousand: number | null;
+  // Si es false, el producto se cotiza SIN técnica de personalización (no
+  // hay selector de técnica en la cotización ni técnica en el PDF).
+  requires_customization: boolean;
   is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
@@ -53,6 +56,7 @@ export function ProductFactory(sequelize: Sequelize): ProductStatic {
       price_hundred: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_half_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+      requires_customization: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

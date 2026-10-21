@@ -5,6 +5,7 @@ import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import {
   createQuotation,
+  CustomizationMismatchError,
   DisabledCatalogEntityError,
   MissingProductPriceError,
   MissingQuantityError,
@@ -58,7 +59,8 @@ export const createQuotationController = asyncHandler(async (req: Request, res: 
     if (
       err instanceof MissingProductPriceError ||
       err instanceof MissingQuantityError ||
-      err instanceof DisabledCatalogEntityError
+      err instanceof DisabledCatalogEntityError ||
+      err instanceof CustomizationMismatchError
     ) {
       throw new AppError(400, err.message);
     }

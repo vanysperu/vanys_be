@@ -31,6 +31,19 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
     companyId = (await authedRequest(token).get("/access/me")).body.data.companyId;
   });
 
+  // Los recordatorios de prueba no deben quedar sonando: sus avisos taparían
+  // las pantallas en la suite E2E (que usa las mismas cuentas QA).
+  afterAll(async () => {
+    const gestor = await login(QA_GESTOR.email, QA_GESTOR.password);
+    for (const accountToken of [token, gestor.token]) {
+      const api = authedRequest(accountToken);
+      const due = await api.get("/reminder/due");
+      for (const reminder of due.body.data?.data ?? []) await api.put(`/reminder/read/${reminder.id}`);
+      const upcoming = await api.get("/reminder/list?box=sent&status=upcoming&limit=100");
+      for (const reminder of upcoming.body.data?.data ?? []) await api.put(`/reminder/disable/${reminder.id}`);
+    }
+  });
+
   // La fixture crea 10 unidades a (20 + 5): total 250.
   const advance = (amount: number) => ({ amount, method: "cash", paid_at: "2026-10-18" });
 

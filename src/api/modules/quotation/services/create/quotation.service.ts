@@ -25,12 +25,15 @@ export class TenantMismatchError extends Error {}
 // solo se bloquea usarlo en una cotización nueva.
 export class DisabledCatalogEntityError extends Error {}
 
+// La técnica no coincide con lo que pide el producto: falta en uno que
+// requiere personalización, o sobra en uno que no la lleva.
+export class CustomizationMismatchError extends Error {}
+
 export interface CreateQuotationItemInput {
   product_id: number;
-  // Obligatoria (pedido explícito del usuario: "tipo de personalización es
-  // obligatorio para cada producto") — el validator ya la exige antes de
-  // llegar acá.
-  technique_id: number;
+  // Obligatoria solo si el producto requiere personalización
+  // (product.requires_customization); prohibida si no la requiere.
+  technique_id?: number | null;
   // Cantidad real de unidades pedidas — siempre obligatoria, en todos los
   // modos. El subtotal es precio_por_unidad × cantidad; pedir más que el
   // tamaño "típico" del modo (ej. 1100 en modo millar) sigue cobrando la
@@ -116,12 +119,46 @@ const resolveTechniquePrice = (
 // MySQL/Sequelize devuelve DECIMAL como string (evita perder precisión de
 // punto flotante) — Number(...) es obligatorio antes de sumar, si no "+"
 // hace concatenación de texto en vez de suma ("50" + "15.00" = "5015.00").
+// Sin técnica (producto que no se personaliza) el precio es solo el del producto.
 const resolveUnitPrice = (
   basePrice: number,
-  technique: CustomizationTechniqueModel,
+  technique: CustomizationTechniqueModel | null,
   pricingMode: QuotationItemPricingMode,
   customTechniquePrice?: number | null
-) => basePrice + resolveTechniquePrice(technique, pricingMode, customTechniquePrice);
+) => basePrice + (technique ? resolveTechniquePrice(technique, pricingMode, customTechniquePrice) : 0);
+
+// Técnica del item según el producto (pedido explícito del usuario: "muchos
+// productos no requieren personalizado"):
+//   - producto sin personalización -> no lleva técnica (si llega una, error:
+//     así no se cobra una técnica que no corresponde).
+//   - producto con personalización -> la técnica es obligatoria y debe ser
+//     de la misma empresa y estar activa.
+const resolveItemTechnique = (
+  product: ProductModel,
+  techniqueId: number | null | undefined,
+  techniques: CustomizationTechniqueModel[],
+  companyId: number
+): CustomizationTechniqueModel | null => {
+  if (!product.requires_customization) {
+    if (techniqueId) {
+      throw new CustomizationMismatchError(`El producto "${product.name}" no lleva personalización: quita la técnica`);
+    }
+    return null;
+  }
+  if (!techniqueId) {
+    throw new CustomizationMismatchError(`El producto "${product.name}" requiere una técnica de personalización`);
+  }
+
+  const technique = techniques.find((row) => row.id === techniqueId);
+  if (!technique) throw new Error(`La técnica ${techniqueId} no existe`);
+  if (technique.company_id !== companyId) {
+    throw new TenantMismatchError(`La técnica "${technique.name}" no pertenece a esta empresa`);
+  }
+  if (technique.is_deleted) {
+    throw new DisabledCatalogEntityError(`La técnica "${technique.name}" está deshabilitada`);
+  }
+  return technique;
+};
 
 // La cantidad es siempre obligatoria — no hay "lote de respaldo": cada
 // modo de precio (unidad/ciento/medio millar/millar/personalizado) es solo
@@ -233,14 +270,7 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
         throw new DisabledCatalogEntityError(`El producto "${product.name}" está deshabilitado`);
       }
 
-      const technique = techniques.find((row: CustomizationTechniqueModel) => row.id === item.technique_id);
-      if (!technique) throw new Error(`La técnica ${item.technique_id} no existe`);
-      if (technique.company_id !== input.company_id) {
-        throw new TenantMismatchError(`La técnica "${technique.name}" no pertenece a esta empresa`);
-      }
-      if (technique.is_deleted) {
-        throw new DisabledCatalogEntityError(`La técnica "${technique.name}" está deshabilitada`);
-      }
+      const technique = resolveItemTechnique(product, item.technique_id, techniques, input.company_id);
 
       const quantity = resolveQuantity(item.quantity);
       const basePrice = resolveBasePrice(product, item.pricing_mode, item.custom_price);

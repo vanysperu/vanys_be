@@ -18,11 +18,13 @@ const updateProductById = async ({
   const safePayload = {
     name: product.name,
     description: product.description,
-    sku: product.sku,
+    // "" (campo vacío) borra el SKU.
+    sku: product.sku === "" ? null : product.sku,
     price_unit: product.price_unit,
     price_hundred: product.price_hundred,
     price_half_thousand: product.price_half_thousand,
     price_thousand: product.price_thousand,
+    requires_customization: product.requires_customization,
   };
 
   return DataBase.instance.product.update(

@@ -61,6 +61,7 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
         name: `Jabon${stamp}`,
         price_unit: 1.2,
         price_hundred: 0.9,
+        requires_customization: true,
       });
       const technique = await api.post("/customization-technique/create", {
         company_id: companyId,
@@ -94,6 +95,7 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
         name: `NoTier${stamp}`,
         price_unit: 2,
         price_thousand: 0.5,
+        requires_customization: true,
       });
       const technique = await api.post("/customization-technique/create", {
         company_id: companyId,

@@ -38,7 +38,8 @@ export const createProductValidator = [
     .withMessage("Máximo 255 caracteres"),
   body("description").optional({ values: "null" }).isString(),
   body("sku")
-    .optional({ values: "null" })
+    // Vacío = sin SKU (el formulario manda "" si no se escribe nada).
+    .optional({ values: "falsy" })
     .isString()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres")
@@ -49,6 +50,7 @@ export const createProductValidator = [
   body("price_hundred").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por ciento debe ser un número positivo"),
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por medio millar debe ser un número positivo"),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por millar debe ser un número positivo"),
+  body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
   atLeastOnePriceValidator,
 ];
 
@@ -72,7 +74,8 @@ export const updateProductValidator = [
   body("name").optional().isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
   body("description").optional({ values: "null" }).isString(),
   body("sku")
-    .optional({ values: "null" })
+    // Vacío = sin SKU (el formulario manda "" si no se escribe nada).
+    .optional({ values: "falsy" })
     .isString()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres")
@@ -83,6 +86,7 @@ export const updateProductValidator = [
   body("price_hundred").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
+  body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
 ];
 
 export const disableProductValidator = [paramProductIdValidator];
