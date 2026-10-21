@@ -22,7 +22,8 @@ export const RECEIVABLE_STATUSES: QuotationStatus[] = [
 
 // Margen de un céntimo (mismo criterio que OVERPAY_TOLERANCE en pagos):
 // un saldo de S/ 0.004 por redondeo no es una deuda real.
-const MIN_BALANCE = 0.01;
+export const RECEIVABLE_MIN_BALANCE = 0.01;
+const MIN_BALANCE = RECEIVABLE_MIN_BALANCE;
 
 export type ReceivableOrderBy = "created_at" | "balance" | "total";
 

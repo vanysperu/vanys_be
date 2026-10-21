@@ -37,4 +37,11 @@ const constraintExists = (queryInterface, table, name) =>
     [table, name]
   );
 
-module.exports = { tableExists, columnExists, constraintExists };
+const indexExists = (queryInterface, table, name) =>
+  exists(
+    queryInterface,
+    "SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+    [table, name]
+  );
+
+module.exports = { tableExists, columnExists, constraintExists, indexExists };

@@ -36,6 +36,7 @@ import { router as PaymentRoutes } from "../api/modules/payment/routes/payment.r
 import { router as EmployeeDebtRoutes } from "../api/modules/employee_debt/routes/employee_debt.routes";
 import { router as ReceivableRoutes } from "../api/modules/receivable/routes/receivable.routes";
 import { router as ReminderRoutes } from "../api/modules/reminder/routes/reminder.routes";
+import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
 import { serveCompanyAssetController } from "../api/modules/uploads/controllers/uploads.controller";
 import path from "path";
@@ -146,6 +147,7 @@ export default class Server {
     this._router.use("/employee-debt", EmployeeDebtRoutes);
     this._router.use("/receivable", ReceivableRoutes);
     this._router.use("/reminder", ReminderRoutes);
+    this._router.use("/statistics", StatisticsRoutes);
     this._router.use("/uploads", UploadsRoutes);
 
     this.frontend();
