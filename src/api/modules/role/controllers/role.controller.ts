@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
-import { getRolesList } from "../services/find/role.service";
+import { getAllRoles, getRolesList } from "../services/find/role.service";
 import { createRole } from "../services/create/role.services";
 import { updateRoleById } from "../services/update/role.service";
 import { disableOrEnabledRolById } from "../services/delete/role.service";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
+import { AppError } from "../../../../core/errors/AppError";
 import { nowUtc } from "../../../../utils/dateUtils";
 
 export const listRolesController = asyncHandler(async (req: Request, res: Response) => {
@@ -19,8 +20,10 @@ export const listRolesController = asyncHandler(async (req: Request, res: Respon
   const orderBy = typeof queryParams.orderBy === "string" ? queryParams.orderBy : undefined;
   const orderDirRaw = typeof queryParams.orderDir === "string" ? queryParams.orderDir.toLowerCase() : undefined;
   const orderDir: "asc" | "desc" = orderDirRaw === "asc" ? "asc" : "desc";
-  const name = typeof queryParams.name === "string" ? queryParams.name : undefined;
-  const description = typeof queryParams.description === "string" ? queryParams.description : undefined;
+  // .trim(): un espacio final en el input rompía el LIKE ("%texto %" nunca
+  // matchea "texto" guardado sin ese espacio) — bug reportado por QA.
+  const name = typeof queryParams.name === "string" ? queryParams.name.trim() || undefined : undefined;
+  const description = typeof queryParams.description === "string" ? queryParams.description.trim() || undefined : undefined;
   const isSystemFilter = typeof queryParams.isSystem === "string" ? queryParams.isSystem : undefined;
   const status = queryParams.status;
 
@@ -76,6 +79,13 @@ export const updateRoleController = asyncHandler(async (req: Request, res: Respo
 
   const { id } = req.params;
   const { name, description } = req.body;
+
+  // Un rol "Inactivo" seguía permitiendo editarse (bug reportado por QA)
+  // porque este endpoint nunca revisaba su estado.
+  const [existingRole] = await getAllRoles({ where: { id: Number(id) } });
+  if (existingRole?.status === false) {
+    throw new AppError(409, "No se puede editar un rol inactivo. Actívalo primero.");
+  }
 
   const result = await updateRoleById({
     role: {

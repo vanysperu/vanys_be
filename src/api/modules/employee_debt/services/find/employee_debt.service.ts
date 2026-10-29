@@ -55,12 +55,17 @@ const getEmployeeDebtSummary = async (
   // El rango de fechas se compara en la zona de Lima (las fechas se guardan
   // en UTC): sin el CONVERT_TZ, una compra hecha a las 8 p. m. del 17 caería
   // en el día 18.
+  // pending_amount: el REMANENTE de cada fila pendiente (amount - paid_amount),
+  // no su monto original — una fila con un abono parcial ya repuso una parte
+  // (pagos parciales, pedido de QA). paid_amount (agregado): todo lo
+  // efectivamente repuesto hasta ahora, incluidas las filas con abono
+  // parcial todavía "pending".
   const grouped = `
     SELECT ed.user_id,
            CONCAT(u.name, ' ', u.paternal_lastname) AS employee_name,
-           SUM(CASE WHEN ed.status = 'pending' THEN ed.amount ELSE 0 END) AS pending_amount,
+           SUM(CASE WHEN ed.status = 'pending' THEN ed.amount - ed.paid_amount ELSE 0 END) AS pending_amount,
            SUM(CASE WHEN ed.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
-           SUM(CASE WHEN ed.status = 'paid' THEN ed.amount ELSE 0 END) AS paid_amount,
+           SUM(ed.paid_amount) AS paid_amount,
            SUM(CASE WHEN ed.status = 'paid' THEN 1 ELSE 0 END) AS paid_count,
            MAX(ed.paid_at) AS last_paid_at
     FROM employee_debt ed

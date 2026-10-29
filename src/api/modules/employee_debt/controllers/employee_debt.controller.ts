@@ -7,7 +7,7 @@ import {
   EmployeeDebtStatusFilter,
   getEmployeeDebtSummary,
 } from "../services/find/employee_debt.service";
-import { markEmployeeDebtAsPaid } from "../services/update/employee_debt.service";
+import { InvalidPaymentAmountError, markEmployeeDebtAsPaid } from "../services/update/employee_debt.service";
 import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
 
@@ -63,12 +63,22 @@ export const payEmployeeDebtController = asyncHandler(async (req: Request, res: 
     required: false,
   });
 
-  const result = await markEmployeeDebtAsPaid({
-    userId: Number(userId),
-    companyId: user.isSystem ? null : user.companyId,
-    paymentAccountId,
-    updatedBy: user.userId,
-  });
+  const amount = Number(req.body.amount);
 
-  ok(res, 200, result, "Deuda saldada correctamente");
+  let result;
+  try {
+    result = await markEmployeeDebtAsPaid({
+      userId: Number(userId),
+      companyId: user.isSystem ? null : user.companyId,
+      amount,
+      paymentAccountId,
+      updatedBy: user.userId,
+    });
+  } catch (err: unknown) {
+    if (err instanceof InvalidPaymentAmountError) throw new AppError(400, err.message);
+    throw err;
+  }
+
+  const message = result.affectedRows > 0 ? "Abono registrado correctamente" : "Deuda saldada correctamente";
+  ok(res, 200, result, message);
 });

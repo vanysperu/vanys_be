@@ -6,6 +6,7 @@ import { createReminderService } from "../services/create/create.service";
 import { ReminderInputDto } from "../types/reminder.types";
 
 export const createReminderController = asyncHandler(async (req: Request, res: Response) => {
-  const reminder = await createReminderService(req.body as ReminderInputDto, req.user as IToken);
-  ok(res, 201, reminder, "Recordatorio programado correctamente");
+  const reminders = await createReminderService(req.body as ReminderInputDto, req.user as IToken);
+  const message = reminders.length > 1 ? `Recordatorio programado para ${reminders.length} personas` : "Recordatorio programado correctamente";
+  ok(res, 201, reminders, message);
 });

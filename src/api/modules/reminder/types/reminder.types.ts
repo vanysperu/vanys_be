@@ -42,6 +42,12 @@ export interface ReminderInputDto {
   // Hora de Lima escrita por el usuario.
   remind_date: string;
   remind_time: string;
-  // Vacío = uno mismo.
+  // Vacío = uno mismo. Solo lo usa "editar" (un recordatorio ya existente
+  // tiene un único destinatario) — "crear" usa recipient_user_ids.
   recipient_user_id?: number | null;
+  // Selector múltiple al crear (pedido explícito de QA: "poder enviar el
+  // mismo recordatorio a varias personas a la vez"): una fila de
+  // `reminder` por destinatario, cada una con su propio estado
+  // (visto/cancelado) independiente de las demás.
+  recipient_user_ids?: number[];
 }

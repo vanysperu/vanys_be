@@ -20,7 +20,18 @@ const reminderBody = [
   body("recipient_user_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El destinatario no es válido"),
 ];
 
-export const createReminderValidator = reminderBody;
+export const createReminderValidator = [
+  ...reminderBody,
+  // Selector múltiple al crear (pedido de QA): cada entrada debe ser un id
+  // válido; la existencia/pertenencia a la empresa la valida el service
+  // (resolveRecipient), que es quien conoce al actor.
+  body("recipient_user_ids")
+    .optional({ values: "null" })
+    .isArray({ min: 1 })
+    .withMessage("Elige al menos un destinatario")
+    .bail(),
+  body("recipient_user_ids.*").isInt({ gt: 0 }).withMessage("El destinatario no es válido"),
+];
 export const updateReminderValidator = [idParam, ...reminderBody];
 export const reminderIdValidator = [idParam];
 

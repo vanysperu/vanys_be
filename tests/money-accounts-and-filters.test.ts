@@ -227,7 +227,7 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
       expect(before?.paid_by_employee_name).toBeTruthy();
       expect(before?.reimbursement_status).toBe("pending");
 
-      const paid = await api.put(`/employee-debt/pay/${userId}`, { payment_account_id: accountId });
+      const paid = await api.put(`/employee-debt/pay/${userId}`, { payment_account_id: accountId, amount: 33 });
       expect(paid.status).toBe(200);
 
       const after = await findExpense();
@@ -247,7 +247,7 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
       const pending = await api.get(`/employee-debt/list?userId=${userId}`);
       expect(pending.body.data.data.some((row: { user_id: number }) => row.user_id === userId)).toBe(true);
 
-      await api.put(`/employee-debt/pay/${userId}`, {});
+      await api.put(`/employee-debt/pay/${userId}`, { amount: 12 });
 
       const pendingAfter = await api.get(`/employee-debt/list?userId=${userId}`);
       expect(pendingAfter.body.data.data.some((row: { user_id: number }) => row.user_id === userId)).toBe(false);

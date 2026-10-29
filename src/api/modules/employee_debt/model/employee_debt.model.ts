@@ -8,6 +8,10 @@ export interface EmployeeDebtAttributes {
   user_id: number;
   purchase_order_item_purchase_id: number;
   amount: number;
+  // Cuánto se le repuso YA de esta fila (0 <= paid_amount <= amount). La
+  // fila sigue "pending" mientras paid_amount < amount (admite abonos
+  // parciales); el monto realmente pendiente es siempre amount - paid_amount.
+  paid_amount: number;
   status: EmployeeDebtStatus;
   paid_at: string | null;
   // Cuenta de la empresa (general_variable category="payment_account") desde
@@ -38,6 +42,7 @@ export function EmployeeDebtFactory(sequelize: Sequelize): EmployeeDebtStatic {
       user_id: { type: DataTypes.BIGINT, allowNull: false },
       purchase_order_item_purchase_id: { type: DataTypes.BIGINT, allowNull: false, unique: true },
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+      paid_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
       status: { type: DataTypes.ENUM("pending", "paid"), allowNull: false, defaultValue: "pending" },
       paid_at: { type: DataTypes.DATEONLY, allowNull: true },
       payment_account_id: { type: DataTypes.BIGINT, allowNull: true },

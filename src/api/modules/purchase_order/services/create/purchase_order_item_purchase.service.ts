@@ -192,6 +192,7 @@ const createPurchaseOrderItemPurchase = async ({
           user_id: paidByUserId!,
           purchase_order_item_purchase_id: purchase.id,
           amount,
+          paid_amount: 0,
           status: "pending",
           paid_at: null,
           created_by: createdBy ?? null,

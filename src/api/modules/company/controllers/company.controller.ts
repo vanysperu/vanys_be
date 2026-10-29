@@ -43,6 +43,14 @@ export const updateCompanyController = asyncHandler(async (req: Request, res: Re
   const user = req.user as IToken;
   const { id } = req.params;
 
+  // Una empresa "Inactiva" seguía permitiendo editarse desde el frontend
+  // (bug reportado por QA) porque este endpoint nunca revisaba su estado.
+  const existingCompany = await getCompanyById(Number(id));
+  if (!existingCompany) throw new AppError(404, "La empresa no existe");
+  if (existingCompany.is_deleted) {
+    throw new AppError(409, "No se puede editar una empresa inactiva. Actívala primero.");
+  }
+
   const result = await updateCompanyById({ company: req.body, companyId: Number(id), updatedBy: user.userId });
 
   ok(res, 200, result, "Empresa actualizada correctamente");

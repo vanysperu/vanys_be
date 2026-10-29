@@ -65,6 +65,13 @@ export const updateClientController = asyncHandler(async (req: Request, res: Res
     throw new AppError(403, "No tienes acceso a este cliente");
   }
 
+  // Un cliente "Inactivo" seguía permitiendo editarse y guardar cambios
+  // (bug reportado por QA) porque este endpoint nunca revisaba su estado.
+  const existingClient = await getClientById(Number(id));
+  if (existingClient?.is_deleted) {
+    throw new AppError(409, "No se puede editar un cliente inactivo. Actívalo primero.");
+  }
+
   const result = await updateClientById({ client: req.body, clientId: Number(id), updatedBy: user.userId });
 
   ok(res, 200, result, "Cliente actualizado correctamente");

@@ -13,7 +13,22 @@ export const createCashMovementValidator = [
     .withMessage("Máximo 50 caracteres"),
   body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
   body("description").optional({ values: "falsy" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
-  body("occurred_at").isISO8601().withMessage("La fecha es obligatoria"),
+  // No basta con isISO8601(): el frontend ya bloquea fechas futuras en el
+  // calendario, pero sin este `.custom()` el backend igual aceptaba un
+  // movimiento con fecha de, por ejemplo, 2027 llamando a la API directo
+  // (bug reportado por QA — CLAUDE.md sección 12: nunca confiar solo en la
+  // validación del cliente).
+  body("occurred_at")
+    .isISO8601()
+    .withMessage("La fecha es obligatoria")
+    .bail()
+    .custom((value: string) => {
+      if (new Date(value).getTime() > Date.now()) {
+        throw new Error("La fecha no puede ser una fecha futura");
+      }
+      return true;
+    })
+    .bail(),
   // Solo se valida la FORMA acá. La existencia Y la pertenencia a la empresa
   // del caller las valida el controller (createCashMovementController), que
   // es el único que conoce req.user — repetir el "existe?" en el validator

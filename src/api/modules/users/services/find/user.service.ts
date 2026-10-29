@@ -146,6 +146,11 @@ const getUsersList = async (
       u.failed_attempts, u.last_lock_date, u.last_unlock_date,
       u.lockout_minutes, u.device_id, u.recovery_code, u.business_unit_id,
       u.is_deleted, u.created_by, u.updated_at, u.updated_by,
+      -- Empresa efectiva (igual criterio que getUserTenantInfo): si tiene
+      -- tienda, la empresa de esa tienda manda; si no (admin de empresa sin
+      -- tienda propia), cae al company_id directo del usuario. Necesario
+      -- para que "Editar usuario" pueda precargar/corregir Empresa/Tienda.
+      COALESCE(bu.company_id, u.company_id) as company_id,
       CONCAT_WS(' ', u.name, u.paternal_lastname, u.maternal_lastname) as fullName,
       CASE
         WHEN u.status = 1 THEN 'Activo'

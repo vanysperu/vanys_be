@@ -79,7 +79,7 @@ describe("Origen de fondos de una compra + deudas a personal", () => {
     const debtBefore = before.body.data.data.find((row: { user_id: number }) => row.user_id === userId);
     expect(debtBefore).toBeDefined();
 
-    const paid = await api.put(`/employee-debt/pay/${userId}`);
+    const paid = await api.put(`/employee-debt/pay/${userId}`, { amount: debtBefore.pending_amount });
     expect(paid.status).toBe(200);
 
     const after = await api.get("/employee-debt/list");

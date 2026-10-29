@@ -45,32 +45,40 @@ export const createPurchaseOrderItemPurchaseValidator = [
   body("funding_source")
     .isIn(["company", "employee"])
     .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),
-  // Obligatorio solo cuando es plata del trabajador — si no se manda, el
-  // controller asume que quien registra la compra es quien puso el dinero.
-  // El `custom` valida que el trabajador exista, esté activo, y pertenezca
-  // a la MISMA empresa dueña de la orden de compra — sin esto, cualquiera
-  // podía generarle una deuda (`employee_debt`) real a un usuario de OTRA
-  // empresa, o a un usuario deshabilitado, con solo adivinar su id.
   body("paid_by_user_id")
     .if(body("funding_source").equals("employee"))
     .optional({ values: "null" })
     .isInt({ gt: 0 })
     .withMessage("El trabajador debe ser un id válido")
-    .bail()
-    .custom(async (value: number, { req }) => {
-      const employee = await DataBase.instance.user.findOne({ where: { id: Number(value) } });
-      if (!employee || employee.is_deleted || !employee.status) {
-        throw new Error("El trabajador seleccionado no existe o está deshabilitado");
-      }
+    .bail(),
+  // Este chequeo corre SIEMPRE que funding_source sea "employee", mande o
+  // no `paid_by_user_id` explícito: si no se manda, el controller asume
+  // como "trabajador" a quien registra la compra (req.user). Antes solo se
+  // validaba el caso explícito, así que un Super Administrador (is_system,
+  // sin empresa) podía registrar una compra con fondos propios sin pasar
+  // paid_by_user_id y generarse a sí mismo una `employee_debt` imposible de
+  // pagar después (el pago exige que el trabajador pertenezca a una
+  // empresa) — bug reportado por QA. El `custom` valida que el trabajador
+  // exista, esté activo, y pertenezca a la MISMA empresa dueña de la orden
+  // de compra.
+  body("funding_source").custom(async (value: string, { req }) => {
+    if (value !== "employee") return true;
 
-      const item = await DataBase.instance.purchase_order_item.findOne({ where: { id: Number(req.params?.itemId) } });
-      if (!item) throw new Error("El item de la orden de compra no existe");
-      const purchaseOrder = await DataBase.instance.purchase_order.findOne({ where: { id: item.purchase_order_id } });
-      if (!purchaseOrder) throw new Error("La orden de compra no existe");
+    const authUser = req.user as { userId: number } | undefined;
+    const employeeId = Number(req.body.paid_by_user_id ?? authUser?.userId);
+    const employee = await DataBase.instance.user.findOne({ where: { id: employeeId } });
+    if (!employee || employee.is_deleted || !employee.status) {
+      throw new Error("El trabajador que puso el dinero no existe o está deshabilitado");
+    }
 
-      if (employee.company_id !== purchaseOrder.company_id) {
-        throw new Error("El trabajador seleccionado no pertenece a la empresa de esta orden de compra");
-      }
-      return true;
-    }),
+    const item = await DataBase.instance.purchase_order_item.findOne({ where: { id: Number(req.params?.itemId) } });
+    if (!item) throw new Error("El item de la orden de compra no existe");
+    const purchaseOrder = await DataBase.instance.purchase_order.findOne({ where: { id: item.purchase_order_id } });
+    if (!purchaseOrder) throw new Error("La orden de compra no existe");
+
+    if (employee.company_id !== purchaseOrder.company_id) {
+      throw new Error("El trabajador que puso el dinero no pertenece a la empresa de esta orden de compra");
+    }
+    return true;
+  }),
 ];

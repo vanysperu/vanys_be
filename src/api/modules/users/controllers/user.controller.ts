@@ -207,10 +207,11 @@ const resolveTargetUserCompanyId = async (targetUserId: number): Promise<number 
 
 export const updateUserController = asyncHandler(async (req: Request, res: Response) => {
   const authUser = req.user as IToken;
-  const { userId, companyId } = authUser;
+  const { userId, companyId, isSystem } = authUser;
   const { id } = req.params;
+  const targetUserId = Number(id);
 
-  if (!(await assertUserBelongsToCaller(Number(id), authUser))) {
+  if (!(await assertUserBelongsToCaller(targetUserId, authUser))) {
     throw new AppError(403, "No tienes acceso a este usuario");
   }
 
@@ -229,10 +230,40 @@ export const updateUserController = asyncHandler(async (req: Request, res: Respo
     status,
   } = req.body as UpdateUserDto;
 
+  // Empresa/Tienda del usuario editado: antes este endpoint ni siquiera
+  // aceptaba estos campos, así que era imposible corregir una tienda/empresa
+  // mal asignada al crear. Mismo criterio que createUserController:
+  // - Solo Super Administrador puede reasignar la EMPRESA.
+  // - La tienda la puede cambiar cualquiera con acceso al módulo, salvo que
+  //   el caller esté limitado a una sola tienda (gestor), en cuyo caso esa
+  //   tienda manda sin importar lo que mande el body (sección 11.1).
+  const { business_unit_id: requestedBusinessUnitId, company_id: requestedCompanyId } = req.body as UpdateUserDto & {
+    business_unit_id?: number | null;
+    company_id?: number | null;
+  };
+
+  let resolvedCompanyId = await resolveTargetUserCompanyId(targetUserId);
+  if (isSystem && requestedCompanyId) {
+    const company = await DataBase.instance.company.findByPk(requestedCompanyId);
+    if (!company) throw new AppError(404, "La empresa seleccionada no existe");
+    resolvedCompanyId = requestedCompanyId;
+  }
+
+  const scopedBusinessUnitId = resolveBusinessUnitFilter(authUser);
+  const business_unit_id =
+    scopedBusinessUnitId ?? (requestedBusinessUnitId !== undefined ? requestedBusinessUnitId : undefined);
+
+  if (business_unit_id) {
+    const businessUnit = await DataBase.instance.business_unit.findByPk(business_unit_id);
+    if (!businessUnit || businessUnit.company_id !== resolvedCompanyId) {
+      throw new AppError(403, "La tienda seleccionada no pertenece a esta empresa");
+    }
+  }
+
   await assertRoleIsAssignable({
     roleId: roleIds,
     callerIsSystem: authUser.isSystem,
-    targetCompanyId: await resolveTargetUserCompanyId(Number(id)),
+    targetCompanyId: resolvedCompanyId,
   });
 
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -241,7 +272,7 @@ export const updateUserController = asyncHandler(async (req: Request, res: Respo
   // el error siempre se vuelve a lanzar al final (CLAUDE.md sección 5).
   try {
     await updateUserById({
-      userId: Number(id),
+      userId: targetUserId,
       updateUserDto: {
         date_of_birth,
         address,
@@ -255,6 +286,8 @@ export const updateUserController = asyncHandler(async (req: Request, res: Respo
         phone_number,
         roleIds,
         status,
+        ...(isSystem && requestedCompanyId ? { company_id: resolvedCompanyId! } : {}),
+        ...(business_unit_id !== undefined ? { business_unit_id } : {}),
       },
       transaction,
       updatedBy: userId,
@@ -367,11 +400,13 @@ export const listUsersController = asyncHandler(async (req: Request<any, any, an
   const startDate = queryParams.startDate || undefined;
   const isActive = queryParams.isActive || undefined;
   const roleId = Number(queryParams.roleId) || undefined;
-  const searchTerm = queryParams.searchTerm || undefined;
+  // .trim(): un espacio final en el input rompía el LIKE (bug reportado
+  // por QA) — aplica al buscador global y a los filtros por columna.
+  const searchTerm = (queryParams.searchTerm as string | undefined)?.trim() || undefined;
   // Filtros por columna de la tabla (nombre/email/rol) — se agregan al
   // buscador global existente, no lo reemplazan.
-  const name = (queryParams as unknown as Record<string, string | undefined>).name || undefined;
-  const email = (queryParams as unknown as Record<string, string | undefined>).email || undefined;
+  const name = (queryParams as unknown as Record<string, string | undefined>).name?.trim() || undefined;
+  const email = (queryParams as unknown as Record<string, string | undefined>).email?.trim() || undefined;
   const roleName = (queryParams as unknown as Record<string, string | undefined>).roleName || undefined;
   // Misma lista blanca de antes: si el valor pedido no está permitido, se
   // conserva el mismo fallback silencioso a "created_at" (nunca se lanza 400).

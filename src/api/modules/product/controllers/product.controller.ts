@@ -45,11 +45,13 @@ export const updateProductController = asyncHandler(async (req: Request, res: Re
 export const listProductsController = asyncHandler(async (req: Request, res: Response) => {
   const { isSystem, companyId } = req.user as IToken;
   const { page, limit, orderBy, orderDir } = parsePaginationParams(req.query);
-  const searchTerm = (req.query.searchTerm as string) || undefined;
+  // .trim(): un espacio final en el input rompía el LIKE (bug reportado
+  // por QA en otros listados, mismo criterio acá).
+  const searchTerm = (req.query.searchTerm as string | undefined)?.trim() || undefined;
   // Filtros por columna (nombre, sku, estado): se agregan al searchTerm
   // global, no lo reemplazan.
-  const name = (req.query.name as string) || undefined;
-  const sku = (req.query.sku as string) || undefined;
+  const name = (req.query.name as string | undefined)?.trim() || undefined;
+  const sku = (req.query.sku as string | undefined)?.trim() || undefined;
   const status = (req.query.status as string) || undefined;
 
   const resp = await getProductsList({

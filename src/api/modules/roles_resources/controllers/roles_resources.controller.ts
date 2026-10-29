@@ -65,6 +65,14 @@ export const setRoleResourcesController = asyncHandler(async (req: Request, res:
     throw new AppError(403, "No tienes acceso a este rol");
   }
 
+  // Un rol "Inactivo" seguía permitiendo guardar cambios de accesos desde el
+  // modal de llave (bug reportado por QA) porque este endpoint nunca
+  // revisaba su estado.
+  const targetRole = await DataBase.instance.role.findOne({ where: { id: Number(roleId) } });
+  if (targetRole?.status === false) {
+    throw new AppError(409, "No se pueden configurar los accesos de un rol inactivo. Actívalo primero.");
+  }
+
   const transaction = await DataBase.instance.sequelize.transaction();
 
   // Try/catch se mantiene únicamente para el rollback de la transacción;

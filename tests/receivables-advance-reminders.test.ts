@@ -151,19 +151,21 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
       const { date, time } = limaParts(120);
       const res = await api.post("/reminder/create", { title: "Futuro", remind_date: date, remind_time: time });
       expect(res.status).toBe(201);
-      expect(res.body.data.state).toBe("upcoming");
-      expect(res.body.data.remind_date).toBe(date);
-      expect(res.body.data.remind_time).toBe(time);
+      // El create ahora devuelve un array (selector múltiple, pedido de QA):
+      // un solo destinatario sigue siendo un array de 1 elemento.
+      expect(res.body.data[0].state).toBe("upcoming");
+      expect(res.body.data[0].remind_date).toBe(date);
+      expect(res.body.data[0].remind_time).toBe(time);
 
       const due = await api.get("/reminder/due");
-      expect(due.body.data.data.some((row: { id: number }) => row.id === res.body.data.id)).toBe(false);
+      expect(due.body.data.data.some((row: { id: number }) => row.id === res.body.data[0].id)).toBe(false);
     });
 
     it("al llegar su hora aparece en la campana y al marcarlo visto desaparece", async () => {
       const api = authedRequest(token);
       const { date, time } = limaParts(0);
       const created = await api.post("/reminder/create", { title: "Ahora", remind_date: date, remind_time: time });
-      const reminderId: number = created.body.data.id;
+      const reminderId: number = created.body.data[0].id;
 
       const due = await api.get("/reminder/due");
       expect(due.body.data.data.some((row: { id: number }) => row.id === reminderId)).toBe(true);
@@ -193,7 +195,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
         recipient_user_id: gestor.userId,
       });
       expect(created.status).toBe(201);
-      const reminderId: number = created.body.data.id;
+      const reminderId: number = created.body.data[0].id;
 
       const gestorApi = authedRequest(gestor.token);
       const gestorDue = await gestorApi.get("/reminder/due");
@@ -208,6 +210,28 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
       const sent = await api.get("/reminder/list?box=sent&status=read");
       expect(sent.body.data.data.some((row: { id: number }) => row.id === reminderId)).toBe(true);
+    });
+
+    it("recipient_user_ids crea un recordatorio por destinatario (selector múltiple)", async () => {
+      const api = authedRequest(token);
+      const gestor = await login(QA_GESTOR.email, QA_GESTOR.password);
+      const { date, time } = limaParts(0);
+
+      const created = await api.post("/reminder/create", {
+        title: "Aviso para todo el equipo",
+        remind_date: date,
+        remind_time: time,
+        recipient_user_ids: [userId, gestor.userId],
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.data).toHaveLength(2);
+      const recipientIds = created.body.data.map((row: { recipient: { id: number } }) => row.recipient.id);
+      expect(recipientIds.sort()).toEqual([userId, gestor.userId].sort());
+
+      const gestorDue = await authedRequest(gestor.token).get("/reminder/due");
+      expect(gestorDue.body.data.data.some((row: { id: number }) => created.body.data.some((r: { id: number }) => r.id === row.id))).toBe(
+        true
+      );
     });
 
     it("no deja avisarle a un usuario de otra empresa", async () => {
@@ -235,7 +259,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
       const api = authedRequest(token);
       const { date, time } = limaParts(30);
       const created = await api.post("/reminder/create", { title: "Editar", remind_date: date, remind_time: time });
-      const reminderId: number = created.body.data.id;
+      const reminderId: number = created.body.data[0].id;
 
       const now = limaParts(0);
       const edited = await api.put(`/reminder/update/${reminderId}`, {

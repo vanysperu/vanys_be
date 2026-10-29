@@ -234,6 +234,30 @@ export const createUserDtoValidator = [
 
   // Género
   body("gender").isIn([4, 5]).withMessage("El género debe ser masculino, femenino ").bail(),
+
+  // Tienda (opcional): el frontend manda "" cuando el select queda sin
+  // elegir. Sin esta normalización, ese "" llegaba crudo hasta Sequelize e
+  // insertaba un valor inválido en la columna INTEGER ("expected number,
+  // received NaN"). El sanitizer corre antes que `.optional()`, así que el
+  // "" ya es `null` cuando se evalúa si el campo está vacío.
+  body("business_unit_id")
+    .customSanitizer((value: unknown) => (value === "" ? null : value))
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La tienda seleccionada no es válida.")
+    .bail()
+    .toInt(),
+
+  // Empresa: solo la usa el controller cuando el caller es Super
+  // Administrador (ver createUserController). Mismo criterio de
+  // sanitización que business_unit_id.
+  body("company_id")
+    .customSanitizer((value: unknown) => (value === "" ? null : value))
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La empresa seleccionada no es válida.")
+    .bail()
+    .toInt(),
 ];
 
 export const updateUserDtoValidator = [
@@ -423,6 +447,28 @@ export const updateUserDtoValidator = [
     .isIn([4, 5])
     .withMessage("El género debe ser 4 (masculino) o 5 (femenino).")
     .bail(),
+
+  // Tienda (opcional, editable): antes "Editar usuario" ni siquiera
+  // aceptaba este campo, así que era imposible corregir la tienda asignada
+  // por error al crear. Mismo criterio de sanitización que en creación:
+  // "" -> null, un valor real se valida como entero positivo.
+  body("business_unit_id")
+    .customSanitizer((value: unknown) => (value === "" ? null : value))
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La tienda seleccionada no es válida.")
+    .bail()
+    .toInt(),
+
+  // Empresa (opcional, solo un Super Administrador puede reasignarla — ver
+  // updateUserController).
+  body("company_id")
+    .customSanitizer((value: unknown) => (value === "" ? null : value))
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La empresa seleccionada no es válida.")
+    .bail()
+    .toInt(),
 ];
 
 export const changePasswordValidator = [

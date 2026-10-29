@@ -127,12 +127,26 @@ const styles = StyleSheet.create({
   infoGrid: { flexDirection: "row", justifyContent: "space-between" },
   table: { borderWidth: 1, borderColor: "#E4E4E9", borderRadius: 3 },
   // Gris azulado neutro (el lila anterior venía de la paleta vieja de Grulla).
-  tableHeaderRow: { flexDirection: "row", backgroundColor: "#EEF1F6", paddingVertical: 6, paddingHorizontal: 6 },
-  tableRow: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: "#EEEEF2" },
+  // gap: sin espacio entre columnas, un "Producto" largo que llegaba a
+  // ocupar todo su ancho se pegaba directo con el texto de "Técnica" al
+  // lado, sin separación visual entre ambos (bug reportado por QA: "se
+  // junta el Producto con la Técnica").
+  tableHeaderRow: { flexDirection: "row", backgroundColor: "#EEF1F6", paddingVertical: 6, paddingHorizontal: 6, gap: 6 },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#EEEEF2",
+    gap: 6,
+  },
   th: { fontSize: 8.5, fontWeight: 700, color: "#5B6072" },
   td: { fontSize: 9 },
-  colProduct: { flex: 2.4 },
-  colTechnique: { flex: 1.6 },
+  colProduct: { flex: 2.2 },
+  // Antes 1.6: "SERIGRAFIA GENERAL" no entraba en una sola línea y el
+  // renderer la partía a mitad de palabra ("GEN-ERAL") — bug reportado por
+  // QA. Con más ancho entra completo sin cortarse.
+  colTechnique: { flex: 2 },
   // Cant. es SOLO el número (pedido explícito del usuario) — el modo de
   // precio (unidad/ciento/medio millar/millar/personalizado) tiene su
   // propia columna al lado, igual que en el detalle de cotización en
@@ -488,17 +502,26 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
           );
         };
 
+        // La grilla de 2 columnas (walletCard, 48.5% de ancho) solo tiene
+        // sentido con 2+ cuentas digitales para emparejar — con una sola
+        // (ej. únicamente Yape, sin Plin) quedaba pegada a la izquierda
+        // ocupando la mitad del ancho, dejando la otra mitad vacía y
+        // "rompiendo" la simetría contra las cuentas bancarias de ancho
+        // completo (bug reportado por QA). Con una sola cuenta digital se
+        // usa el mismo ancho completo que las bancarias.
         return createElement(
           View,
           { style: styles.section },
           sectionTitle("Métodos de pago"),
           ...bankAccounts.map((account) => renderAccount(account, styles.paymentCard)),
-          walletAccounts.length > 0 &&
-            createElement(
-              View,
-              { style: styles.walletGrid },
-              ...walletAccounts.map((account) => renderAccount(account, styles.walletCard)),
-            ),
+          walletAccounts.length === 1
+            ? renderAccount(walletAccounts[0]!, styles.paymentCard)
+            : walletAccounts.length > 1 &&
+                createElement(
+                  View,
+                  { style: styles.walletGrid },
+                  ...walletAccounts.map((account) => renderAccount(account, styles.walletCard)),
+                ),
         );
       })(),
       // Términos y condiciones: texto único configurado en "Documentos de
