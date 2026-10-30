@@ -1,10 +1,34 @@
 import { body, param, CustomValidator } from "express-validator";
 import { DataBase } from "../../../../database";
+import { assertDocumentNumberMatchesType, DOCUMENT_TYPE_RULES } from "../../../../core/validators/documentType.validator";
 
 // Mismas reglas que el frontend (grulla_fe: client.schema.ts) — nunca se
 // confía solo en la validación del cliente (CLAUDE.md sección 12).
 const NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'.-]+$/;
 const PHONE_REGEX = /^\d{6,9}$/;
+
+// El tipo y número de documento del cliente van siempre juntos (o ninguno
+// de los dos: un cliente puede no tener documento cargado) — antes
+// "Documento" era un string libre sin tipo ni largo validado, permitiendo
+// letras y más de 12 dígitos sin avisar (bug reportado por QA). Se valida
+// acá, en el campo document_type, porque necesita leer ambos valores del
+// body a la vez.
+const assertDocumentTypeAndNumberTogether: CustomValidator = (value, { req }) => {
+  const hasType = value !== undefined && value !== null && value !== "";
+  const hasNumber = req.body.document_number !== undefined && req.body.document_number !== null && req.body.document_number !== "";
+
+  if (!hasType && !hasNumber) return true;
+  if (hasType !== hasNumber) {
+    throw new Error("Indica el tipo y el número de documento juntos.");
+  }
+
+  const documentType = Number(value);
+  if (!DOCUMENT_TYPE_RULES[documentType]) {
+    throw new Error("El tipo de documento no es válido.");
+  }
+  assertDocumentNumberMatchesType(documentType, String(req.body.document_number));
+  return true;
+};
 
 // El sistema permitía registrar dos o más clientes con el mismo email o
 // documento dentro de la misma empresa (bug reportado por QA). La
@@ -62,6 +86,13 @@ export const createClientValidator = [
     .isString()
     .matches(NAME_REGEX)
     .withMessage("El nombre solo puede tener letras"),
+  body("document_type")
+    .optional({ values: "null" })
+    .isInt()
+    .withMessage("El tipo de documento no es válido")
+    .bail()
+    .custom(assertDocumentTypeAndNumberTogether)
+    .bail(),
   body("document_number")
     .optional({ values: "null" })
     .isString()
@@ -102,6 +133,13 @@ const paramClientIdValidator = param("id")
 export const updateClientValidator = [
   paramClientIdValidator,
   body("name").optional().isString().matches(NAME_REGEX).withMessage("El nombre solo puede tener letras"),
+  body("document_type")
+    .optional({ values: "null" })
+    .isInt()
+    .withMessage("El tipo de documento no es válido")
+    .bail()
+    .custom(assertDocumentTypeAndNumberTogether)
+    .bail(),
   body("document_number")
     .optional({ values: "null" })
     .isString()

@@ -2,16 +2,31 @@ import { body, param } from "express-validator";
 import { custom } from "joi";
 import moment from "moment";
 import { DataBase } from "../../../../database";
+import { assertDocumentNumberMatchesType } from "../../../../core/validators/documentType.validator";
 
 // Nombre propio: solo letras/acentos/espacios/guiones — mismo criterio que
 // clients (client.validator.ts) para todo campo que sea semánticamente un
 // "nombre", nunca un código/número.
 const NAME_REGEX = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'.-]+$/;
 
+// Solo mayores de edad (pedido explícito del usuario).
+const MIN_AGE_YEARS = 18;
+
+// Edad exacta a día de hoy (no solo resta de años: 17/10/2008 sigue siendo
+// menor el 16/10/2026, recién cumple el 17).
+const calculateAge = (birthDate: Date, today: Date): number => {
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const hasHadBirthdayThisYear =
+    today.getMonth() > birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
+};
+
 // DD/MM/YYYY (formato que ya manda el frontend, ver UsersListPage.tsx ->
-// toDDMMYYYY) — valida que sea una fecha real (rechaza "31/02/2026") y que
+// toDDMMYYYY) — valida que sea una fecha real (rechaza "31/02/2026"), que
 // no sea una fecha futura (pedido explícito del usuario: "fecha futura de
-// nacimiento" se estaba aceptando).
+// nacimiento" se estaba aceptando) y que la persona sea mayor de edad.
 const validateDateOfBirth = (value: string): true => {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
   if (!match) throw new Error("La fecha de nacimiento debe tener el formato DD/MM/YYYY.");
@@ -24,8 +39,13 @@ const validateDateOfBirth = (value: string): true => {
   const isRealDate = parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
   if (!isRealDate) throw new Error("La fecha de nacimiento no es una fecha válida.");
 
-  if (parsed.getTime() > new Date().getTime()) {
+  const today = new Date();
+  if (parsed.getTime() > today.getTime()) {
     throw new Error("La fecha de nacimiento no puede ser una fecha futura.");
+  }
+
+  if (calculateAge(parsed, today) < MIN_AGE_YEARS) {
+    throw new Error(`El usuario debe ser mayor de edad (${MIN_AGE_YEARS} años o más).`);
   }
   return true;
 };
@@ -111,36 +131,7 @@ export const createUserDtoValidator = [
     .withMessage("El tipo de documento debe ser DNI, CE, PAS o RUC.")
     .bail()
     .custom((value, { req }) => {
-      const documentNumber = req.body.document_number;
-      switch (value) {
-        case 1:
-          if (documentNumber.length !== 8) {
-            throw new Error("El DNI debe tener 8 dígitos.");
-          }
-          break;
-        case 3:
-          if (documentNumber.length < 9 || documentNumber.length > 12) {
-            throw new Error("El CE debe tener entre 9 y 12 dígitos.");
-          }
-          break;
-        case 2:
-          if (documentNumber.length < 6 || documentNumber.length > 9) {
-            throw new Error("El PAS debe tener entre 6 y 9 dígitos.");
-          }
-          break;
-        case 6:
-          if (documentNumber.length !== 11) {
-            throw new Error("El RUC debe tener 11 dígitos.");
-          }
-          break;
-        default:
-          throw new Error("El tipo de documento no válido.");
-      }
-      // DNI (1) y RUC (6) son siempre numéricos; CE (3) y PAS (2) pueden
-      // traer letras (documentos de extranjería), así que no se restringen.
-      if ((value === 1 || value === 6) && !/^\d+$/.test(documentNumber)) {
-        throw new Error("El DNI/RUC debe contener solo dígitos.");
-      }
+      assertDocumentNumberMatchesType(value, req.body.document_number);
       return true;
     })
     .bail(),
@@ -330,31 +321,7 @@ export const updateUserDtoValidator = [
     .custom((value, { req }) => {
       const documentNumber = req.body.document_number;
       if (!documentNumber) return true;
-
-      switch (value) {
-        case 1:
-          if (documentNumber.length !== 8) throw new Error("El DNI debe tener 8 dígitos.");
-          break;
-        case 3:
-          if (documentNumber.length < 9 || documentNumber.length > 12)
-            throw new Error("El CE debe tener entre 9 y 12 dígitos.");
-          break;
-        case 2:
-          if (documentNumber.length < 6 || documentNumber.length > 9)
-            throw new Error("El PAS debe tener entre 6 y 9 dígitos.");
-          break;
-        case 6:
-          if (documentNumber.length !== 11) throw new Error("El RUC debe tener 11 dígitos.");
-          break;
-        default:
-          throw new Error("El tipo de documento no válido.");
-      }
-
-      // Mismo criterio que en creación: DNI/RUC son siempre numéricos.
-      if ((value === 1 || value === 6) && !/^\d+$/.test(documentNumber)) {
-        throw new Error("El DNI/RUC debe contener solo dígitos.");
-      }
-
+      assertDocumentNumberMatchesType(value, documentNumber);
       return true;
     })
     .bail(),

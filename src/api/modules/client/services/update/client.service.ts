@@ -17,6 +17,7 @@ const updateClientById = async ({
   // documento/teléfono/dirección) a otra empresa.
   const safePayload = {
     name: client.name,
+    document_type: client.document_type,
     document_number: client.document_number,
     email: client.email,
     phone: client.phone,

@@ -150,16 +150,25 @@ const getUsersList = async (
       -- tienda, la empresa de esa tienda manda; si no (admin de empresa sin
       -- tienda propia), cae al company_id directo del usuario. Necesario
       -- para que "Editar usuario" pueda precargar/corregir Empresa/Tienda.
-      COALESCE(bu.company_id, u.company_id) as company_id,
+      -- MAX(...): con GROUP BY u.id (ver abajo), cualquier columna que no
+      -- salga 1 a 1 de "user" necesita agregarse así (MySQL ONLY_FULL_GROUP_BY).
+      MAX(COALESCE(bu.company_id, u.company_id)) as company_id,
       CONCAT_WS(' ', u.name, u.paternal_lastname, u.maternal_lastname) as fullName,
       CASE
         WHEN u.status = 1 THEN 'Activo'
         WHEN u.status = 0 THEN 'Inactivo'
         ELSE 'No especificado'
       END as status_name,
-      dt.name as document_type_name,
-      g.name as gender_name,
-      r.name as role_name
+      MAX(dt.name) as document_type_name,
+      MAX(g.name) as gender_name,
+      -- MAX(r.name): si por datos viejos/corruptos un usuario llegara a
+      -- tener más de una fila en user_role (el alta/edición siempre
+      -- reemplaza, nunca acumula, pero esto es defensivo), antes esto hacía
+      -- que el INNER JOIN devolviera una fila por rol — el usuario aparecía
+      -- DUPLICADO tanto en la tabla de Usuarios como en cualquier selector
+      -- de personas que reutilice este mismo listado (ej. "Asignado a" al
+      -- crear una orden de compra) — bug reportado por QA.
+      MAX(r.name) as role_name
     `;
 
     const qSelect = `
@@ -204,12 +213,16 @@ const getUsersList = async (
     `;
 
     const qOrderBy = `ORDER BY ${orderBy} ${orderDir}`;
+    // Una fila por usuario, sin importar cuántas filas tenga en user_role
+    // (ver comentario de MAX(r.name) arriba).
+    const qGroupBy = "GROUP BY u.id";
 
     const result = await paginatedListGenerator({
       structure: {
         qColumns,
         qSelect,
         qWhere,
+        qGroupBy,
         qOrderBy,
       },
       limit,

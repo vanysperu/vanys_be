@@ -5,6 +5,9 @@ export interface ClientAttributes {
   company_id: number;
   business_unit_id: number | null;
   name: string;
+  // Catálogo global general_variable (category="document_type"), mismos
+  // códigos que usuarios: 1=DNI, 2=Pasaporte, 3=CE, 6=RUC.
+  document_type: string | null;
   document_number: string | null;
   email: string | null;
   phone: string | null;
@@ -34,6 +37,7 @@ export function ClientFactory(sequelize: Sequelize): ClientStatic {
       company_id: { type: DataTypes.BIGINT, allowNull: false },
       business_unit_id: { type: DataTypes.BIGINT, allowNull: true },
       name: { type: DataTypes.STRING(255), allowNull: false },
+      document_type: { type: DataTypes.STRING, allowNull: true },
       document_number: { type: DataTypes.STRING(20), allowNull: true },
       email: { type: DataTypes.STRING(150), allowNull: true },
       phone: { type: DataTypes.STRING(30), allowNull: true },
