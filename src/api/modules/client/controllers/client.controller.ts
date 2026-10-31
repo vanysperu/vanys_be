@@ -2,6 +2,7 @@ import { buildBusinessDateRange, resolveIsDeletedFilter } from "../../../../core
 import { Op, WhereOptions } from "sequelize";
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
+import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
@@ -39,18 +40,17 @@ export const createClientController = asyncHandler(async (req: Request, res: Res
   const user = req.user as IToken;
 
   // Un admin de empresa solo crea clientes de SU empresa — nunca confía
-  // en el company_id que manda el body (CLAUDE.md sección 10).
-  if (!user.isSystem && Number(req.body.company_id) !== user.companyId) {
-    throw new AppError(403, "No puedes crear clientes para otra empresa");
-  }
+  // en el company_id que manda el body (CLAUDE.md sección 10); el Super
+  // Administrador elige la empresa en el formulario.
+  const company_id = await resolveTargetCompanyId(user, req.body.company_id, "clientes");
 
   // Regla de oro de tiendas: si el usuario está limitado a una tienda propia,
   // el cliente se crea SIEMPRE en esa tienda, sin importar lo que mande el
   // body (mismo criterio que company_id arriba, nunca se confía en el front).
-  const business_unit_id = await resolveTargetBusinessUnitId(user, req.body.business_unit_id);
+  const business_unit_id = await resolveTargetBusinessUnitId(user, req.body.business_unit_id, company_id);
 
   const client = await createClient({
-    client: { ...req.body, business_unit_id },
+    client: { ...req.body, company_id, business_unit_id },
     createdBy: user.userId,
   });
 
@@ -85,7 +85,7 @@ export const listClientsController = asyncHandler(async (req: Request, res: Resp
     limit,
     orderBy,
     orderDir,
-    companyId: isSystem ? null : companyId,
+    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
     businessUnitId: resolveBusinessUnitFilter(user),
     searchTerm,
     where,

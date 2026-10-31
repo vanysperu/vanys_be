@@ -19,6 +19,7 @@ export interface ReminderPerson {
 }
 
 export interface ReminderRecipient extends ReminderPerson {
+  email: string;
   is_me: boolean;
 }
 

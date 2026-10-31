@@ -35,6 +35,9 @@ export const createCashMovementValidator = [
   // era una consulta extra por request que además daba una respuesta más
   // débil (confirmaba que un id ajeno existe antes de que el controller lo
   // rechace por empresa).
+  // Solo la usa el Super Administrador (elige la empresa); para un usuario
+  // de empresa el controller siempre usa la suya.
+  body("company_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La empresa debe ser un id válido"),
   body("quotation_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cotización debe ser un id válido"),
   body("purchase_order_id")
     .optional({ values: "null" })

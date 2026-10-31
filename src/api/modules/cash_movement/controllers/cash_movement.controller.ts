@@ -11,26 +11,29 @@ import { disableOrEnableCashMovementById } from "../services/delete/cash_movemen
 import { resolveBusinessUnitFilter, resolveTargetBusinessUnitId } from "../../../../core/rbac/businessUnitScope";
 import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
+import { resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { direction, category, amount, description, occurred_at, quotation_id, purchase_order_id } = req.body;
 
   // Mismo criterio que clientes/cotizaciones/usuarios (CLAUDE.md sección 10
-  // + 11.1): la empresa nunca se confía del body, y si el caller está
-  // limitado a una tienda propia, el movimiento se crea SIEMPRE ahí.
-  const companyId = user.companyId!;
-  const business_unit_id = await resolveTargetBusinessUnitId(user, req.body.business_unit_id);
+  // + 11.1): un usuario de empresa crea SIEMPRE en la suya (y en su tienda
+  // si está limitado a una); el Super Administrador elige la empresa en el
+  // formulario (antes se usaba `user.companyId`, null para él, y el
+  // movimiento fallaba al guardarse).
+  const companyId = await resolveTargetCompanyId(user, req.body.company_id, "movimientos");
+  const business_unit_id = await resolveTargetBusinessUnitId(user, req.body.business_unit_id, companyId);
 
   if (quotation_id) {
     const quotation = await DataBase.instance.quotation.findOne({ where: { id: quotation_id } });
-    if (!quotation || (quotation.company_id !== companyId && !user.isSystem)) {
+    if (!quotation || quotation.company_id !== companyId) {
       throw new AppError(403, "La cotización seleccionada no pertenece a esta empresa");
     }
   }
   if (purchase_order_id) {
     const purchaseOrder = await DataBase.instance.purchase_order.findOne({ where: { id: purchase_order_id } });
-    if (!purchaseOrder || (purchaseOrder.company_id !== companyId && !user.isSystem)) {
+    if (!purchaseOrder || purchaseOrder.company_id !== companyId) {
       throw new AppError(403, "La orden de compra seleccionada no pertenece a esta empresa");
     }
   }

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
+import { resolveListCompanyFilter } from "../../../../core/rbac/companyScope";
 import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
@@ -88,7 +89,7 @@ export const listQuotationsController = asyncHandler(async (req: Request, res: R
     limit,
     orderBy,
     orderDir,
-    companyId: isSystem ? null : companyId,
+    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
     businessUnitId: scopedBusinessUnitId ?? requestedBusinessUnitId,
     status,
     clientId,

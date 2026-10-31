@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
+import { resolveListCompanyFilter } from "../../../../core/rbac/companyScope";
 import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
@@ -68,7 +69,7 @@ export const listPurchaseOrdersController = asyncHandler(async (req: Request, re
   // directo en la query (WHERE real), ya no en memoria sobre la página
   // traída — así `meta.total` refleja el conteo real filtrado.
   const resp = await getPurchaseOrdersList({
-    companyId: isSystem ? null : companyId,
+    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
     businessUnitId: resolveBusinessUnitFilter(user),
     assignedTo,
     status: (status as string) || undefined,

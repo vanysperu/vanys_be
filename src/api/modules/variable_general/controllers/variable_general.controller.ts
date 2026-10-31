@@ -12,6 +12,7 @@ import {
 import { updateVariableGeneralById } from "../services/update/variable_general.service";
 import { IToken } from "../../../interfaces/IToken.interface";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
+import { resolveListCompanyFilter } from "../../../../core/rbac/companyScope";
 
 export const listVariableGeneralController = asyncHandler(async (req: Request, res: Response) => {
   const { companyId, isSystem } = req.user as IToken;
@@ -27,7 +28,9 @@ export const listVariableGeneralController = asyncHandler(async (req: Request, r
     filter: {
       search: (search as string) || undefined,
       category: (category as string) || undefined,
-      companyId: isSystem ? null : companyId,
+      // El Super Administrador puede pedir ?companyId= (ej. las cuentas de
+      // pago de la empresa elegida en "Nuevo movimiento de caja").
+      companyId: resolveListCompanyFilter({ companyId, isSystem } as IToken, req.query.companyId),
       // Filtros por columna de la pantalla de administración.
       title: (title as string) || undefined,
       name: (name as string) || undefined,

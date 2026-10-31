@@ -11,6 +11,9 @@ export async function listReminderRecipientsService(actor: IToken, search?: stri
   return rows.map((row) => ({
     id: row.id,
     name: [row.name, row.paternal_lastname].filter(Boolean).join(" "),
+    // Dos compañeros pueden llamarse igual: el email los distingue en el
+    // selector (sin él, se veían como "personas duplicadas" — bug de QA).
+    email: row.email,
     // El frontend no conoce el id del usuario logueado: así puede mostrar "Yo".
     is_me: row.id === actor.userId,
   }));

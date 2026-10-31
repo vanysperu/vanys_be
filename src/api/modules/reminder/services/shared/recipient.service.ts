@@ -12,6 +12,7 @@ export interface RecipientRow {
   id: number;
   name: string;
   paternal_lastname: string | null;
+  email: string;
   company_id: number | null;
 }
 
@@ -45,7 +46,7 @@ const findEligibleRecipients = async ({
   if (userId !== undefined) conditions.push("u.id = :userId");
 
   return (await DataBase.instance.sequelize.query(
-    `SELECT u.id, u.name, u.paternal_lastname, u.company_id
+    `SELECT u.id, u.name, u.paternal_lastname, u.email, u.company_id
      FROM \`user\` u
      WHERE ${conditions.join(" AND ")}
      ORDER BY u.name ASC, u.paternal_lastname ASC

@@ -11,6 +11,7 @@ import { getCompaniesList, getCompanyById } from "../services/find/company.servi
 import { disableOrEnableCompanyById } from "../services/delete/company.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
 import { CompanyAttributes } from "../model/company.model";
+import { resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 
 // Filtros por columna de la pantalla "Empresas": texto -> LIKE, el resto
 // (ninguno acá, no hay enums/booleanos filtrables en esta tabla todavía).
@@ -61,27 +62,29 @@ export const listCompaniesController = asyncHandler(async (req: Request, res: Re
   ok(res, 200, resp, message);
 });
 
-// Esta pareja ("mi empresa") es aparte de create/update/list/disable
-// (esos siguen exclusivos de is_system, ver CLAUDE.md sección 10 — dar de
-// alta o gestionar OTRAS empresas es acción de plataforma). Acá un admin
-// de empresa gestiona la información de branding de la SUYA propia para
-// que salga bien en sus PDFs de cotización — nunca puede leer ni tocar la
-// de otra empresa porque el id no viene del cliente, sale del token.
-export const getMyCompanyDocumentSettingsController = asyncHandler(async (req: Request, res: Response) => {
-  const { companyId, isSystem } = req.user as IToken;
-  if (isSystem || !companyId) {
+// Esta pareja ("documentos de la empresa") es aparte de create/update/
+// list/disable de empresas. Un admin de empresa gestiona la información de
+// branding de la SUYA para sus PDFs de cotización — nunca la de otra: el id
+// sale del token, no del cliente. El Super Administrador (sin empresa
+// propia) elige la empresa en la pantalla (pedido explícito del usuario:
+// "el super admin debería poder hacer todo, escogiendo la empresa").
+const resolveDocumentSettingsCompanyId = async (user: IToken, requestedCompanyId: unknown): Promise<number> => {
+  if (!user.isSystem && !user.companyId) {
     throw new AppError(400, "Esta acción es solo para usuarios de una empresa");
   }
+  return resolveTargetCompanyId(user, user.isSystem ? requestedCompanyId : undefined, "documentos");
+};
+
+export const getMyCompanyDocumentSettingsController = asyncHandler(async (req: Request, res: Response) => {
+  const companyId = await resolveDocumentSettingsCompanyId(req.user as IToken, req.query.companyId);
 
   const company = await getCompanyById(companyId);
   ok(res, 200, company, "Configuración obtenida correctamente");
 });
 
 export const updateMyCompanyDocumentSettingsController = asyncHandler(async (req: Request, res: Response) => {
-  const { userId, companyId, isSystem } = req.user as IToken;
-  if (isSystem || !companyId) {
-    throw new AppError(400, "Esta acción es solo para usuarios de una empresa");
-  }
+  const { userId } = req.user as IToken;
+  const companyId = await resolveDocumentSettingsCompanyId(req.user as IToken, req.body.company_id);
 
   // Whitelist explícito: nunca pasar req.body completo a updateCompanyById
   // acá — ese service no filtra columnas, y un admin de empresa no debe

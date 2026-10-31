@@ -162,22 +162,10 @@ const styles = StyleSheet.create({
   totalsLabel: { fontSize: 9, color: "#5B6072" },
   totalsValue: { fontSize: 9, fontWeight: 700 },
   balanceRow: { borderTopWidth: 1, borderTopColor: "#E4E4E9", paddingTop: 5, marginTop: 3 },
-  paymentCard: {
-    borderWidth: 1,
-    borderColor: "#E4E4E9",
-    borderRadius: 4,
-    padding: 8,
-    marginBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   qrImage: { width: 64, height: 64 },
-  // Cuentas digitales (Yape/Plin): de a dos por fila, pegadas cada una a
-  // su lado (izquierda/derecha) — las cuentas bancarias se quedan en
-  // paymentCard (una por fila, como antes) porque suelen llevar más texto
-  // (pedido explícito del usuario: "yape izquierda, plin derecha, pegado
-  // hacia cada lado").
+  // Métodos de pago: de a dos por fila, todos del mismo ancho (bancarias y
+  // Yape/Plin), pegados cada uno a su lado (pedido explícito del usuario:
+  // "yape izquierda, plin derecha, pegado hacia cada lado").
   walletGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 6 },
   walletCard: {
     width: "48.5%",
@@ -469,10 +457,8 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
           sectionTitle("Notas"),
           createElement(Text, { style: styles.td }, data.notes),
         ),
-      // Cuentas de pago: bancarias primero (una fila completa cada una,
-      // suelen llevar más texto), cuentas digitales (Yape/Plin) después en
-      // una grilla de 2 columnas porque son cortas (pedido explícito del
-      // usuario).
+      // Cuentas de pago: bancarias primero, cuentas digitales (Yape/Plin)
+      // después, todas en la misma grilla de 2 columnas.
       (() => {
         const bankAccounts = data.paymentAccounts.filter((account) => !isWalletAccount(account));
         // Yape siempre a la izquierda, Plin a la derecha (pedido explícito
@@ -502,26 +488,20 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
           );
         };
 
-        // La grilla de 2 columnas (walletCard, 48.5% de ancho) solo tiene
-        // sentido con 2+ cuentas digitales para emparejar — con una sola
-        // (ej. únicamente Yape, sin Plin) quedaba pegada a la izquierda
-        // ocupando la mitad del ancho, dejando la otra mitad vacía y
-        // "rompiendo" la simetría contra las cuentas bancarias de ancho
-        // completo (bug reportado por QA). Con una sola cuenta digital se
-        // usa el mismo ancho completo que las bancarias.
+        // Todas las cuentas (bancarias primero, luego Yape/Plin) en UNA sola
+        // grilla de 2 columnas con el mismo ancho (walletCard, 48.5%) — antes
+        // las bancarias ocupaban el ancho completo y las digitales la mitad,
+        // y el recuadro de una cuenta bancaria sola se veía desproporcionado
+        // (pedido de QA: mismo ancho para todos los métodos de pago).
         return createElement(
           View,
           { style: styles.section },
           sectionTitle("Métodos de pago"),
-          ...bankAccounts.map((account) => renderAccount(account, styles.paymentCard)),
-          walletAccounts.length === 1
-            ? renderAccount(walletAccounts[0]!, styles.paymentCard)
-            : walletAccounts.length > 1 &&
-                createElement(
-                  View,
-                  { style: styles.walletGrid },
-                  ...walletAccounts.map((account) => renderAccount(account, styles.walletCard)),
-                ),
+          createElement(
+            View,
+            { style: styles.walletGrid },
+            ...[...bankAccounts, ...walletAccounts].map((account) => renderAccount(account, styles.walletCard)),
+          ),
         );
       })(),
       // Términos y condiciones: texto único configurado en "Documentos de

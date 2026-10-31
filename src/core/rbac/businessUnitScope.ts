@@ -57,9 +57,15 @@ export function resolveBusinessUnitFilter(user: IToken): number | undefined {
 // alcance que mande el frontend).
 //
 // Devuelve el id ya validado, o lanza AppError si no pertenece a la empresa.
+//
+// `targetCompanyId`: empresa ya resuelta del registro. El Super
+// Administrador elige empresa Y tienda en el formulario, así que la tienda
+// tiene que ser de ESA empresa (sin esto, podía guardar un registro de la
+// Empresa A en una tienda de la Empresa B — mezcla de información).
 export async function resolveTargetBusinessUnitId(
   user: IToken,
-  bodyBusinessUnitId: unknown
+  bodyBusinessUnitId: unknown,
+  targetCompanyId?: number
 ): Promise<number | null> {
   const scoped = resolveBusinessUnitFilter(user);
   if (scoped !== undefined) return scoped;
@@ -74,9 +80,14 @@ export async function resolveTargetBusinessUnitId(
   const businessUnit = await DataBase.instance.business_unit.findOne({ where: { id: businessUnitId } });
   if (!businessUnit) throw new AppError(404, "La tienda seleccionada no existe");
 
-  // Un is_system puede operar sobre cualquier empresa, así que para él solo
-  // importa que la tienda exista.
-  if (user.isSystem) return businessUnitId;
+  // Un is_system puede operar sobre cualquier empresa: la tienda solo tiene
+  // que pertenecer a la empresa que eligió para este registro.
+  if (user.isSystem) {
+    if (targetCompanyId !== undefined && businessUnit.company_id !== targetCompanyId) {
+      throw new AppError(403, "La tienda seleccionada no pertenece a esta empresa");
+    }
+    return businessUnitId;
+  }
 
   if (businessUnit.company_id !== user.companyId) {
     throw new AppError(403, "La tienda seleccionada no pertenece a esta empresa");

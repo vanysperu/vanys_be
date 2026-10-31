@@ -8,22 +8,17 @@ import { updateTechniqueById } from "../services/update/customization_technique.
 import { getTechniqueById, getTechniquesList } from "../services/find/customization_technique.service";
 import { disableOrEnableTechniqueById } from "../services/delete/customization_technique.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
+import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 
 export const createTechniqueController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
 
   // Misma regla que productos (ver product.controller.ts): una técnica de
-  // personalización pertenece a una empresa específica, no es un catálogo
-  // de plataforma — un super administrador no la gestiona.
-  if (user.isSystem) {
-    throw new AppError(403, "Un super administrador no puede crear técnicas de una empresa");
-  }
+  // personalización pertenece a una empresa específica — el Super
+  // Administrador la elige en el formulario.
+  const company_id = await resolveTargetCompanyId(user, req.body.company_id, "técnicas");
 
-  if (Number(req.body.company_id) !== user.companyId) {
-    throw new AppError(403, "No puedes crear técnicas para otra empresa");
-  }
-
-  const technique = await createTechnique({ technique: req.body, createdBy: user.userId });
+  const technique = await createTechnique({ technique: { ...req.body, company_id }, createdBy: user.userId });
 
   ok(res, 201, technique, "Técnica creada correctamente");
 });
@@ -53,7 +48,7 @@ export const listTechniquesController = asyncHandler(async (req: Request, res: R
     limit,
     orderBy,
     orderDir,
-    companyId: isSystem ? null : companyId,
+    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
     name,
     status,
     dateFrom: req.query.dateFrom,

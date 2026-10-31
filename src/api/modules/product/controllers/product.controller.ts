@@ -8,23 +8,17 @@ import { updateProductById } from "../services/update/product.service";
 import { getProductById, getProductsList } from "../services/find/product.service";
 import { disableOrEnableProductById } from "../services/delete/product.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
+import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 
 export const createProductController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
 
   // Un producto SIEMPRE pertenece a una empresa específica (no existe
-  // "producto global") — un super administrador no gestiona el catálogo
-  // operativo de ninguna empresa en particular, eso es responsabilidad
-  // del admin de esa empresa (pedido explícito del usuario).
-  if (user.isSystem) {
-    throw new AppError(403, "Un super administrador no puede crear productos de una empresa");
-  }
+  // "producto global"): el Super Administrador la elige en el formulario,
+  // un usuario de empresa siempre crea en la suya.
+  const company_id = await resolveTargetCompanyId(user, req.body.company_id, "productos");
 
-  if (Number(req.body.company_id) !== user.companyId) {
-    throw new AppError(403, "No puedes crear productos para otra empresa");
-  }
-
-  const product = await createProduct({ product: req.body, createdBy: user.userId });
+  const product = await createProduct({ product: { ...req.body, company_id }, createdBy: user.userId });
 
   ok(res, 201, product, "Producto creado correctamente");
 });
@@ -59,7 +53,7 @@ export const listProductsController = asyncHandler(async (req: Request, res: Res
     limit,
     orderBy,
     orderDir,
-    companyId: isSystem ? null : companyId,
+    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
     searchTerm,
     name,
     sku,
