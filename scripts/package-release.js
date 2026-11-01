@@ -156,6 +156,11 @@ const smokeTestPackage = async () => {
       PORT: String(SMOKE_PORT),
       SECRET_HIDDEN_KEY: crypto.randomBytes(32).toString("hex"),
       CRON_SECRET: "",
+      // Arranca como en el hosting: con la actualización automática de la
+      // base activa (contra la base de desarrollo del .env, que normalmente
+      // ya está al día). Así se comprueba que el paquete trae sus
+      // migraciones y seeders y los encuentra.
+      DB_AUTO_MIGRATE: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

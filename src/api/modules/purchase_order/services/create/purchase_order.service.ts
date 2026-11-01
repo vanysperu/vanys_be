@@ -1,4 +1,5 @@
 import { DataBase } from "../../../../../database";
+import { assertQuotationIsActive } from "../../../quotation/services/shared/active_quotation";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { QuotationItemModel } from "../../../quotation/model/quotation_item.model";
 import { BusinessUnitAttributes } from "../../../business_unit/models/business_unit.models";
@@ -52,6 +53,10 @@ const createPurchaseOrder = async ({
     if (callerBusinessUnitId !== undefined && quotation.business_unit_id !== callerBusinessUnitId) {
       throw new TenantMismatchError("La cotización seleccionada no pertenece a tu tienda");
     }
+    // Solo se compra para una cotización aceptada o en curso (pedido explícito
+    // del usuario: "nada sin aceptar"). Se valida después de la empresa/tienda
+    // para no revelar el estado de una cotización ajena.
+    await assertQuotationIsActive(quotation.id, "crear una orden de compra", transaction);
 
     // Un admin de empresa no tiene tienda asignada (business_unit_id NULL)
     // pero sí su propio company_id directo (ver migración

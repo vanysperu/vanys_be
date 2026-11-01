@@ -17,6 +17,7 @@ import {
   changeQuotationStatus,
   InvalidTransitionError,
   QuotationHasMoneyInvolvedError,
+  TotalBelowPaidError,
   updateQuotationById,
 } from "../services/update/quotation.service";
 import { changeItemStage } from "../services/update/quotation_item.service";
@@ -25,14 +26,21 @@ import {
   CreateQuotationPaymentInput,
   PaymentExceedsBalanceError,
 } from "../services/create/quotation_payment.service";
+import { QuotationNotActiveError } from "../services/shared/active_quotation";
 import { hasRouteAccess } from "../../../../middlewares/user-access";
 import { createQuotationExpense } from "../services/create/quotation_expense.service";
 import { getQuotationById, getQuotationsList } from "../services/find/quotation.service";
 import { generateQuotationPdf } from "../services/pdf/quotation_pdf.service";
 import { QuotationStatus } from "../model/quotation.model";
 import { DataBase } from "../../../../database";
+import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
 import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitScope";
+
+// Mismo 409 para todo lo que exige una cotización aceptada (pagos, gastos,
+// compras y producción), así el frontend lo reconoce por un solo `code`.
+const notActiveError = (err: QuotationNotActiveError) =>
+  new AppError(409, err.message, undefined, "QUOTATION_NOT_ACTIVE");
 
 export const createQuotationController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
@@ -123,9 +131,13 @@ export const updateQuotationController = asyncHandler(async (req: Request, res: 
     throw new AppError(403, "No tienes acceso a esta cotización");
   }
 
-  const result = await updateQuotationById({ quotation: req.body, quotationId: Number(id), updatedBy: user.userId });
-
-  ok(res, 200, result, "Cotización actualizada correctamente");
+  try {
+    const result = await updateQuotationById({ quotation: req.body, quotationId: Number(id), updatedBy: user.userId });
+    ok(res, 200, result, "Cotización actualizada correctamente");
+  } catch (err: unknown) {
+    if (err instanceof TotalBelowPaidError) throw new AppError(400, err.message);
+    throw err;
+  }
 });
 
 export const changeQuotationStatusController = asyncHandler(async (req: Request, res: Response) => {
@@ -164,6 +176,7 @@ export const changeQuotationStatusController = asyncHandler(async (req: Request,
     ) {
       throw new AppError(400, err.message);
     }
+    if (err instanceof QuotationNotActiveError) throw notActiveError(err);
     throw err;
   }
 });
@@ -187,6 +200,7 @@ export const changeItemStageController = asyncHandler(async (req: Request, res: 
     if (err instanceof InvalidTransitionError) {
       throw new AppError(400, err.message);
     }
+    if (err instanceof QuotationNotActiveError) throw notActiveError(err);
     throw err;
   }
 });
@@ -204,6 +218,7 @@ export const createQuotationPaymentController = asyncHandler(async (req: Request
     payment = await createQuotationPayment({ quotationId: Number(id), input: req.body, createdBy: user.userId });
   } catch (err: unknown) {
     if (err instanceof PaymentExceedsBalanceError) throw new AppError(400, err.message);
+    if (err instanceof QuotationNotActiveError) throw notActiveError(err);
     throw err;
   }
 
@@ -218,9 +233,28 @@ export const createQuotationExpenseController = asyncHandler(async (req: Request
     throw new AppError(403, "No tienes acceso a esta cotización");
   }
 
-  const expense = await createQuotationExpense({ quotationId: Number(id), input: req.body, createdBy: user.userId });
+  // La cuenta (vacío = efectivo) tiene que ser de la empresa DUEÑA de la
+  // cotización y estar activa.
+  const quotation = await DataBase.instance.quotation.findOne({ where: { id: Number(id) }, attributes: ["company_id"] });
+  if (!quotation) throw new AppError(404, "La cotización no existe");
+  const paymentAccountId = await resolvePaymentAccountId({
+    accountId: req.body.payment_account_id,
+    companyId: quotation.company_id,
+    required: false,
+  });
 
-  ok(res, 201, expense, "Gasto registrado correctamente");
+  const { description, amount, category, spent_at } = req.body;
+  try {
+    const expense = await createQuotationExpense({
+      quotationId: Number(id),
+      input: { description, amount, category, spent_at, payment_account_id: paymentAccountId },
+      createdBy: user.userId,
+    });
+    ok(res, 201, expense, "Gasto registrado correctamente");
+  } catch (err: unknown) {
+    if (err instanceof QuotationNotActiveError) throw notActiveError(err);
+    throw err;
+  }
 });
 
 export const downloadQuotationPdfController = asyncHandler(async (req: Request, res: Response) => {

@@ -14,18 +14,22 @@ const { columnExists } = require("../migration-helpers");
 // fila es siempre `amount - paid_amount`.
 module.exports = {
   async up(queryInterface, Sequelize) {
-    if (await columnExists(queryInterface, "employee_debt", "paid_amount")) return;
-
-    await queryInterface.addColumn("employee_debt", "paid_amount", {
-      type: Sequelize.DECIMAL(10, 2),
-      allowNull: false,
-      defaultValue: 0,
-    });
+    if (!(await columnExists(queryInterface, "employee_debt", "paid_amount"))) {
+      await queryInterface.addColumn("employee_debt", "paid_amount", {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0,
+      });
+    }
 
     // Las filas ya marcadas "paid" antes de este cambio se consideran
-    // liquidadas por su monto completo.
+    // liquidadas por su monto completo. Corre aunque la columna ya existiera:
+    // si un arranque anterior se cortó entre el ALTER y este UPDATE (la base
+    // se actualiza sola al arrancar, ver src/database/autoMigrate.ts), el
+    // reintento completa el relleno. Una fila "paid" siempre tiene
+    // paid_amount = amount, así que repetirlo no cambia nada más.
     await queryInterface.sequelize.query(
-      "UPDATE employee_debt SET paid_amount = amount WHERE status = 'paid'"
+      "UPDATE employee_debt SET paid_amount = amount WHERE status = 'paid' AND paid_amount <> amount"
     );
   },
 

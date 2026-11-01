@@ -1,97 +1,125 @@
 import { DataBase } from "../../../../../database";
 import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
+import { formatSoles, fromCents, toCents } from "../../../../../core/utils/money";
 
 export class InvalidPaymentAmountError extends Error {}
 
-// Aplica un abono (total o parcial) a las deudas PENDIENTES más antiguas de
-// un trabajador primero (FIFO) — pedido explícito de QA: antes solo se podía
-// liquidar TODO de una vez, sin opción de reponer un monto menor (ej. S/50
-// de una deuda de S/200).
+// Registra una reposición (total o parcial) a un trabajador y la reparte
+// entre sus deudas PENDIENTES más antiguas primero (FIFO) — un trabajador
+// espera que se le repongan antes las compras más viejas.
 //
-// Cada fila de `employee_debt` sigue correspondiendo 1 a 1 a la compra que
-// la generó (purchase_order_item_purchase_id es UNIQUE, nunca se parte una
-// fila en dos): lo que cambia por abono es `paid_amount` dentro de esa misma
-// fila. Una fila pasa a status="paid" recién cuando paid_amount alcanza a
-// amount; mientras tanto sigue "pending" con su remanente
-// (amount - paid_amount), que es lo único que un abono parcial más tarde
-// puede seguir descontando.
+// La reposición es el egreso real de Caja: queda guardada con su monto,
+// fecha y cuenta (employee_debt_payment), y cada parte aplicada a una deuda
+// queda en employee_debt_payment_allocation. Así, dos abonos desde cuentas
+// distintas son dos salidas distintas (antes el segundo pisaba la cuenta y
+// la fecha del primero), y anular una reposición devuelve exactamente lo
+// que cubrió.
 //
-// Queda registrado desde qué cuenta se repuso (null = efectivo) y en qué
-// fecha en CADA fila tocada por este abono — así, igual que antes, cada
-// gasto de esas compras aparece en Caja como "pagado por <trabajador> ·
-// repuesto el <fecha> desde <cuenta>".
-const markEmployeeDebtAsPaid = async ({
+// Todo en una transacción con las deudas bloqueadas (FOR UPDATE): dos
+// reposiciones simultáneas al mismo trabajador se serializan, y la segunda
+// ve lo que ya cubrió la primera — nunca se repone de más.
+const registerEmployeeDebtPayment = async ({
   userId,
   companyId,
   amount,
   paymentAccountId,
-  updatedBy,
+  createdBy,
 }: {
   userId: number;
-  companyId: number | null;
-  // Monto a abonar ahora; debe ser > 0 y no puede superar el total
-  // pendiente del trabajador.
+  // Empresa del trabajador: la reposición y sus deudas son siempre de ella.
+  companyId: number;
+  // Monto a reponer ahora; debe ser > 0 y no superar el total pendiente.
   amount: number;
   paymentAccountId: number | null;
-  updatedBy?: number;
+  createdBy: number;
 }) => {
-  const where: Record<string, unknown> = { user_id: userId, status: "pending" };
-  if (companyId !== null) where.company_id = companyId;
-
-  const transaction = await DataBase.instance.sequelize.transaction();
-
-  try {
-    // Las más antiguas primero: es lo que un trabajador esperaría que se le
-    // repusiera antes si el abono no alcanza para todo.
+  return DataBase.instance.sequelize.transaction(async (transaction) => {
     const pendingDebts = await DataBase.instance.employee_debt.findAll({
-      where,
-      order: [["created_at", "ASC"]],
+      where: { user_id: userId, company_id: companyId, status: "pending" },
+      order: [
+        ["created_at", "ASC"],
+        ["id", "ASC"],
+      ],
       transaction,
       lock: transaction.LOCK.UPDATE,
     });
 
-    const totalPending = pendingDebts.reduce((sum, debt) => sum + (Number(debt.amount) - Number(debt.paid_amount)), 0);
-    if (amount <= 0 || amount > totalPending + 0.009) {
+    // Céntimos enteros: sin errores de redondeo al comparar ni al repartir.
+    const amountCents = toCents(amount);
+    const totalPendingCents = pendingDebts.reduce((sum, debt) => sum + toCents(debt.amount) - toCents(debt.paid_amount), 0);
+    if (totalPendingCents <= 0) throw new InvalidPaymentAmountError("Este trabajador no tiene deudas pendientes");
+    if (amountCents <= 0 || amountCents > totalPendingCents) {
       throw new InvalidPaymentAmountError(
-        `El monto a reponer no puede ser mayor al total pendiente (S/ ${totalPending.toFixed(2)})`
+        `El monto a reponer no puede ser mayor al total pendiente (${formatSoles(fromCents(totalPendingCents))})`
       );
     }
 
     const paidAt = todayInBusinessTz();
-    const updatedAt = nowUtc();
-    let remainingBudget = amount;
-    let affectedRows = 0;
+    const now = nowUtc();
 
+    const payment = await DataBase.instance.employee_debt_payment.create(
+      {
+        id: 0,
+        company_id: companyId,
+        user_id: userId,
+        amount: fromCents(amountCents),
+        payment_account_id: paymentAccountId,
+        paid_at: paidAt,
+        is_deleted: false,
+        created_by: createdBy,
+        created_at: now,
+        updated_by: createdBy,
+        updated_at: now,
+      },
+      { transaction }
+    );
+
+    let remainingCents = amountCents;
     for (const debt of pendingDebts) {
-      if (remainingBudget <= 0) break;
+      if (remainingCents === 0) break;
 
-      const debtRemaining = Number(debt.amount) - Number(debt.paid_amount);
-      const amountToApply = Math.min(debtRemaining, remainingBudget);
-      const newPaidAmount = Number(debt.paid_amount) + amountToApply;
-      const isFullyPaid = newPaidAmount >= Number(debt.amount) - 0.009;
+      const debtAmountCents = toCents(debt.amount);
+      const debtPaidCents = toCents(debt.paid_amount);
+      const appliedCents = Math.min(debtAmountCents - debtPaidCents, remainingCents);
+      if (appliedCents <= 0) continue;
 
+      const newPaidCents = debtPaidCents + appliedCents;
       await debt.update(
         {
-          paid_amount: isFullyPaid ? debt.amount : newPaidAmount,
-          status: isFullyPaid ? "paid" : "pending",
+          paid_amount: fromCents(newPaidCents),
+          status: newPaidCents === debtAmountCents ? "paid" : "pending",
           paid_at: paidAt,
-          payment_account_id: paymentAccountId,
-          updated_by: updatedBy ?? null,
-          updated_at: updatedAt,
+          updated_by: createdBy,
+          updated_at: now,
         },
         { transaction }
       );
 
-      remainingBudget -= amountToApply;
-      affectedRows += 1;
+      await DataBase.instance.employee_debt_payment_allocation.create(
+        {
+          id: 0,
+          company_id: companyId,
+          employee_debt_payment_id: payment.id,
+          employee_debt_id: debt.id,
+          amount: fromCents(appliedCents),
+          created_by: createdBy,
+          created_at: now,
+          updated_by: createdBy,
+          updated_at: now,
+        },
+        { transaction }
+      );
+
+      remainingCents -= appliedCents;
     }
 
-    await transaction.commit();
-    return { affectedRows, amountApplied: amount };
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
+    return {
+      id: payment.id,
+      amount: fromCents(amountCents),
+      paid_at: paidAt,
+      fully_paid: amountCents === totalPendingCents,
+    };
+  });
 };
 
-export { markEmployeeDebtAsPaid };
+export { registerEmployeeDebtPayment };

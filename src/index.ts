@@ -5,6 +5,7 @@ import { assertProductionEnv } from "./config/validateEnv";
 import { resolvePort } from "./config/runtime";
 import Server from "./server/index.server";
 import { DataBase } from "./database";
+import { runPendingMigrations, shouldAutoMigrate } from "./database/autoMigrate";
 import { expireOverdueQuotations } from "./api/modules/quotation/services/jobs/expireQuotations.job";
 import { formatInstantDateTimeEsPe } from "./utils/dateUtils";
 
@@ -32,13 +33,26 @@ const runExpireQuotationsJob = () => {
 
 let expireJobTimer: NodeJS.Timeout | null = null;
 
-server.start(() => {
-  console.log(`Servidor escuchando en el puerto ${resolvePort()} (${process.env.NODE_ENV ?? "development"})`);
-  DataBase.instance;
-  console.log(`Hora del negocio (America/Lima): ${formatInstantDateTimeEsPe(new Date())}`);
+// La base se actualiza ANTES de abrir el puerto: el código nuevo espera las
+// tablas/columnas nuevas. Si la actualización falla, la app no arranca (el
+// error queda en los logs del hosting) en vez de atender con una base a
+// medias.
+const startServer = async () => {
+  if (shouldAutoMigrate()) await runPendingMigrations();
 
-  runExpireQuotationsJob();
-  expireJobTimer = setInterval(runExpireQuotationsJob, EXPIRE_QUOTATIONS_INTERVAL_MS);
+  server.start(() => {
+    console.log(`Servidor escuchando en el puerto ${resolvePort()} (${process.env.NODE_ENV ?? "development"})`);
+    DataBase.instance;
+    console.log(`Hora del negocio (America/Lima): ${formatInstantDateTimeEsPe(new Date())}`);
+
+    runExpireQuotationsJob();
+    expireJobTimer = setInterval(runExpireQuotationsJob, EXPIRE_QUOTATIONS_INTERVAL_MS);
+  });
+};
+
+startServer().catch((error: unknown) => {
+  console.error("[db] No se pudo actualizar la base de datos; la app no arranca:", error);
+  process.exit(1);
 });
 
 // El hosting detiene/reinicia el proceso con SIGTERM (al redesplegar, al

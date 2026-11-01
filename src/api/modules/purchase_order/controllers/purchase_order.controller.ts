@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { QuotationNotActiveError } from "../../quotation/services/shared/active_quotation";
 import { IToken } from "../../../interfaces/IToken.interface";
 import { resolveListCompanyFilter } from "../../../../core/rbac/companyScope";
 import { AppError } from "../../../../core/errors/AppError";
@@ -45,6 +46,9 @@ export const createPurchaseOrderController = asyncHandler(async (req: Request, r
     });
     return ok(res, 201, purchaseOrder, "Orden de compra creada correctamente");
   } catch (err: unknown) {
+    if (err instanceof QuotationNotActiveError) {
+      throw new AppError(409, err.message, undefined, "QUOTATION_NOT_ACTIVE");
+    }
     if (err instanceof TenantMismatchError) {
       throw new AppError(403, err.message);
     }
@@ -161,7 +165,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id } = req.body;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -181,9 +185,13 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       allowExceed: allow_exceed === true,
       fundingSource: funding_source,
       paidByUserId,
+      paymentAccountId: payment_account_id,
       createdBy: user.userId,
     });
   } catch (err: unknown) {
+    if (err instanceof QuotationNotActiveError) {
+      throw new AppError(409, err.message, undefined, "QUOTATION_NOT_ACTIVE");
+    }
     // 409 con código estable y las cantidades: el frontend muestra la
     // confirmación "¿seguro quieres comprar más?" y, si se acepta, reenvía
     // la misma compra con allow_exceed: true.

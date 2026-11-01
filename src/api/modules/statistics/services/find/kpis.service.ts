@@ -10,6 +10,12 @@ import {
   toCount,
   toMoney,
 } from "../shared/scope";
+import {
+  EXPENSE_FUNDING_JOIN_SQL,
+  EXPENSE_PAID_BY_COMPANY_SQL,
+  REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
+  REIMBURSEMENT_SCOPE_SQL,
+} from "../../../cash_movement/services/shared/cash_flow.sql";
 
 interface QuotationTotalsRow {
   quoted_count: unknown;
@@ -35,7 +41,7 @@ interface ManualCashRow {
 export async function getKpisService(scope: StatisticsScope, from: string, to: string): Promise<KpiValues> {
   const replacements = { ...scopeReplacements(scope), from, to };
 
-  const [[quotations], [linkedExpenses], [collected], [quotationExpenses], [manualCash]] = await Promise.all([
+  const [[quotations], [linkedExpenses], [collected], [quotationExpenses], [reimbursements], [manualCash]] = await Promise.all([
     // Cotizaciones emitidas en el rango, por resultado.
     selectRows<QuotationTotalsRow>(
       `SELECT COUNT(*) AS quoted_count,
@@ -65,12 +71,21 @@ export async function getKpisService(scope: StatisticsScope, from: string, to: s
        WHERE qp.is_deleted = false AND ${MONEY_SCOPE_SQL} AND qp.paid_at BETWEEN :from AND :to`,
       replacements
     ),
-    // Caja: gastos de cotizaciones (compras, etc.) con fecha en el rango.
+    // Caja: gastos de cotizaciones que pagó la EMPRESA (una compra pagada con
+    // plata de un trabajador sale de caja recién al reponerle).
     selectRows<SumRow>(
       `SELECT COALESCE(SUM(qe.amount), 0) AS total
        FROM quotation_expense qe
        INNER JOIN quotation q ON q.id = qe.quotation_id
-       WHERE ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to`,
+       ${EXPENSE_FUNDING_JOIN_SQL}
+       WHERE ${MONEY_SCOPE_SQL} AND ${EXPENSE_PAID_BY_COMPANY_SQL} AND qe.spent_at BETWEEN :from AND :to`,
+      replacements
+    ),
+    // Caja: reposiciones a trabajadores en el rango (mismo alcance que Caja).
+    selectRows<SumRow>(
+      `SELECT COALESCE(SUM(a.amount), 0) AS total
+       FROM ${REIMBURSEMENT_ALLOCATIONS_FROM_SQL}
+       WHERE ${REIMBURSEMENT_SCOPE_SQL} AND p.paid_at BETWEEN :from AND :to`,
       replacements
     ),
     // Caja: ingresos y egresos manuales.
@@ -89,7 +104,9 @@ export async function getKpisService(scope: StatisticsScope, from: string, to: s
   const lostCount = toCount(quotations?.lost_count);
   const collectedAmount = toMoney(collected?.total);
   const otherIncome = toMoney(manualCash?.income);
-  const expenses = toMoney(toMoney(quotationExpenses?.total) + toMoney(manualCash?.expense));
+  const expenses = toMoney(
+    toMoney(quotationExpenses?.total) + toMoney(reimbursements?.total) + toMoney(manualCash?.expense)
+  );
   const marginAmount = toMoney(wonSubtotal - toMoney(linkedExpenses?.total));
 
   return {

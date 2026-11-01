@@ -12,6 +12,7 @@ import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitSco
 import { DataBase } from "../../../../database";
 import { assertQuotationBelongsToCaller } from "../../quotation/controllers/quotation.controller";
 import { PaymentExceedsBalanceError } from "../../quotation/services/create/quotation_payment.service";
+import { QuotationNotActiveError } from "../../quotation/services/shared/active_quotation";
 
 // Mismo criterio que cash_movement.controller.ts: la empresa/tienda nunca
 // se confía del query/body, siempre sale del token (CLAUDE.md sección 10/11.1).
@@ -66,6 +67,7 @@ export const updatePaymentController = asyncHandler(async (req: Request, res: Re
     payment = await updatePaymentById({ paymentId: Number(id), input: req.body, updatedBy: user.userId });
   } catch (err: unknown) {
     if (err instanceof PaymentExceedsBalanceError) throw new AppError(400, err.message);
+    if (err instanceof QuotationNotActiveError) throw new AppError(409, err.message, undefined, "QUOTATION_NOT_ACTIVE");
     throw err;
   }
 
@@ -78,7 +80,15 @@ export const disablePaymentController = asyncHandler(async (req: Request, res: R
 
   await assertPaymentBelongsToCaller(Number(id), user);
 
-  const result = await disableOrEnablePaymentById({ paymentId: Number(id), updatedBy: user.userId });
+  let result;
+  try {
+    result = await disableOrEnablePaymentById({ paymentId: Number(id), updatedBy: user.userId });
+  } catch (err: unknown) {
+    // Solo al restaurar: el pago volvería a sumar y debe cumplir las reglas de uno nuevo.
+    if (err instanceof PaymentExceedsBalanceError) throw new AppError(400, err.message);
+    if (err instanceof QuotationNotActiveError) throw new AppError(409, err.message, undefined, "QUOTATION_NOT_ACTIVE");
+    throw err;
+  }
 
   ok(res, 200, result, "Proceso exitoso");
 });

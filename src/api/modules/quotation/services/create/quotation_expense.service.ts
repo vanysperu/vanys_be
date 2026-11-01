@@ -2,12 +2,15 @@ import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { logQuotationEvent, truncateForTimeline } from "../timeline/quotation_event.service";
+import { assertQuotationIsActive } from "../shared/active_quotation";
 
 export interface CreateQuotationExpenseInput {
   description: string;
   amount: number;
   category?: string | null;
   spent_at: string;
+  // Cuenta de la empresa desde la que se pagó, ya validada (null = efectivo).
+  payment_account_id?: number | null;
 }
 
 // Escribe en 2 tablas (quotation_expense, quotation_event). Si el caller ya
@@ -26,6 +29,10 @@ const createQuotationExpense = async ({
   transaction?: Transaction;
 }) => {
   const run = async (t: Transaction) => {
+    // Solo en una cotización aceptada o en curso (con lock: no se cuela un
+    // gasto en una cotización que se está cancelando).
+    await assertQuotationIsActive(quotationId, "registrar un gasto", t);
+
     const expense = await DataBase.instance.quotation_expense.create(
       {
         id: 0,
@@ -34,6 +41,7 @@ const createQuotationExpense = async ({
         amount: input.amount,
         category: input.category ?? null,
         spent_at: input.spent_at,
+        payment_account_id: input.payment_account_id ?? null,
         created_by: createdBy ?? null,
         created_at: nowUtc(),
         updated_by: null,

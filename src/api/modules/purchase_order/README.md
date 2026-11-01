@@ -59,6 +59,11 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
     Por defecto el acreedor es quien registra la compra; un admin puede
     registrarla a nombre de otro trabajador pasando `paid_by_user_id`
     explícito en el body.
+  - Con `"company"` se indica desde qué cuenta salió el dinero
+    (`payment_account_id`, vacío = efectivo): de la empresa de la orden y
+    activa; se guarda en el gasto y Caja lo descuenta de esa cuenta. Con
+    `"employee"` se rechaza cualquier cuenta: la empresa no pagó nada todavía
+    (en Caja, esa compra no suma; el egreso es la reposición).
 - Quién puede tocar un item: el asignado de la orden (`assigned_to`,
   siempre, sin importar tienda — es su tarea personal), o un admin de la
   empresa (limitado a su propia tienda si tiene una asignada).

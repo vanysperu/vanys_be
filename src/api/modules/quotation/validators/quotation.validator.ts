@@ -1,4 +1,5 @@
 import { body, param } from "express-validator";
+import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
 import { DataBase } from "../../../../database";
 import { QUOTATION_STATUSES } from "../model/quotation.model";
 import { QUOTATION_ITEM_PRICING_MODES } from "../model/quotation_item.model";
@@ -115,10 +116,9 @@ export const changeStatusValidator = [
   body("status").isIn(QUOTATION_STATUSES).withMessage("Estado inválido"),
   // Adelanto opcional al aceptar (mismas reglas que un pago normal).
   body("advance_payment").optional({ values: "null" }).isObject().withMessage("El adelanto no es válido"),
-  body("advance_payment.amount")
-    .if(body("advance_payment").exists({ values: "null" }))
-    .isFloat({ gt: 0, max: 99999999.99 })
-    .withMessage("El monto del adelanto debe ser mayor a 0"),
+  moneyAmountRule("advance_payment.amount", "El monto del adelanto debe ser mayor a 0", {
+    onlyIf: body("advance_payment").exists({ values: "null" }),
+  }),
   body("advance_payment.method")
     .if(body("advance_payment").exists({ values: "null" }))
     .isString()
@@ -127,10 +127,9 @@ export const changeStatusValidator = [
     .bail()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres"),
-  body("advance_payment.paid_at")
-    .if(body("advance_payment").exists({ values: "null" }))
-    .isISO8601()
-    .withMessage("La fecha del adelanto es obligatoria"),
+  moneyDateRule("advance_payment.paid_at", "La fecha del adelanto es obligatoria", {
+    onlyIf: body("advance_payment").exists({ values: "null" }),
+  }),
   body("advance_payment.notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("advance_payment.operation_number")
     .optional({ values: "null" })
@@ -173,7 +172,7 @@ export const CASH_PAYMENT_METHOD = "cash";
 
 export const createQuotationPaymentValidator = [
   paramQuotationIdValidator,
-  body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
+  moneyAmountRule("amount"),
   // Columna VARCHAR(50) — sin este tope, un método muy largo produce el
   // mismo error crudo de MySQL que ya se corrigió para las notas.
   body("method")
@@ -184,7 +183,7 @@ export const createQuotationPaymentValidator = [
     .isString()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres"),
-  body("paid_at").isISO8601().withMessage("La fecha de pago es obligatoria"),
+  moneyDateRule("paid_at", "La fecha de pago es obligatoria"),
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("operation_number")
     .optional({ values: "null" })
@@ -213,8 +212,11 @@ export const createQuotationExpenseValidator = [
     .isString()
     .isLength({ max: 300 })
     .withMessage("Máximo 300 caracteres"),
-  body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
+  moneyAmountRule("amount"),
   // Columna VARCHAR(50) — mismo motivo que "method" arriba.
   body("category").optional({ values: "null" }).isString().isLength({ max: 50 }).withMessage("Máximo 50 caracteres"),
-  body("spent_at").isISO8601().withMessage("La fecha del gasto es obligatoria"),
+  moneyDateRule("spent_at", "La fecha del gasto es obligatoria"),
+  // Cuenta de la empresa desde la que se pagó (vacío = efectivo); que sea de
+  // la empresa de la cotización y esté activa lo valida el controller.
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];

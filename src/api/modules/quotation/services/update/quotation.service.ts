@@ -1,7 +1,13 @@
-import { QueryTypes } from "sequelize";
+import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
-import { computeQuotationTotal, QUOTATION_STATUS_LABEL, QuotationAttributes, QuotationStatus } from "../../model/quotation.model";
+import {
+  computeQuotationTotal,
+  QUOTATION_STATUS_LABEL,
+  QuotationAttributes,
+  QuotationModel,
+  QuotationStatus,
+} from "../../model/quotation.model";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getIgvRate } from "../shared/tax_config";
 import { CreateQuotationPaymentInput, insertQuotationPayment } from "../create/quotation_payment.service";
@@ -62,19 +68,31 @@ export const ALLOWED_TRANSITIONS = buildAllowedTransitions();
 export class InvalidTransitionError extends Error {}
 export class QuotationHasMoneyInvolvedError extends Error {}
 
+// Quitar el IGV baja el total: si el cliente ya pagó más que el total nuevo,
+// la cotización quedaría sobre-pagada (saldo negativo) sin ningún aviso.
+export class TotalBelowPaidError extends Error {}
+
+// Destinos que dejarían el dinero colgado: rechazar/cancelar son estados
+// finales, y una cotización que vuelve a Pendiente sale de "Por cobrar" y el
+// job de vencimiento la puede cerrar sola (ej. aceptada con adelanto y
+// arrastrada de vuelta a Pendiente en el Kanban).
+const MONEY_BLOCKED_TARGETS: Partial<Record<QuotationStatus, string>> = {
+  rejected: "rechazar",
+  cancelled: "cancelar",
+  pending: "volver a Pendiente",
+};
+
 // Antes nada impedía rechazar o cancelar una cotización que YA tenía dinero
 // cobrado (total_paid > 0) o compras reales hechas (purchase_order_item_
 // purchase) — el dinero/las compras quedaban "colgados" en una cotización
 // cerrada, sin ningún aviso, hasta que alguien lo notara en una auditoría
 // manual. Rechazar/cancelar con plata o compras de por medio exige primero
 // resolver eso (anular los pagos, revisar las compras) — nunca es automático.
-const assertNoMoneyInvolved = async (quotationId: number) => {
-  const quotation = await DataBase.instance.quotation.findOne({ where: { id: quotationId } });
-  if (!quotation) throw new Error("La cotización no existe");
-
+// `quotation` ya viene leída con lock dentro de `transaction`.
+const assertNoMoneyInvolved = async (quotation: QuotationModel, action: string, transaction: Transaction) => {
   if (Number(quotation.total_paid) > 0) {
     throw new QuotationHasMoneyInvolvedError(
-      "No se puede rechazar/cancelar: esta cotización ya tiene pagos registrados. Anula los pagos primero."
+      `No se puede ${action}: esta cotización ya tiene pagos registrados. Anula los pagos primero.`
     );
   }
 
@@ -84,12 +102,12 @@ const assertNoMoneyInvolved = async (quotationId: number) => {
      INNER JOIN purchase_order_item poi ON poi.id = poip.purchase_order_item_id
      INNER JOIN purchase_order po ON po.id = poi.purchase_order_id
      WHERE po.quotation_id = :quotationId`,
-    { type: QueryTypes.SELECT, replacements: { quotationId } }
+    { type: QueryTypes.SELECT, replacements: { quotationId: quotation.id }, transaction }
   )) as { total: number }[];
 
   if (Number(purchaseRow?.total ?? 0) > 0) {
     throw new QuotationHasMoneyInvolvedError(
-      "No se puede rechazar/cancelar: esta cotización ya tiene compras reales registradas en una orden de compra."
+      `No se puede ${action}: esta cotización ya tiene compras reales registradas en una orden de compra.`
     );
   }
 };
@@ -139,12 +157,25 @@ const updateQuotationById = async ({
   return DataBase.instance.sequelize.transaction(async (transaction) => {
     // Si cambia includes_igv, el total se recalcula desde el subtotal ya
     // guardado (los items de una cotización ya creada no se vuelven a editar
-    // en este flujo, así que no hace falta re-sumarlos).
+    // en este flujo, así que no hace falta re-sumarlos). El lock serializa
+    // contra un pago que se esté registrando al mismo tiempo (que toma el
+    // mismo lock, ver assertPaymentWithinBalance).
     if (typeof quotation.includes_igv === "boolean") {
-      const current = await DataBase.instance.quotation.findOne({ where: { id: quotationId }, transaction });
+      const current = await DataBase.instance.quotation.findOne({
+        where: { id: quotationId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
       if (!current) throw new Error("La cotización no existe");
       const igvRate = await getIgvRate(current.company_id);
-      updateData.total = computeQuotationTotal(Number(current.subtotal), quotation.includes_igv, igvRate);
+      const total = computeQuotationTotal(Number(current.subtotal), quotation.includes_igv, igvRate);
+      const totalPaid = Number(current.total_paid);
+      if (totalPaid > total) {
+        throw new TotalBelowPaidError(
+          `No se puede quitar el IGV: el cliente ya pagó S/ ${totalPaid.toFixed(2)} y el nuevo total sería S/ ${total.toFixed(2)}. Corrige los pagos primero.`
+        );
+      }
+      updateData.total = total;
     }
 
     const result = await DataBase.instance.quotation.update(updateData, { where: { id: quotationId }, transaction });
@@ -179,25 +210,32 @@ const changeQuotationStatus = async ({
     throw new AdvanceOnlyOnAcceptError("El adelanto solo se puede registrar al aceptar la cotización");
   }
 
-  const current = await DataBase.instance.quotation.findOne({ where: { id: quotationId } });
-  if (!current) throw new Error("La cotización no existe");
-
-  const currentStatus = current.status;
-  const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
-
-  if (!allowed.includes(nextStatus)) {
-    throw new InvalidTransitionError(
-      `No se puede pasar de "${currentStatus}" a "${nextStatus}". Transiciones válidas: ${allowed.join(", ") || "ninguna (estado final)"}`
-    );
-  }
-
-  if (nextStatus === "rejected" || nextStatus === "cancelled") {
-    await assertNoMoneyInvolved(quotationId);
-  }
-
   // Escribe en 2 tablas (quotation, quotation_event) — y, con adelanto, también
   // en quotation_payment — todo o nada.
   return DataBase.instance.sequelize.transaction(async (transaction) => {
+    // Se lee con lock y se valida DENTRO de la transacción: antes se validaba
+    // afuera, y dos cambios casi simultáneos (dos personas, o el job de
+    // vencimiento) pasaban la validación con el mismo estado de origen, o se
+    // registraba un pago entre el chequeo de dinero y el cambio de estado.
+    const current = await DataBase.instance.quotation.findOne({
+      where: { id: quotationId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!current) throw new Error("La cotización no existe");
+
+    const currentStatus = current.status;
+    const allowed = ALLOWED_TRANSITIONS[currentStatus] ?? [];
+
+    if (!allowed.includes(nextStatus)) {
+      throw new InvalidTransitionError(
+        `No se puede pasar de "${currentStatus}" a "${nextStatus}". Transiciones válidas: ${allowed.join(", ") || "ninguna (estado final)"}`
+      );
+    }
+
+    const blockedAction = MONEY_BLOCKED_TARGETS[nextStatus];
+    if (blockedAction) await assertNoMoneyInvolved(current, blockedAction, transaction);
+
     const result = await DataBase.instance.quotation.update(
       { status: nextStatus, updated_by: updatedBy, updated_at: nowUtc() },
       { where: { id: quotationId }, transaction }

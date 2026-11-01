@@ -6,6 +6,8 @@ const QA_SUPERADMIN = { email: "qa.superadmin@grulla.test", password: "Test1234"
 interface CashRow {
   source: string;
   source_id: number;
+  amount: number;
+  moves_cash: boolean;
   quotation_id: number | null;
   payment_account_id: number | null;
   payment_account_name: string | null;
@@ -207,7 +209,7 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
       expect((cashOnly.body.data.data as CashRow[]).some((item) => item.source_id === movementId)).toBe(false);
     });
 
-    it("el gasto pagado por un trabajador dice quién lo pagó, y al reponerle queda la fecha y la cuenta", async () => {
+    it("el gasto pagado por un trabajador dice quién lo pagó y no mueve caja; la reposición es el egreso, con su cuenta", async () => {
       const api = authedRequest(token);
       const { quotationId, quotationItemId } = await createQuotationFixture(token, companyId);
       const { itemId } = await createPurchaseOrderFixture(token, companyId, userId, quotationId, quotationItemId);
@@ -218,22 +220,33 @@ describe("Cuentas de dinero, precios de técnica y filtros", () => {
       });
       expect(purchase.status).toBe(201);
 
-      const findExpense = async () => {
-        const list = await api.get(`/cash-movement/list?limit=100&source=quotation_expense&quotationId=${quotationId}`);
-        return (list.body.data.data as CashRow[])[0];
-      };
+      const listRows = async () =>
+        (await api.get(`/cash-movement/list?limit=100&quotationId=${quotationId}`)).body.data.data as CashRow[];
 
-      const before = await findExpense();
+      const before = (await listRows()).find((row) => row.source === "quotation_expense");
       expect(before?.paid_by_employee_name).toBeTruthy();
       expect(before?.reimbursement_status).toBe("pending");
+      expect(before?.moves_cash).toBe(false);
+      expect(before?.payment_account_name).toBeNull();
 
-      const paid = await api.put(`/employee-debt/pay/${userId}`, { payment_account_id: accountId, amount: 33 });
+      // Puede haber deudas viejas del mismo trabajador: se repone todo lo
+      // pendiente para que esta compra quede cubierta (FIFO).
+      const pending = await api.get(`/employee-debt/list?userId=${userId}`);
+      const total = pending.body.data.data.find((row: { user_id: number }) => row.user_id === userId).pending_amount;
+      const paid = await api.put(`/employee-debt/pay/${userId}`, { payment_account_id: accountId, amount: total });
       expect(paid.status).toBe(200);
 
-      const after = await findExpense();
-      expect(after?.reimbursement_status).toBe("paid");
-      expect(after?.reimbursed_at).toBeTruthy();
-      expect(after?.payment_account_name).toBe(accountName);
+      const after = await listRows();
+      const expense = after.find((row) => row.source === "quotation_expense");
+      expect(expense?.reimbursement_status).toBe("paid");
+      expect(expense?.reimbursed_at).toBeTruthy();
+      expect(expense?.moves_cash).toBe(false);
+
+      // Filtrada por la cotización, la reposición muestra solo su parte (33).
+      const reimbursement = after.find((row) => row.source === "employee_debt_payment");
+      expect(reimbursement?.moves_cash).toBe(true);
+      expect(reimbursement?.amount).toBe(33);
+      expect(reimbursement?.payment_account_name).toBe(accountName);
     });
   });
 

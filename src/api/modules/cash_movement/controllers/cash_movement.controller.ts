@@ -4,14 +4,16 @@ import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import { createCashMovement } from "../services/create/cash_movement.service";
-import { CashMovementSource, getCashMovementById, getCashMovementsList } from "../services/find/cash_movement.service";
-
-const CASH_MOVEMENT_SOURCES: CashMovementSource[] = ["manual", "quotation_payment", "quotation_expense"];
+import {
+  CASH_MOVEMENT_SOURCES,
+  getCashMovementById,
+  getCashMovementsList,
+} from "../services/find/cash_movement.service";
 import { disableOrEnableCashMovementById } from "../services/delete/cash_movement.service";
 import { resolveBusinessUnitFilter, resolveTargetBusinessUnitId } from "../../../../core/rbac/businessUnitScope";
 import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
-import { resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
+import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
@@ -73,7 +75,9 @@ export const listCashMovementsController = asyncHandler(async (req: Request, res
   const limit = Math.min(Number(req.query.limit) || 20, 100);
 
   const resp = await getCashMovementsList({
-    companyId: user.isSystem ? null : user.companyId,
+    // El Super Administrador puede acotar a una empresa (?companyId): sin eso,
+    // sus totales mezclan la plata de todas.
+    companyId: resolveListCompanyFilter(user, req.query.companyId),
     businessUnitId: resolveBusinessUnitFilter(user),
     direction: direction === "income" || direction === "expense" ? direction : undefined,
     category: (category as string) || undefined,

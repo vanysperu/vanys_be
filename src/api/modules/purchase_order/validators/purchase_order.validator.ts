@@ -1,4 +1,5 @@
 import { body, param } from "express-validator";
+import { moneyAmountRule } from "../../../../core/validators/money.validator";
 import { DataBase } from "../../../../database";
 
 export const createPurchaseOrderValidator = [
@@ -39,8 +40,21 @@ export const updatePurchaseOrderItemStatusValidator = [
 export const createPurchaseOrderItemPurchaseValidator = [
   itemIdParamValidator,
   body("quantity").isInt({ gt: 0 }).withMessage("La cantidad comprada debe ser un número entero positivo"),
-  body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
+  moneyAmountRule("amount"),
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
+  // Cuenta de la empresa desde la que se pagó (vacío = efectivo). Que sea de
+  // la empresa de la orden y esté activa lo valida el service. Si la pagó un
+  // trabajador con su plata, no sale de ninguna cuenta de la empresa: ese
+  // dinero sale recién al reponerle (Deudas a personal).
+  body("payment_account_id")
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La cuenta seleccionada no es válida")
+    .bail()
+    .custom((value: unknown, { req }) => {
+      if (req.body.funding_source !== "employee") return true;
+      throw new Error("Una compra pagada con plata del trabajador no sale de una cuenta de la empresa");
+    }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   body("funding_source")
     .isIn(["company", "employee"])

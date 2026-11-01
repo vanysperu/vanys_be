@@ -1,4 +1,5 @@
 import { BuildOptions, DataTypes, Model, Sequelize } from "sequelize";
+import { roundMoney } from "../../../../utils/numbers";
 
 export type QuotationStatus =
   | "pending"
@@ -44,8 +45,16 @@ export const QUOTATION_STATUS_LABEL: Record<QuotationStatus, string> = {
 // configurable por empresa (ver services/shared/tax_config.ts ->
 // getIgvRate), pedido explícito del usuario. `igvRate` es la fracción ya
 // resuelta (0.18 = 18%) para esa empresa en el momento del cálculo.
+//
+// El IGV se calcula UNA vez sobre el subtotal de toda la cotización y se
+// redondea a céntimos (medio céntimo hacia arriba): 374.25 -> IGV 67.37,
+// total 441.62. El reparto por producto que muestran el PDF y la pantalla
+// sale de este mismo monto (ver services/shared/igv_breakdown.ts).
+export const computeQuotationIgv = (subtotal: number, includesIgv: boolean, igvRate: number): number =>
+  includesIgv ? roundMoney(subtotal * igvRate) : 0;
+
 export const computeQuotationTotal = (subtotal: number, includesIgv: boolean, igvRate: number): number =>
-  includesIgv ? subtotal * (1 + igvRate) : subtotal;
+  roundMoney(subtotal + computeQuotationIgv(subtotal, includesIgv, igvRate));
 
 export interface QuotationAttributes {
   id: number;

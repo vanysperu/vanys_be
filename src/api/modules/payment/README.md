@@ -36,7 +36,17 @@ ni anular.
   un desfase si un pago se corrige más de una vez.
 - Anular es un **toggle** sobre `is_deleted` (mismo patrón que
   `cash_movement`/`client`/`product`): el mismo endpoint anula o restaura
-  según el estado actual.
+  según el estado actual. **Restaurar** pasa por las mismas reglas que un
+  pago nuevo (no deja la cotización sobre-pagada ni con dinero estando
+  cerrada), con la fila bloqueada.
+- Solo una cotización aceptada o en curso recibe pagos (`accepted`,
+  `design_pending`, `in_process`, `ready`, `delivered`, `finished`): una
+  Pendiente cobra su adelanto al aceptarse; una cerrada no recibe plata.
+- **Efectivo = sin cuenta**: un pago con método `cash` nunca guarda
+  `payment_account_id` (si llega, se descarta). La migración
+  `20261031100000` limpió los que habían quedado así.
+- Monto con máximo 2 decimales y fecha real, no futura (hora de Lima) —
+  reglas compartidas en `core/validators/money.validator.ts`.
 - Editar/anular valida que el pago pertenezca a una cotización de la propia
   empresa (y tienda, si el caller está limitado a una) vía
   `assertQuotationBelongsToCaller` (reexportado desde

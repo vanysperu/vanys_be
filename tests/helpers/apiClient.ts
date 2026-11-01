@@ -37,6 +37,7 @@ export function authedRequest(token: string) {
       request(BASE_URL).put(`/api${path}`).set("Authorization", `Bearer ${token}`).send(body),
     patch: (path: string, body?: object) =>
       request(BASE_URL).patch(`/api${path}`).set("Authorization", `Bearer ${token}`).send(body),
+    delete: (path: string) => request(BASE_URL).delete(`/api${path}`).set("Authorization", `Bearer ${token}`),
   };
 }
 

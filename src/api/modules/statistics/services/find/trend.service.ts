@@ -9,6 +9,12 @@ import {
   selectRows,
   toMoney,
 } from "../shared/scope";
+import {
+  EXPENSE_FUNDING_JOIN_SQL,
+  EXPENSE_PAID_BY_COMPANY_SQL,
+  REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
+  REIMBURSEMENT_SCOPE_SQL,
+} from "../../../cash_movement/services/shared/cash_flow.sql";
 
 interface BucketRow {
   bucket: string;
@@ -26,7 +32,7 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
     fmt: BUCKET_SQL_FORMAT[period.granularity],
   };
 
-  const [quotations, payments, quotationExpenses, manualCash] = await Promise.all([
+  const [quotations, payments, quotationExpenses, reimbursements, manualCash] = await Promise.all([
     selectRows<BucketRow>(
       `SELECT DATE_FORMAT(${EMISSION_DATE_SQL}, :fmt) AS bucket,
               COALESCE(SUM(q.total), 0) AS quoted,
@@ -48,7 +54,15 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
       `SELECT DATE_FORMAT(qe.spent_at, :fmt) AS bucket, COALESCE(SUM(qe.amount), 0) AS amount
        FROM quotation_expense qe
        INNER JOIN quotation q ON q.id = qe.quotation_id
-       WHERE ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to
+       ${EXPENSE_FUNDING_JOIN_SQL}
+       WHERE ${MONEY_SCOPE_SQL} AND ${EXPENSE_PAID_BY_COMPANY_SQL} AND qe.spent_at BETWEEN :from AND :to
+       GROUP BY bucket`,
+      replacements
+    ),
+    selectRows<BucketRow>(
+      `SELECT DATE_FORMAT(p.paid_at, :fmt) AS bucket, COALESCE(SUM(a.amount), 0) AS amount
+       FROM ${REIMBURSEMENT_ALLOCATIONS_FROM_SQL}
+       WHERE ${REIMBURSEMENT_SCOPE_SQL} AND p.paid_at BETWEEN :from AND :to
        GROUP BY bucket`,
       replacements
     ),
@@ -67,6 +81,7 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
   const quotationMap = byBucket(quotations);
   const paymentMap = byBucket(payments);
   const expenseMap = byBucket(quotationExpenses);
+  const reimbursementMap = byBucket(reimbursements);
   const manualMap = byBucket(manualCash);
 
   return buildBuckets(period).map((bucket) => ({
@@ -74,6 +89,10 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
     quoted: toMoney(quotationMap.get(bucket)?.quoted),
     won: toMoney(quotationMap.get(bucket)?.won),
     income: toMoney(toMoney(paymentMap.get(bucket)?.amount) + toMoney(manualMap.get(bucket)?.income)),
-    expenses: toMoney(toMoney(expenseMap.get(bucket)?.amount) + toMoney(manualMap.get(bucket)?.expense)),
+    expenses: toMoney(
+      toMoney(expenseMap.get(bucket)?.amount) +
+        toMoney(reimbursementMap.get(bucket)?.amount) +
+        toMoney(manualMap.get(bucket)?.expense)
+    ),
   }));
 }

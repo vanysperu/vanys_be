@@ -4,6 +4,7 @@ import { nowUtc } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
 import { CASH_PAYMENT_METHOD } from "../../validators/quotation.validator";
+import { assertQuotationIsActive } from "../shared/active_quotation";
 
 // Tolerancia de un céntimo para absorber artefactos de redondeo decimal
 // (ver computeQuotationTotal) — nunca para disfrazar un sobre-pago real.
@@ -36,6 +37,10 @@ const assertPaymentWithinBalance = async ({
     lock: transaction.LOCK.UPDATE,
   });
   if (!quotation) throw new Error("La cotización no existe");
+  // Solo una cotización aceptada o en curso recibe dinero (regla única de
+  // active_quotation.ts). Se lee con la MISMA transacción: el adelanto al
+  // aceptar cambia el estado a "accepted" justo antes, dentro de ella.
+  await assertQuotationIsActive(quotationId, "registrar un pago", transaction);
 
   const where: Record<string, unknown> = { quotation_id: quotationId, is_deleted: false };
   if (excludePaymentId) where.id = { [Op.ne]: excludePaymentId };
@@ -109,10 +114,15 @@ const resolvePaymentAccountForQuotation = async ({
   });
   if (!quotation) throw new Error("La cotización no existe");
 
+  // El efectivo no entra a ninguna cuenta: si llega una (el formulario la
+  // oculta al elegir efectivo pero podía mandar la elegida antes), se
+  // descarta. Caja la mostraría como dinero en el banco que nunca llegó.
+  if (method === CASH_PAYMENT_METHOD) return null;
+
   return resolvePaymentAccountId({
     accountId,
     companyId: quotation.company_id,
-    required: method !== CASH_PAYMENT_METHOD,
+    required: true,
   });
 };
 

@@ -50,7 +50,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
   describe("Adelanto al pasar a Aceptada", () => {
     it("acepta y registra el adelanto en una sola operación", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
       const res = await api.put(`/quotation/status/${quotationId}`, { status: "accepted", advance_payment: advance(125) });
       expect(res.status).toBe(200);
@@ -66,7 +66,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("sin adelanto sigue funcionando como antes", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
       const res = await api.put(`/quotation/status/${quotationId}`, { status: "accepted" });
       expect(res.status).toBe(200);
@@ -76,7 +76,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("si el adelanto supera el total, no acepta ni registra nada (rollback)", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
       const res = await api.put(`/quotation/status/${quotationId}`, { status: "accepted", advance_payment: advance(999) });
       expect(res.status).toBe(400);
@@ -88,7 +88,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("rechaza un adelanto en un cambio de estado que no es aceptar", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
       const res = await api.put(`/quotation/status/${quotationId}`, { status: "rejected", advance_payment: advance(10) });
       expect(res.status).toBe(400);
@@ -97,7 +97,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("exige número de operación si el adelanto no es en efectivo", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
       const res = await api.put(`/quotation/status/${quotationId}`, {
         status: "accepted",
@@ -116,7 +116,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("una cotización pendiente no está por cobrar; aceptada con adelanto, sí, con su saldo", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
       expect(await findReceivable(quotationId)).toBeUndefined();
 
       await api.put(`/quotation/status/${quotationId}`, { status: "accepted", advance_payment: advance(100) });
@@ -129,7 +129,7 @@ describe("Adelanto al aceptar, Por cobrar y Recordatorios", () => {
 
     it("al pagar el saldo completo deja de estar por cobrar", async () => {
       const api = authedRequest(token);
-      const { quotationId } = await createQuotationFixture(token, companyId);
+      const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
       await api.put(`/quotation/status/${quotationId}`, { status: "accepted", advance_payment: advance(100) });
 
       const paid = await api.post(`/quotation/${quotationId}/payments`, advance(150));

@@ -11,6 +11,7 @@ import {
 } from "../../../../../utils/dateUtils";
 import { QUOTATION_STATUS_LABEL, QuotationStatus } from "../../model/quotation.model";
 import { getQuotationById } from "../find/quotation.service";
+import { allocateIgvByLine } from "../shared/igv_breakdown";
 import { CompanyAttributes } from "../../../company/model/company.model";
 import { VariableGeneralAttributes } from "../../../variable_general/models/variable_general.model";
 
@@ -89,15 +90,16 @@ Font.register({
 const money = (value: number) => `S/ ${Number(value).toFixed(2)}`;
 
 // Espejo de QUOTATION_ITEM_PRICING_MODE_LABEL (grulla_fe: quotation.types.ts)
-// — sin esto, un item de "medio millar" muestra "Cant. 500" en el PDF sin
-// contexto y el cliente puede pensar que compró 500 unidades sueltas al
-// precio unitario en vez de un lote cerrado.
+// — dice qué tarifa por volumen se aplicó al precio unitario (ej. 10
+// unidades a precio de ciento), que si no, no se explica solo con el número.
+// "custom" no tiene etiqueta a propósito: un precio negociado para esta
+// cotización es interno y el cliente no debe ver "Personalizado" (pedido
+// explícito del usuario); esa fila muestra "—".
 const PRICING_MODE_LABEL: Record<string, string> = {
   unit: "Unidad",
   hundred: "Ciento",
   half_thousand: "Medio millar",
   thousand: "Millar",
-  custom: "Personalizado",
 };
 
 const styles = StyleSheet.create({
@@ -228,6 +230,9 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
   // Si ningún item lleva técnica (productos sin personalización), la columna
   // "Técnica" se omite entera; si se mezclan, los que no llevan muestran "—".
   const showTechnique = data.items.some((item) => Boolean(item.technique));
+  // Mismo criterio para "Modo": si todos los items llevan precio
+  // personalizado (que no se le muestra al cliente), la columna sobra.
+  const showMode = data.items.some((item) => item.pricing_mode !== "custom");
   // Helper para no repetir `[styles.sectionTitle, { color: data.brandColor }]`
   // en cada uno de los ~8 títulos de sección del documento.
   const sectionTitle = (label: string) =>
@@ -360,7 +365,7 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             // (pedido explícito del usuario: "no va a salir ni en los pdf").
             showTechnique ? createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica") : null,
             createElement(Text, { style: [styles.th, styles.colQty] }, "Cant."),
-            createElement(Text, { style: [styles.th, styles.colMode] }, "Modo"),
+            showMode ? createElement(Text, { style: [styles.th, styles.colMode] }, "Modo") : null,
             createElement(Text, { style: [styles.th, styles.colPrice] }, "P. unit."),
             // Mismas columnas que el detalle en pantalla (pedido explícito
             // del usuario: que se vea claro cuánto se paga por cada producto
@@ -374,38 +379,33 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
                 ]
               : [createElement(Text, { style: [styles.th, styles.colTotal], key: "h-total" }, "Total (sin IGV)")]),
           ),
-          ...data.items.map((item: QuotationPdfItem) => {
-            // IGV por línea, derivado del real cobrado (total-subtotal),
-            // repartido proporcional al peso de esta línea en el subtotal
-            // total — igual criterio que el desglose en pantalla
-            // (QuotationDetailDialog.tsx: nunca recalcula con el % actual
-            // configurado, se basa en lo que de verdad se cobró).
-            const lineIgv = data.includes_igv && data.subtotal > 0 ? (item.subtotal / data.subtotal) * (data.total - data.subtotal) : 0;
-            const lineTotal = Number(item.subtotal) + lineIgv;
-
-            return createElement(
-              View,
-              { style: styles.tableRow, key: item.id },
-              createElement(Text, { style: [styles.td, styles.colProduct] }, item.product?.name ?? "—"),
-              showTechnique
-                ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
-                : null,
-              createElement(Text, { style: [styles.td, styles.colQty] }, String(item.quantity)),
+          // IGV por línea: el IGV real cobrado (total - subtotal, nunca el %
+          // configurado hoy) repartido entre las líneas con el mismo reparto
+          // que el detalle en pantalla (QuotationDetailDialog.tsx), así cada
+          // fila cuadra y las filas suman exactamente el resumen.
+          ...allocateIgvByLine(data.items, data.includes_igv ? Number(data.total) - Number(data.subtotal) : 0).map(
+            ({ line: item, amounts }) =>
               createElement(
-                Text,
-                { style: [styles.td, styles.colMode] },
-                PRICING_MODE_LABEL[item.pricing_mode] ?? item.pricing_mode,
+                View,
+                { style: styles.tableRow, key: item.id },
+                createElement(Text, { style: [styles.td, styles.colProduct] }, item.product?.name ?? "—"),
+                showTechnique
+                  ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
+                  : null,
+                createElement(Text, { style: [styles.td, styles.colQty] }, String(item.quantity)),
+                showMode
+                  ? createElement(Text, { style: [styles.td, styles.colMode] }, PRICING_MODE_LABEL[item.pricing_mode] ?? "—")
+                  : null,
+                createElement(Text, { style: [styles.td, styles.colPrice] }, money(item.unit_price)),
+                ...(data.includes_igv
+                  ? [
+                      createElement(Text, { style: [styles.td, styles.colSubtotal], key: "subtotal" }, money(amounts.subtotal)),
+                      createElement(Text, { style: [styles.td, styles.colIgv], key: "igv" }, money(amounts.igv)),
+                    ]
+                  : []),
+                createElement(Text, { style: [styles.td, styles.colTotal], key: "total" }, money(amounts.total)),
               ),
-              createElement(Text, { style: [styles.td, styles.colPrice] }, money(item.unit_price)),
-              ...(data.includes_igv
-                ? [
-                    createElement(Text, { style: [styles.td, styles.colSubtotal], key: "subtotal" }, money(item.subtotal)),
-                    createElement(Text, { style: [styles.td, styles.colIgv], key: "igv" }, money(lineIgv)),
-                  ]
-                : []),
-              createElement(Text, { style: [styles.td, styles.colTotal], key: "total" }, money(lineTotal)),
-            );
-          }),
+          ),
         ),
         createElement(
           View,

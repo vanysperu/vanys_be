@@ -1,4 +1,5 @@
 import { body, param } from "express-validator";
+import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
 import { DataBase } from "../../../../database";
 import { CASH_PAYMENT_METHOD } from "../../quotation/validators/quotation.validator";
 
@@ -18,7 +19,7 @@ const paramPaymentIdValidator = param("id")
 
 export const updatePaymentValidator = [
   paramPaymentIdValidator,
-  body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
+  moneyAmountRule("amount"),
   body("method")
     .not()
     .isEmpty()
@@ -27,7 +28,7 @@ export const updatePaymentValidator = [
     .isString()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres"),
-  body("paid_at").isISO8601().withMessage("La fecha de pago es obligatoria"),
+  moneyDateRule("paid_at", "La fecha de pago es obligatoria"),
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("operation_number")
     .optional({ values: "null" })

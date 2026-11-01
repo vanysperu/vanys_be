@@ -23,6 +23,12 @@
 - variable_general.delete.button (legacy, ver "Notas" abajo)
 
 ## Reglas de negocio propias del módulo
+- **Cuentas de pago** (`category = "payment_account"`): una cuenta con
+  movimientos (pagos, gastos, caja, reposiciones) **no se elimina** (409
+  `PAYMENT_ACCOUNT_IN_USE`) ni cambia de categoría: antes, borrarla pasaba su
+  historial a "Efectivo" y Caja dejaba de cuadrar. Se **deshabilita**: deja
+  de ofrecerse en los selectores y su historial se conserva. La base también
+  lo impide (llaves `RESTRICT`).
 - `company_id = NULL` significa variable **global**, visible para todas las
   empresas (ej. tipos de documento, etapas de producción por defecto). Solo
   un usuario `is_system` puede crear/editar/deshabilitar una fila con

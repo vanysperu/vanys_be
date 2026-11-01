@@ -55,7 +55,10 @@ export async function createUnscopedCompanyAdmin(
 
 // Crea cliente + producto + técnica + cotización con un item — el mismo
 // setup mínimo que necesita cualquier test de pagos/compras/deudas.
-export async function createQuotationFixture(token: string, companyId: number) {
+// La deja Aceptada (sin adelanto) por defecto: solo una cotización aceptada o
+// en curso admite pagos, gastos, órdenes de compra y compras. accepted: false
+// la deja Pendiente (para probar aceptar, rechazar o el adelanto).
+export async function createQuotationFixture(token: string, companyId: number, options: { accepted?: boolean } = {}) {
   const api = authedRequest(token);
   const stamp = wordStamp();
 
@@ -79,6 +82,10 @@ export async function createQuotationFixture(token: string, companyId: number) {
   });
 
   const quotationId: number = quotation.body.data.id;
+  if (options.accepted ?? true) {
+    const accepted = await api.put(`/quotation/status/${quotationId}`, { status: "accepted" });
+    if (accepted.status !== 200) throw new Error(`no se pudo aceptar la cotización: ${JSON.stringify(accepted.body)}`);
+  }
   const detail = await api.get(`/quotation/find/${quotationId}`);
   const quotationItemId: number = detail.body.data.items[0].id;
 

@@ -226,12 +226,17 @@ describe("Módulo de estadísticas", () => {
     const paymentsTotal = (payments.body.data.data as { amount: number }[]).reduce((sum, row) => sum + row.amount, 0);
     expect(kpis.collected).toBe(paymentsTotal);
 
+    // Solo lo que mueve caja (un gasto pagado por un trabajador no suma: su
+    // egreso es la reposición). El resumen de Caja abarca todo lo filtrado.
     const cash = await api.get(`/cash-movement/list?limit=100&${range}`);
-    const rows = cash.body.data.data as { direction: string; amount: number }[];
-    const cashIncome = rows.filter((row) => row.direction === "income").reduce((sum, row) => sum + row.amount, 0);
-    const cashExpenses = rows.filter((row) => row.direction === "expense").reduce((sum, row) => sum + row.amount, 0);
+    const rows = cash.body.data.data as { direction: string; amount: number; moves_cash: boolean }[];
+    const moving = rows.filter((row) => row.moves_cash);
+    const cashIncome = moving.filter((row) => row.direction === "income").reduce((sum, row) => sum + row.amount, 0);
+    const cashExpenses = moving.filter((row) => row.direction === "expense").reduce((sum, row) => sum + row.amount, 0);
     expect(kpis.collected + kpis.other_income).toBe(cashIncome);
     expect(kpis.expenses).toBe(cashExpenses);
+    expect(cash.body.data.summary.income).toBe(cashIncome);
+    expect(cash.body.data.summary.expense).toBe(cashExpenses);
   });
 
   it("el Super Administrador puede elegir la empresa y ve los mismos números", async () => {

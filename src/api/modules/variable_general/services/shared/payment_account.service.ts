@@ -1,3 +1,4 @@
+import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { AppError } from "../../../../../core/errors/AppError";
 
@@ -51,4 +52,44 @@ export const resolvePaymentAccountId = async ({
   if (account.is_deleted) throw new AppError(400, "La cuenta seleccionada está deshabilitada");
 
   return parsedId;
+};
+
+// Tablas que guardan la cuenta por la que se movió un dinero. Una cuenta que
+// aparece en cualquiera de ellas es parte de la historia de Caja.
+const PAYMENT_ACCOUNT_REFERENCES = [
+  "quotation_payment",
+  "quotation_expense",
+  "cash_movement",
+  "employee_debt_payment",
+  "employee_debt",
+] as const;
+
+export const isPaymentAccountInUse = async (accountId: number): Promise<boolean> => {
+  // Nombres de tabla fijos del código, nunca un valor externo.
+  const checks = PAYMENT_ACCOUNT_REFERENCES.map(
+    (table) => `EXISTS (SELECT 1 FROM ${table} WHERE payment_account_id = :accountId)`
+  );
+  const [row] = await DataBase.instance.sequelize.query<{ in_use: number | string }>(
+    `SELECT (${checks.join(" OR ")}) AS in_use`,
+    { type: QueryTypes.SELECT, replacements: { accountId } }
+  );
+  return Number(row?.in_use) === 1;
+};
+
+/**
+ * Antes, eliminar una cuenta en "Documentos de la empresa" la borraba
+ * físicamente y la base pasaba a NULL la cuenta de todos sus pagos y
+ * movimientos: el historial aparecía de golpe como "Efectivo" y Caja dejaba
+ * de cuadrar. Una cuenta con movimientos ya no se elimina (tampoco cambia de
+ * categoría): se deshabilita, que la saca de los selectores y conserva su
+ * historia. La base también lo impide (llaves RESTRICT).
+ */
+export const assertPaymentAccountCanBeRemoved = async (accountId: number): Promise<void> => {
+  if (!(await isPaymentAccountInUse(accountId))) return;
+  throw new AppError(
+    409,
+    "Esta cuenta ya tiene movimientos registrados: no se puede eliminar. Deshabilítala para que no se use más; su historial se conserva.",
+    undefined,
+    "PAYMENT_ACCOUNT_IN_USE"
+  );
 };

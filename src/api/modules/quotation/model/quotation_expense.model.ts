@@ -7,6 +7,10 @@ export interface QuotationExpenseAttributes {
   amount: number;
   category: string | null;
   spent_at: string;
+  // Cuenta de la empresa desde la que se pagó (null = efectivo). Un gasto de
+  // una compra pagada con plata de un trabajador no la usa: ese dinero sale
+  // de la empresa recién al reponerle (employee_debt_payment).
+  payment_account_id: number | null;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -33,6 +37,7 @@ export function QuotationExpenseFactory(sequelize: Sequelize): QuotationExpenseS
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       category: { type: DataTypes.STRING(50), allowNull: true },
       spent_at: { type: DataTypes.DATEONLY, allowNull: false },
+      payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

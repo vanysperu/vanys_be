@@ -6,6 +6,8 @@ import { PurchaseOrderItemModel } from "../../model/purchase_order_item.model";
 import { PurchaseOrderItemPurchaseModel } from "../../model/purchase_order_item_purchase.model";
 import { QuotationItemAttributes } from "../../../quotation/model/quotation_item.model";
 import { ProductAttributes } from "../../../product/model/product.model";
+import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
+import { assertQuotationIsActive } from "../../../quotation/services/shared/active_quotation";
 
 // Igual que en purchase_order.service.ts: el `include` anidado
 // (quotationItem -> product) no está declarado en `PurchaseOrderItemModel`
@@ -44,6 +46,9 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // compra: un admin puede registrarla en nombre de otro trabajador).
   fundingSource?: "company" | "employee";
   paidByUserId?: number;
+  // Cuenta de la empresa desde la que se pagó (vacío = efectivo). Solo aplica
+  // a "company": con plata del trabajador, la empresa no paga nada todavía.
+  paymentAccountId?: unknown;
   createdBy?: number;
 }
 
@@ -80,6 +85,7 @@ const createPurchaseOrderItemPurchase = async ({
   allowExceed = false,
   fundingSource = "company",
   paidByUserId,
+  paymentAccountId,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -111,6 +117,15 @@ const createPurchaseOrderItemPurchase = async ({
       lock: transaction.LOCK.UPDATE,
     });
     if (!purchaseOrder) throw new Error("La orden de compra no existe");
+    await assertQuotationIsActive(purchaseOrder.quotation_id, "registrar una compra", transaction);
+
+    // La cuenta tiene que ser de la empresa DUEÑA de la orden y estar activa.
+    // Con plata del trabajador queda sin cuenta: el egreso de la empresa es la
+    // reposición, que registra su propia cuenta (Deudas a personal).
+    const expenseAccountId =
+      fundingSource === "company"
+        ? await resolvePaymentAccountId({ accountId: paymentAccountId, companyId: purchaseOrder.company_id, required: false })
+        : null;
 
     // Comprar por encima de lo que falta exige confirmación explícita
     // (allowExceed). Sin confirmar, se rechaza: un "compré 500" en vez de
@@ -153,6 +168,7 @@ const createPurchaseOrderItemPurchase = async ({
         // Día calendario de Lima: antes era el día UTC, así que una compra
         // registrada después de las 7 p. m. quedaba con fecha de mañana.
         spent_at: todayInBusinessTz(),
+        payment_account_id: expenseAccountId,
       },
       createdBy,
       // MUY IMPORTANTE: sin esto, el gasto (y su evento del timeline) se
@@ -190,7 +206,13 @@ const createPurchaseOrderItemPurchase = async ({
           id: 0,
           company_id: purchaseOrder.company_id,
           user_id: paidByUserId!,
+          origin: "purchase",
           purchase_order_item_purchase_id: purchase.id,
+          description: null,
+          category: null,
+          // La tienda la da la cotización de la orden.
+          business_unit_id: null,
+          incurred_at: todayInBusinessTz(),
           amount,
           paid_amount: 0,
           status: "pending",

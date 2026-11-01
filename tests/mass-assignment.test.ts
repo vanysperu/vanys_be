@@ -43,7 +43,7 @@ describe("Mass assignment — campos sensibles no editables vía body", () => {
 
   it("PUT /quotation/update/:id ignora company_id/business_unit_id/client_id/status/total del body", async () => {
     const api = authedRequest(token);
-    const { quotationId } = await createQuotationFixture(token, companyId);
+    const { quotationId } = await createQuotationFixture(token, companyId, { accepted: false });
 
     const res = await api.put(`/quotation/update/${quotationId}`, {
       notes: "nota legítima",

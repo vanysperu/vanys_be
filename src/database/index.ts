@@ -50,6 +50,14 @@ import {
 } from "../api/modules/purchase_order/model/purchase_order_item_purchase.model";
 import { CashMovementFactory, CashMovementStatic } from "../api/modules/cash_movement/model/cash_movement.model";
 import { EmployeeDebtFactory, EmployeeDebtStatic } from "../api/modules/employee_debt/model/employee_debt.model";
+import {
+  EmployeeDebtPaymentFactory,
+  EmployeeDebtPaymentStatic,
+} from "../api/modules/employee_debt/model/employee_debt_payment.model";
+import {
+  EmployeeDebtPaymentAllocationFactory,
+  EmployeeDebtPaymentAllocationStatic,
+} from "../api/modules/employee_debt/model/employee_debt_payment_allocation.model";
 import { employeeDebtAssociations } from "./associations/employee_debt";
 import { ReminderFactory, ReminderStatic } from "../api/modules/reminder/model/reminder.model";
 import { CompanyAssetFactory, CompanyAssetStatic } from "../api/modules/uploads/model/company_asset.model";
@@ -90,6 +98,8 @@ export class DataBase {
   public purchase_order_item_purchase: PurchaseOrderItemPurchaseStatic;
   public cash_movement: CashMovementStatic;
   public employee_debt: EmployeeDebtStatic;
+  public employee_debt_payment: EmployeeDebtPaymentStatic;
+  public employee_debt_payment_allocation: EmployeeDebtPaymentAllocationStatic;
   public reminder: ReminderStatic;
   public company_asset: CompanyAssetStatic;
 
@@ -150,6 +160,8 @@ export class DataBase {
     this.purchase_order_item_purchase = PurchaseOrderItemPurchaseFactory(this.sequelize);
     this.cash_movement = CashMovementFactory(this.sequelize);
     this.employee_debt = EmployeeDebtFactory(this.sequelize);
+    this.employee_debt_payment = EmployeeDebtPaymentFactory(this.sequelize);
+    this.employee_debt_payment_allocation = EmployeeDebtPaymentAllocationFactory(this.sequelize);
     this.reminder = ReminderFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
 
@@ -232,6 +244,9 @@ export class DataBase {
       user: this.user,
       purchase_order_item_purchase: this.purchase_order_item_purchase,
       employee_debt: this.employee_debt,
+      employee_debt_payment: this.employee_debt_payment,
+      employee_debt_payment_allocation: this.employee_debt_payment_allocation,
+      variable_general: this.variable_general,
     });
   }
 }

@@ -18,6 +18,8 @@ export const getQuotationValidityDays = async (companyId: number | null): Promis
     where: {
       category: QUOTATION_CONFIG_CATEGORY,
       prefix_id: VALIDITY_DAYS_CODE,
+      // Igual que getIgvRate: una fila deshabilitada no cuenta.
+      is_deleted: false,
       [Op.or]: [{ company_id: companyId }, { company_id: null }],
     },
   });

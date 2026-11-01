@@ -39,7 +39,10 @@ dos o ninguno; por defecto los últimos 30 días; máximo 3 años),
 - Métricas de caja (cobrado, otros ingresos, gastos, flujo neto, tendencia de
   ingresos/egresos, cobros por cuenta) usan la **fecha del movimiento**
   (`paid_at`, `spent_at`, `occurred_at`) y el **mismo filtro que Caja**, para
-  que ambos módulos cuadren (cubierto por prueba).
+  que ambos módulos cuadren (cubierto por prueba). "Gastos" de caja = gastos
+  que pagó la empresa + reposiciones a trabajadores (por su fecha) +
+  egresos manuales; una compra pagada con plata de un trabajador no cuenta
+  como salida hasta que se le repone (`cash_movement/services/shared/cash_flow.sql.ts`).
 - **Margen estimado** = subtotal sin IGV de las ganadas del periodo − gastos
   registrados en esas cotizaciones. Es estimado: un gasto aún no cargado no
   cuenta.

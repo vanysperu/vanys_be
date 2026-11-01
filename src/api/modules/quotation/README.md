@@ -48,14 +48,41 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
 - **No se puede rechazar ni cancelar una cotización con dinero de por
   medio** (`QuotationHasMoneyInvolvedError`): si ya tiene pagos registrados
   o compras reales hechas contra ella, el dinero quedaría colgado en una
-  cotización cerrada sin ningún aviso.
+  cotización cerrada sin ningún aviso. Tampoco se puede **volver de Aceptada
+  a Pendiente** con dinero de por medio (ej. aceptada con adelanto y
+  arrastrada de vuelta en el Kanban): una Pendiente sale de "Por cobrar" y
+  el job la puede vencer sola.
+- El cambio de estado lee la cotización **con lock dentro de la
+  transacción** y valida ahí la transición y el dinero: antes se validaba
+  afuera, y dos cambios casi simultáneos (o el job) pasaban la validación con
+  el mismo estado de origen.
+- **Solo una cotización activa avanza** (pedido explícito del usuario: "una
+  cotización que no fue aceptada no debería poder hacer nada"): pagos,
+  gastos, órdenes de compra, compras y movimientos de etapa de producción
+  exigen un estado entre Aceptada y Finalizada
+  (`services/shared/active_quotation.ts` → `assertQuotationIsActive`; si no,
+  409 con code `QUOTATION_NOT_ACTIVE`). Una Pendiente cobra su adelanto al
+  aceptarla; una Rechazada, Vencida o Cancelada ya no admite nada de eso.
 
 ### Dinero
 - Los importes se **redondean a 2 decimales en el service** (`roundMoney`),
-  que es la precisión real de las columnas `DECIMAL(10,2)`. El precio
-  unitario se redondea *antes* de multiplicar para que
+  que es la precisión real de las columnas `DECIMAL(10,2)`, con **medio
+  céntimo hacia arriba** (como SUNAT): subtotal 374.25 → IGV 67.37 → total
+  441.62. Antes el ruido binario de JavaScript (441.61499999999995) lo dejaba
+  en 441.61. El precio unitario se redondea *antes* de multiplicar para que
   `precio unitario × cantidad = subtotal` cuadre exactamente con lo que ve
   el cliente en el PDF.
+- Cálculo completo de una cotización (el mismo en el backend, el formulario
+  de "Nueva cotización", el detalle y el PDF):
+  1. Precio por unidad = precio del producto + precio de la técnica, en la
+     misma escala, redondeado a 2 decimales.
+  2. Subtotal de la línea = precio por unidad × cantidad.
+  3. Subtotal = suma de las líneas.
+  4. IGV = subtotal × tasa, redondeado **una vez** sobre toda la cotización
+     (`computeQuotationIgv`); total = subtotal + IGV.
+  5. IGV por producto = ese IGV repartido entre las líneas por mayor residuo
+     en céntimos (`services/shared/igv_breakdown.ts`): cada fila cuadra
+     (subtotal + IGV = total) y las filas suman exactamente el resumen.
 - `total_paid` se recalcula con una **sentencia SQL atómica**
   (`UPDATE ... SET total_paid = (SELECT SUM ...)`), nunca leyendo y
   escribiendo en dos pasos: dos pagos concurrentes sobre la misma
@@ -73,10 +100,19 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   [`product`](../product/README.md).
 - El PDF solo lista las cuentas de pago **activas** de la empresa.
 - Columnas del PDF por producto: con IGV, `P. unit. · Subtotal · IGV · Total`
-  (el IGV de cada línea es su parte proporcional del IGV real cobrado); sin
-  IGV, una sola columna `Total (sin IGV)`. En el resumen, el IGV se muestra
-  siempre (su % real o "No incluido") y cierra con "Total a pagar". Mismo
-  criterio que el detalle de la cotización en pantalla.
+  (el IGV de cada línea sale del reparto de arriba sobre el IGV real
+  cobrado, `total - subtotal`, nunca del % configurado hoy); sin IGV, una
+  sola columna `Total (sin IGV)`. En el resumen, el IGV se muestra siempre
+  (su % real o "No incluido") y cierra con "Total a pagar". Mismo criterio
+  que el detalle de la cotización en pantalla. Antes cada pantalla calculaba
+  el IGV por fila a su manera: en ~6% de las cotizaciones con varios
+  productos las filas del PDF no sumaban el resumen.
+- La columna "Modo" del PDF nunca dice "Personalizado": un precio negociado
+  es interno y el cliente no lo ve (esa fila muestra "—"). Si todos los items
+  tienen precio personalizado, la columna no aparece.
+- Cambiar `includes_igv` por `PUT /quotation/update/:id` recalcula el total
+  con el mismo redondeo y **no puede dejarlo por debajo de lo ya pagado**
+  (`TotalBelowPaidError`, 400).
 - `GET /quotation/list` devuelve además un `summary` calculado en la base
   sobre **todo lo filtrado** (no solo la página): `receivable_balance` /
   `receivable_count` con el mismo criterio que el módulo
@@ -105,7 +141,9 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   (solo si el usuario no está atado a una tienda), `dateFrom`/`dateTo`
   (fecha de emisión, hora de Lima).
 - El IGV no es constante: sale de una Variable General por empresa
-  (`getIgvRate`).
+  (`getIgvRate`). Una fila **deshabilitada** no cuenta (antes, si la empresa
+  deshabilitaba su IGV propio, se le seguía aplicando); lo mismo para los
+  días de vigencia (`getQuotationValidityDays`).
 
 ### Consistencia
 - Crear una cotización escribe cabecera + items + evento de timeline en
@@ -129,6 +167,14 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   usuario aprobaba la cotización entre la lectura y la escritura del job,
   este la pisaba a "Vencida". Cada vencimiento y su evento de timeline van
   en una transacción.
+- El job **no vence una cotización con pagos** (`total_paid > 0`): "Vencida"
+  es final y el dinero quedaría colgado; queda Pendiente, a la vista.
+
+### Detalle (`GET /quotation/find/:id`)
+- Items, pagos, gastos e historial se leen en consultas separadas
+  (`separate: true`): en un solo JOIN se multiplicaban entre sí, y Sequelize
+  ignoraba su `order`. Items y pagos/gastos salen en el orden en que se
+  cargaron; el historial, del más reciente al más antiguo.
 - El PDF formatea `valid_until` (DATEONLY) como texto, sin pasar por un
   `Date` local. Antes salía **un día antes** de lo guardado.
 

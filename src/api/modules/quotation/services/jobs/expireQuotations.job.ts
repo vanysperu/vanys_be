@@ -21,6 +21,10 @@ export const expireOverdueQuotations = async (): Promise<number> => {
     where: {
       status: "pending",
       valid_until: { [Op.ne]: null, [Op.lt]: today },
+      // Con dinero cobrado no se vence sola: "Vencida" es final y el pago
+      // quedaría colgado sin aviso (mismo criterio que rechazar/cancelar).
+      // Queda Pendiente, a la vista, para que alguien la resuelva.
+      total_paid: 0,
     },
   });
 
@@ -33,7 +37,7 @@ export const expireOverdueQuotations = async (): Promise<number> => {
       // y antes el job la pisaba a "Vencida" igual (solo filtraba por id).
       const [affected] = await DataBase.instance.quotation.update(
         { status: "expired", updated_at: nowUtc() },
-        { where: { id, status: "pending" }, transaction }
+        { where: { id, status: "pending", total_paid: 0 }, transaction }
       );
       if (affected === 0) return false;
 

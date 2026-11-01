@@ -2,6 +2,7 @@ import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getOrderedProductionStages } from "../shared/production_stages";
+import { assertQuotationIsActive } from "../shared/active_quotation";
 import { InvalidTransitionError } from "./quotation.service";
 import { VariableGeneralModel } from "../../../variable_general/models/variable_general.model";
 import { ProductAttributes } from "../../../product/model/product.model";
@@ -49,6 +50,11 @@ const changeItemStage = async ({
 
   // Escribe en 2 tablas (quotation_item, quotation_event) — todo o nada.
   return DataBase.instance.sequelize.transaction(async (transaction) => {
+    // La producción solo avanza en una cotización aceptada o en curso (pedido
+    // explícito del usuario); antes se podían mover las etapas de una
+    // Pendiente o de una Rechazada.
+    await assertQuotationIsActive(item.quotation_id, "mover la producción", transaction);
+
     const result = await DataBase.instance.quotation_item.update(
       { stage_id: nextStageId, updated_by: updatedBy, updated_at: nowUtc() },
       { where: { id: itemId }, transaction }

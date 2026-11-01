@@ -23,6 +23,9 @@ export const getIgvRate = async (companyId: number | null): Promise<number> => {
     where: {
       category: TAX_CONFIG_CATEGORY,
       prefix_id: IGV_RATE_CODE,
+      // Una fila deshabilitada no cuenta: antes, si la empresa deshabilitaba
+      // su IGV propio, se le seguía aplicando en vez del global.
+      is_deleted: false,
       [Op.or]: [{ company_id: companyId }, { company_id: null }],
     },
   });

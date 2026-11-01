@@ -99,6 +99,12 @@ const getQuotationsList = async (
 
 const ACTOR_ATTRIBUTES = ["id", "name", "paternal_lastname"];
 
+// Las cuatro listas (items, pagos, gastos, historial) van en consultas
+// aparte (`separate`): en un solo JOIN se multiplicaban entre sí (10 items ×
+// 60 eventos × 3 pagos × 5 gastos = 9 000 filas para armar UNA cotización), y
+// Sequelize ignora el `order` de un include que no es `separate` — el
+// historial no salía del más reciente al más antiguo, y el orden de los
+// productos en el PDF dependía de cómo resolviera MySQL el JOIN.
 const getQuotationById = async (id: number) => {
   return DataBase.instance.quotation.findOne({
     where: { id },
@@ -107,6 +113,9 @@ const getQuotationById = async (id: number) => {
       { association: "businessUnit", attributes: ["id", "business_code", "address"] },
       {
         association: "items",
+        separate: true,
+        // Mismo orden en que se cargaron en el formulario.
+        order: [["id", "ASC"]],
         include: [
           {
             association: "product",
@@ -118,12 +127,28 @@ const getQuotationById = async (id: number) => {
           { association: "stage", attributes: ["id", "name", "ref1", "ref2"] },
         ],
       },
-      { association: "payments", include: [{ association: "actor", attributes: ACTOR_ATTRIBUTES }] },
-      { association: "expenses", include: [{ association: "actor", attributes: ACTOR_ATTRIBUTES }] },
+      {
+        association: "payments",
+        separate: true,
+        order: [["id", "ASC"]],
+        include: [{ association: "actor", attributes: ACTOR_ATTRIBUTES }],
+      },
+      {
+        association: "expenses",
+        separate: true,
+        order: [["id", "ASC"]],
+        include: [{ association: "actor", attributes: ACTOR_ATTRIBUTES }],
+      },
       {
         association: "events",
+        separate: true,
         include: [{ association: "actor", attributes: ACTOR_ATTRIBUTES }],
-        order: [["created_at", "DESC"]],
+        // Del más reciente al más antiguo (QuotationTimeline.tsx lo muestra
+        // así); el id desempata eventos del mismo segundo.
+        order: [
+          ["created_at", "DESC"],
+          ["id", "DESC"],
+        ],
       },
     ],
   });

@@ -1,4 +1,5 @@
 import { body, param } from "express-validator";
+import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
 import { DataBase } from "../../../../database";
 
 export const createCashMovementValidator = [
@@ -11,24 +12,12 @@ export const createCashMovementValidator = [
     .isString()
     .isLength({ max: 50 })
     .withMessage("Máximo 50 caracteres"),
-  body("amount").isFloat({ gt: 0, max: 99999999.99 }).withMessage("El monto debe ser mayor a 0"),
+  moneyAmountRule("amount"),
   body("description").optional({ values: "falsy" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
-  // No basta con isISO8601(): el frontend ya bloquea fechas futuras en el
-  // calendario, pero sin este `.custom()` el backend igual aceptaba un
-  // movimiento con fecha de, por ejemplo, 2027 llamando a la API directo
-  // (bug reportado por QA — CLAUDE.md sección 12: nunca confiar solo en la
-  // validación del cliente).
-  body("occurred_at")
-    .isISO8601()
-    .withMessage("La fecha es obligatoria")
-    .bail()
-    .custom((value: string) => {
-      if (new Date(value).getTime() > Date.now()) {
-        throw new Error("La fecha no puede ser una fecha futura");
-      }
-      return true;
-    })
-    .bail(),
+  // Fecha nunca futura (el frontend ya la bloquea en el calendario, pero el
+  // backend no confía en eso — CLAUDE.md sección 12), comparada en hora de
+  // Lima: con instantes UTC se colaba la fecha de mañana desde las 7 p. m.
+  moneyDateRule("occurred_at", "La fecha es obligatoria"),
   // Solo se valida la FORMA acá. La existencia Y la pertenencia a la empresa
   // del caller las valida el controller (createCashMovementController), que
   // es el único que conoce req.user — repetir el "existe?" en el validator

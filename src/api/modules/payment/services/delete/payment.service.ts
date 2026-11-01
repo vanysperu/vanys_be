@@ -1,7 +1,10 @@
 import { literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
-import { recalculateTotalPaid } from "../../../quotation/services/create/quotation_payment.service";
+import {
+  assertPaymentWithinBalance,
+  recalculateTotalPaid,
+} from "../../../quotation/services/create/quotation_payment.service";
 import { logQuotationEvent } from "../../../quotation/services/timeline/quotation_event.service";
 
 // Anular/restaurar un pago (toggle, mismo patrón que cash_movement) — al
@@ -9,8 +12,25 @@ import { logQuotationEvent } from "../../../quotation/services/timeline/quotatio
 // en el WHERE); al restaurarlo, vuelve a sumarse solo.
 const disableOrEnablePaymentById = async ({ paymentId, updatedBy }: { paymentId: number; updatedBy?: number }) => {
   return DataBase.instance.sequelize.transaction(async (transaction) => {
-    const payment = await DataBase.instance.quotation_payment.findOne({ where: { id: paymentId }, transaction });
+    // Fila bloqueada: dos toggles simultáneos no leen el mismo estado previo.
+    const payment = await DataBase.instance.quotation_payment.findOne({
+      where: { id: paymentId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
     if (!payment) throw new Error("El pago no existe");
+
+    // Restaurar vuelve a sumar el pago: pasa por las mismas reglas que uno
+    // nuevo — antes se podía dejar la cotización sobre-pagada, o con dinero
+    // estando ya cerrada, solo con reactivar un pago anulado.
+    if (payment.is_deleted) {
+      await assertPaymentWithinBalance({
+        quotationId: payment.quotation_id,
+        amount: Number(payment.amount),
+        excludePaymentId: paymentId,
+        transaction,
+      });
+    }
 
     await DataBase.instance.quotation_payment.update(
       {

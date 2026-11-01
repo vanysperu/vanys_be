@@ -18,8 +18,16 @@
 - cash_movement.disable.button
 
 ## Reglas de negocio propias del módulo
+- **Caja = dinero que REALMENTE entra o sale de la empresa.** Cada fila
+  trae `moves_cash`: un gasto que un trabajador pagó con su plata (compra
+  de orden o deuda manual) se lista para saber quién lo pagó, pero con
+  `moves_cash: false` y no suma — la empresa no soltó nada. Su egreso es la
+  **reposición** (`employee_debt_payment`), en su fecha, por su monto y
+  desde su cuenta (ver [`employee_debt`](../employee_debt/README.md)).
 - El listado es **mixto**: combina los movimientos manuales de esta tabla
-  con los pagos y gastos que ya registran otros módulos. Solo las filas con
+  con los pagos, gastos, deudas manuales y reposiciones que registran otros
+  módulos (fuentes `manual`, `quotation_payment`, `quotation_expense`,
+  `employee_debt`, `employee_debt_payment`). Solo las filas con
   `source = "manual"` se pueden anular desde acá — un pago o un gasto se
   anula en su propio módulo, nunca duplicado como movimiento de caja.
 - `category` es un `prefix_id` de `general_variable` (categoría
@@ -50,15 +58,30 @@
   pago; en gastos de compras pagadas por un trabajador es la cuenta desde la
   que se le **repuso**.
 - Gastos pagados con plata de un trabajador: la fila incluye
-  `paid_by_employee_name`, `reimbursement_status` (`pending`/`paid`) y
-  `reimbursed_at`, y la pantalla muestra "Pagado por X · pendiente de
-  reponer" o "Pagado por X · repuesto el <fecha> desde <cuenta>". Reponer
-  la deuda **no crea un egreso nuevo**: el gasto de la compra ya está en caja
-  como egreso, crear otro contaría dos veces la misma plata.
+  `paid_by_employee_name`, `reimbursement_status`, `reimbursed_amount` y
+  `reimbursed_at` ("Pagado por X con su plata · repuesto S/ a de S/ b").
+  No tienen cuenta y no suman. Con filtro de cuenta (o de efectivo) no
+  aparecen: no salieron de ninguna.
+- Reposiciones: con filtro de tienda, cotización u orden, el monto de la
+  fila es solo la parte que cubrió deudas de ahí (`reimbursement_total` trae
+  el total de la reposición). La tienda de cada parte es la de la
+  cotización de la compra o la de la deuda manual.
+- **Cuenta de cada gasto**: la compra pagada por la empresa y el gasto
+  manual de una cotización guardan desde qué cuenta salió el dinero
+  (`quotation_expense.payment_account_id`, `null` = efectivo).
+- **Totales**: la respuesta de `list` trae `summary` (`income`, `expense`,
+  `net` y `by_account`) calculado sobre TODO lo filtrado — no sobre la
+  página — y solo con lo que mueve caja. Estadísticas usa exactamente los
+  mismos fragmentos SQL (`services/shared/cash_flow.sql.ts`).
 - Los pagos anulados (`is_deleted`) ya no aparecen como ingreso.
-- Filtros de `list`: `direction`, `source` (`manual`/`quotation_payment`/
-  `quotation_expense`), `paymentAccountId` (id o `cash`), `category`,
-  `quotationId`, `purchaseOrderId`, `dateFrom`/`dateTo`.
+- Filtros de `list`: `direction`, `source` (las 5 fuentes),
+  `paymentAccountId` (id o `cash`), `category`, `quotationId`,
+  `purchaseOrderId`, `dateFrom`/`dateTo`, y `companyId` solo para el Super
+  Administrador (sin él, sus totales mezclan todas las empresas).
+- Validaciones de un movimiento manual (compartidas con todo lo que mueve
+  dinero, `core/validators/money.validator.ts`): monto > 0 con máximo 2
+  decimales; fecha real, no futura (comparada en hora de Lima) y no anterior
+  a 2000; cuenta de la empresa y activa.
 
 ## Campos especiales
 - `payment_account_id` (FK a `general_variable`, `SET NULL`) se agregó en

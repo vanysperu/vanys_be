@@ -7,6 +7,9 @@ import { buildPaginationMeta, PaginatedResult } from "../../../../../core/utils/
 // (eso ya se ve en el detalle de la orden de compra que generó cada deuda).
 export interface EmployeeDebtSummaryItem {
   user_id: number;
+  // Empresa del trabajador: las cuentas desde las que se le puede reponer
+  // son solo las de ella (el Super Administrador ve varias empresas).
+  company_id: number;
   employee_name: string;
   pending_amount: number;
   pending_count: number;
@@ -26,7 +29,7 @@ export interface EmployeeDebtSummaryFilter {
   status: EmployeeDebtStatusFilter;
   // Trabajador puntual.
   userId?: number;
-  // Rango sobre la fecha de la compra que generó cada deuda.
+  // Rango sobre el día en que el trabajador puso el dinero (incurred_at).
   dateFrom?: string;
   dateTo?: string;
   page: number;
@@ -35,6 +38,7 @@ export interface EmployeeDebtSummaryFilter {
 
 interface RawSummaryRow {
   user_id: number;
+  company_id: number;
   employee_name: string;
   pending_amount: string | null;
   pending_count: string | null;
@@ -52,9 +56,8 @@ const STATUS_HAVING: Record<EmployeeDebtStatusFilter, string> = {
 const getEmployeeDebtSummary = async (
   filter: EmployeeDebtSummaryFilter
 ): Promise<PaginatedResult<EmployeeDebtSummaryItem>> => {
-  // El rango de fechas se compara en la zona de Lima (las fechas se guardan
-  // en UTC): sin el CONVERT_TZ, una compra hecha a las 8 p. m. del 17 caería
-  // en el día 18.
+  // incurred_at ya es el día calendario de Lima en que se puso el dinero.
+  // Las deudas manuales anuladas no cuentan para nada.
   // pending_amount: el REMANENTE de cada fila pendiente (amount - paid_amount),
   // no su monto original — una fila con un abono parcial ya repuso una parte
   // (pagos parciales, pedido de QA). paid_amount (agregado): todo lo
@@ -62,6 +65,7 @@ const getEmployeeDebtSummary = async (
   // parcial todavía "pending".
   const grouped = `
     SELECT ed.user_id,
+           MAX(ed.company_id) AS company_id,
            CONCAT(u.name, ' ', u.paternal_lastname) AS employee_name,
            SUM(CASE WHEN ed.status = 'pending' THEN ed.amount - ed.paid_amount ELSE 0 END) AS pending_amount,
            SUM(CASE WHEN ed.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
@@ -70,10 +74,11 @@ const getEmployeeDebtSummary = async (
            MAX(ed.paid_at) AS last_paid_at
     FROM employee_debt ed
     INNER JOIN user u ON u.id = ed.user_id
-    WHERE (:companyId IS NULL OR ed.company_id = :companyId)
+    WHERE ed.status <> 'cancelled'
+      AND (:companyId IS NULL OR ed.company_id = :companyId)
       AND (:userId IS NULL OR ed.user_id = :userId)
-      AND (:dateFrom IS NULL OR DATE(CONVERT_TZ(ed.created_at, '+00:00', '-05:00')) >= :dateFrom)
-      AND (:dateTo IS NULL OR DATE(CONVERT_TZ(ed.created_at, '+00:00', '-05:00')) <= :dateTo)
+      AND (:dateFrom IS NULL OR ed.incurred_at >= :dateFrom)
+      AND (:dateTo IS NULL OR ed.incurred_at <= :dateTo)
     GROUP BY ed.user_id, u.name, u.paternal_lastname
     ${STATUS_HAVING[filter.status]}
   `;
@@ -103,6 +108,7 @@ const getEmployeeDebtSummary = async (
 
   const data: EmployeeDebtSummaryItem[] = rows.map((row) => ({
     user_id: row.user_id,
+    company_id: Number(row.company_id),
     employee_name: row.employee_name,
     pending_amount: Number(row.pending_amount ?? 0),
     pending_count: Number(row.pending_count ?? 0),
