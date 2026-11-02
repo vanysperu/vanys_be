@@ -1,6 +1,7 @@
 import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { buildPaginationMeta, PaginatedResult } from "../../../../../core/utils/paginate";
+import { correctionsCountSql } from "../../../money_correction/services/shared/corrections_count";
 
 // Un pago vive físicamente en quotation_payment (CLAUDE.md: no duplicar
 // tablas para la misma entidad) — este módulo solo agrega la capa RBAC de
@@ -20,6 +21,8 @@ export interface PaymentListItem {
   payment_account_name: string | null;
   is_deleted: boolean;
   business_unit_id: number | null;
+  // Cuántas correcciones tiene el pago (badge "Corregido" + historial).
+  corrections_count: number;
   created_at: string;
 }
 
@@ -56,6 +59,7 @@ interface RawPaymentRow {
   payment_account_name: string | null;
   is_deleted: number | boolean;
   business_unit_id: number | null;
+  corrections_count: number | string;
   created_at: Date;
 }
 
@@ -104,7 +108,8 @@ const getPaymentsList = async (filter: PaymentListFilter): Promise<PaginatedResu
   const rows = (await DataBase.instance.sequelize.query(
     `SELECT qp.id, qp.quotation_id, c.name AS client_name, qp.amount, qp.method, qp.paid_at, qp.notes,
             qp.operation_number, qp.payment_account_id, pa.name AS payment_account_name,
-            qp.is_deleted, q.business_unit_id, qp.created_at
+            qp.is_deleted, q.business_unit_id,
+            ${correctionsCountSql("quotation_payment", "qp.id")} AS corrections_count, qp.created_at
      FROM quotation_payment qp
      INNER JOIN quotation q ON q.id = qp.quotation_id
      INNER JOIN client c ON c.id = q.client_id
@@ -131,6 +136,7 @@ const getPaymentsList = async (filter: PaymentListFilter): Promise<PaginatedResu
     payment_account_name: row.payment_account_name,
     is_deleted: Boolean(row.is_deleted),
     business_unit_id: row.business_unit_id,
+    corrections_count: Number(row.corrections_count),
     created_at: new Date(row.created_at).toISOString(),
   }));
 

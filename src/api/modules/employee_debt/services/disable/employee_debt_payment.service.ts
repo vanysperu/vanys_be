@@ -1,100 +1,130 @@
-import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
-import { nowUtc } from "../../../../../utils/dateUtils";
+import { nowUtc, toDateOnlyString } from "../../../../../utils/dateUtils";
 import { formatSoles } from "../../../../../core/utils/money";
+import { WriteScope } from "../../../../../core/rbac/writeScope";
+import { beginCashChange, toggleAdjustmentValues } from "../../../../../core/money/cashPeriod";
+import { recordMoneyCorrection } from "../../../money_correction/services/create/money_correction.service";
+import { cashChangeNote } from "../../../cash_movement/services/update/cash_change_note";
 import { createLogService } from "../../../logs/services/create/log.services";
 import { LogAction } from "../../../logs/model/log.model";
+import { EmployeeDebtModel } from "../../model/employee_debt.model";
+import { recalculateDebtsState } from "../shared/debt_state.service";
+import { assertDebtsInWriteScope } from "../shared/debt_scope.service";
+import { lockWorkerDebtsAndPayment } from "../shared/reimbursement_lock.service";
 
+// Se conserva por compatibilidad del controller; el "no existe / fuera de
+// alcance" ahora sale como AppError 404 de lockWorkerDebtsAndPayment.
 export class EmployeeDebtPaymentNotFoundError extends Error {}
 export class EmployeeDebtPaymentAlreadyVoidedError extends Error {}
+
+const NOT_FOUND_MESSAGE = "La reposición no existe";
 
 // Anula una reposición registrada por error. Es de una sola vía (no se
 // "reactiva"): si después sí correspondía, se registra una reposición nueva,
 // que vuelve a validar contra lo pendiente en ese momento — reactivar una
 // vieja podía reponer de más.
 //
-// En una sola transacción, con la reposición y sus deudas bloqueadas:
-//   - cada deuda recupera exactamente lo que esta reposición le había
-//     cubierto (sus asignaciones) y vuelve a "pendiente";
-//   - la fecha del último abono de esas deudas se recalcula con las
-//     reposiciones que siguen vigentes;
+// En una sola transacción, con las deudas del trabajador y la reposición
+// bloqueadas (en ese orden, ver lockWorkerDebtsAndPayment):
+//   - la reposición queda anulada; sus asignaciones se conservan (historial)
+//     pero dejan de contar;
+//   - lo repuesto, el estado y la fecha del último abono de cada deuda que
+//     cubría se recalculan desde la fuente (recalculateDebtsState, nunca con
+//     restas): una deuda que otra reposición sigue cubriendo por completo
+//     queda "pagada", no "pendiente";
 //   - queda una fila inmutable en `log` (Caja es un libro contable: mismo
 //     criterio que anular un movimiento manual).
 const voidEmployeeDebtPayment = async ({
   paymentId,
-  companyId,
+  scope,
   voidedBy,
+  reason = null,
 }: {
   paymentId: number;
-  // null = Super Administrador (cualquier empresa).
-  companyId: number | null;
+  scope: WriteScope;
   voidedBy: number;
+  // Motivo del ajuste: solo se usa (y se exige) si la reposición es de un mes
+  // cerrado (cierre de caja, fase 2).
+  reason?: string | null;
 }) => {
   return DataBase.instance.sequelize.transaction(async (transaction) => {
-    const payment = await DataBase.instance.employee_debt_payment.findOne({
-      where: { id: paymentId },
+    const { payment, debts } = await lockWorkerDebtsAndPayment({
+      paymentId,
+      scope,
+      notFoundMessage: NOT_FOUND_MESSAGE,
       transaction,
-      lock: transaction.LOCK.UPDATE,
     });
-    // Otra empresa responde igual que "no existe": no se confirma que el id exista.
-    if (!payment || (companyId !== null && payment.company_id !== companyId)) {
-      throw new EmployeeDebtPaymentNotFoundError("La reposición no existe");
-    }
     if (payment.is_deleted) throw new EmployeeDebtPaymentAlreadyVoidedError("Esta reposición ya está anulada");
 
     const allocations = await DataBase.instance.employee_debt_payment_allocation.findAll({
       where: { employee_debt_payment_id: paymentId },
       transaction,
+      lock: transaction.LOCK.UPDATE,
     });
-    const debtIds = allocations.map((allocation) => allocation.employee_debt_id);
-    const now = nowUtc();
+    const debtIds = allocations.map((allocation) => Number(allocation.employee_debt_id));
+    const debtById = new Map(debts.map((debt) => [debt.id, debt]));
+    const coveredDebts = debtIds
+      .map((debtId) => debtById.get(debtId))
+      .filter((debt): debt is EmployeeDebtModel => debt !== undefined);
 
-    if (debtIds.length > 0) {
-      // Bloqueo explícito de las deudas antes de tocarlas (mismo orden que
-      // al reponer): una reposición simultánea al mismo trabajador espera.
-      await DataBase.instance.employee_debt.findAll({ where: { id: debtIds }, transaction, lock: transaction.LOCK.UPDATE });
+    // Un usuario ligado a una tienda solo anula reposiciones que cubren
+    // deudas de su tienda.
+    // No existe / fuera de alcance = AppError 404 (mismo status que antes).
+    await assertDebtsInWriteScope(coveredDebts, scope, NOT_FOUND_MESSAGE, transaction);
 
-      await DataBase.instance.sequelize.query(
-        `UPDATE employee_debt ed
-         INNER JOIN employee_debt_payment_allocation a
-           ON a.employee_debt_id = ed.id AND a.employee_debt_payment_id = :paymentId
-         SET ed.paid_amount = GREATEST(ed.paid_amount - a.amount, 0),
-             ed.status = 'pending',
-             ed.updated_by = :voidedBy,
-             ed.updated_at = :now`,
-        { type: QueryTypes.UPDATE, replacements: { paymentId, voidedBy, now }, transaction }
-      );
-    }
+    // Cierre de caja (fase 2): anular una reposición de un mes cerrado es un
+    // ajuste (motivo obligatorio): patas por cada asignación (tienda de la
+    // deuda/cotización), y lo repuesto de cada deuda se recalcula igual.
+    const paidAt = toDateOnlyString(payment.paid_at);
+    const change = await beginCashChange({
+      companyId: payment.company_id,
+      source: "employee_debt_payment",
+      sourceId: paymentId,
+      oldDate: paidAt,
+      newDate: paidAt,
+      movesCashAfter: false,
+      scope,
+      actorId: voidedBy,
+      transaction,
+    });
 
-    await payment.update({ is_deleted: true, updated_by: voidedBy, updated_at: now }, { transaction });
+    await payment.update({ is_deleted: true, updated_by: voidedBy, updated_at: nowUtc() }, { transaction });
+    await recalculateDebtsState(debtIds, transaction, voidedBy);
 
-    if (debtIds.length > 0) {
-      // Último abono vigente de cada deuda (o NULL si ya no le queda ninguno).
-      await DataBase.instance.sequelize.query(
-        `UPDATE employee_debt ed
-         SET ed.paid_at = (
-           SELECT MAX(p.paid_at)
-           FROM employee_debt_payment_allocation a
-           INNER JOIN employee_debt_payment p ON p.id = a.employee_debt_payment_id
-           WHERE a.employee_debt_id = ed.id AND p.is_deleted = false
-         )
-         WHERE ed.id IN (:debtIds)`,
-        { type: QueryTypes.UPDATE, replacements: { debtIds }, transaction }
-      );
-    }
+    const cash = await change.complete(async (kind) => {
+      // Una anulación normal no deja historial de corrección (solo el log).
+      if (kind !== "adjustment" || reason === null) return null;
+      const { previous, next } = toggleAdjustmentValues(true);
+      const correction = await recordMoneyCorrection({
+        sourceType: "employee_debt_payment",
+        sourceId: paymentId,
+        companyId: payment.company_id,
+        // Misma tienda que la corrección de una reposición: puede cubrir
+        // deudas de varias tiendas.
+        businessUnitId: null,
+        previous,
+        next,
+        reason,
+        actorId: voidedBy,
+        kind,
+        transaction,
+      });
+      return correction.id;
+    });
+    const reasonNote = cash.kind === "adjustment" && reason !== null ? `. Motivo: ${reason}` : "";
 
     await createLogService(
       {
         user_id: voidedBy,
         action: LogAction.DISABLE,
         module: "employee_debt",
-        description: `Anuló la reposición #${paymentId} de ${formatSoles(payment.amount)} al trabajador #${payment.user_id} (del ${payment.paid_at})`,
+        description: `Anuló la reposición #${paymentId} de ${formatSoles(payment.amount)} al trabajador #${payment.user_id} (del ${payment.paid_at})${cashChangeNote(cash)}${reasonNote}`,
         company_id: payment.company_id,
       },
       transaction
     );
 
-    return { id: paymentId, is_deleted: true };
+    return { id: paymentId, is_deleted: true, kind: cash.kind, adjusted_period: cash.adjustedPeriod };
   });
 };
 

@@ -1,7 +1,124 @@
 import { authedRequest, login, wordStamp } from "./apiClient";
 
 const ADMIN_ROLE_ID = 2;
+const GESTOR_ROLE_ID = 6; // rol plantilla "Gestor" (20260928110000-seed-gestor-role.js)
 const TEMPORARY_PASSWORD = "123456"; // DEFAULT_TEMPORARY_PASSWORD del backend
+const READY_PASSWORD = "Test1234";
+
+// Primer login con la contraseña temporal + cambio obligatorio + login final.
+async function activateUser(email: string): Promise<{ token: string; userId: number }> {
+  const first = await login(email, TEMPORARY_PASSWORD);
+  const changed = await authedRequest(first.token)
+    .patch("/user/change/password", { oldPassword: TEMPORARY_PASSWORD, newPassword: READY_PASSWORD });
+  if (changed.status !== 200) {
+    throw new Error(`no se pudo cambiar la contraseña temporal: ${JSON.stringify(changed.body)}`);
+  }
+  return login(email, READY_PASSWORD);
+}
+
+export interface CashClosingTestUser {
+  token: string;
+  userId: number;
+  email: string;
+}
+
+export interface CashClosingTestCompany {
+  companyId: number;
+  companyName: string;
+  storeId: number;
+  // Administrador de empresa sin tienda (rol plantilla Administrador: recibe
+  // todos los recursos cash_closing.* por el seeder 20261102100100).
+  admin: CashClosingTestUser;
+  // Gestor atado a `storeId` (rol plantilla Gestor: solo cash_closing.status.endpoint).
+  gestor: CashClosingTestUser;
+  // Administrador CON tienda (`storeId`): el cierre es por rol, así que igual
+  // ve y cierra la caja de toda su empresa ("todo admin ve lo de su empresa").
+  storeAdmin: CashClosingTestUser;
+  bankAccountId: number; // "BCP Cierre <stamp>"
+  yapeAccountId: number; // "Yape Cierre <stamp>"
+}
+
+/**
+ * Empresa DESECHABLE para probar el cierre de caja: "QA Cierre <stamp>" +
+ * una tienda + admin sin tienda + gestor atado a la tienda + 2 cuentas (banco
+ * y Yape). Los cierres no se pueden borrar, así que cada corrida usa una
+ * empresa nueva — NUNCA configurar la caja de "Acme Corp QA" (rompería los
+ * fixtures con fechas pasadas de las demás suites).
+ *
+ * `superToken`: un solo login del Super Administrador por suite (cada login
+ * nuevo invalida la sesión anterior del mismo usuario).
+ */
+export async function createCashClosingTestCompany(superToken: string): Promise<CashClosingTestCompany> {
+  const superApi = authedRequest(superToken);
+  const stamp = wordStamp().slice(0, 10);
+
+  const companyName = `QA Cierre ${stamp}`;
+  const company = await superApi.post("/company/create", {
+    ruc: `207${Date.now().toString().slice(-8)}`,
+    business_name: companyName,
+  });
+  // Las altas de empresa y tienda responden 201 (company/business_unit controllers).
+  if (company.status !== 201) throw new Error(`no se pudo crear la empresa: ${JSON.stringify(company.body)}`);
+  const companyId: number = company.body.data.id;
+
+  const store = await superApi.post("/business-unit/create", {
+    company_id: companyId,
+    business_code: `QC-${stamp.slice(0, 6)}`,
+  });
+  if (store.status !== 201) throw new Error(`no se pudo crear la tienda: ${JSON.stringify(store.body)}`);
+  const storeId: number = store.body.data.id;
+
+  const admin = await createUnscopedCompanyAdmin(superToken, companyId);
+
+  // Usuario de la empresa atado a `storeId` con el rol indicado.
+  const createStoreUser = async (label: string, roleId: number): Promise<CashClosingTestUser> => {
+    const email = `cierre.${label.toLowerCase()}.${wordStamp()}@acme.test`;
+    const created = await superApi.post("/user/create", {
+      name: "Cierre",
+      paternal_lastname: label,
+      document_type: 1,
+      document_number: `${Date.now()}`.slice(-8),
+      date_of_birth: "01/01/1990",
+      email,
+      status: true,
+      gender: 4,
+      company_id: companyId,
+      business_unit_id: storeId,
+      roleIds: roleId,
+    });
+    if (created.status !== 200) {
+      throw new Error(`no se pudo crear el usuario ${label}: ${JSON.stringify(created.body)}`);
+    }
+    return { ...(await activateUser(email)), email };
+  };
+  const gestor = await createStoreUser("Gestor", GESTOR_ROLE_ID);
+  const storeAdmin = await createStoreUser("Tienda", ADMIN_ROLE_ID);
+
+  const adminApi = authedRequest(admin.token);
+  const createAccount = async (name: string, prefix: "bank" | "yape"): Promise<number> => {
+    const res = await adminApi.post("/variable_general/create", {
+      category: "payment_account",
+      title: "Cuenta",
+      prefix_id: prefix,
+      name,
+      ref1: "123",
+      company_id: companyId,
+    });
+    if (res.status !== 200) throw new Error(`no se pudo crear la cuenta ${name}: ${JSON.stringify(res.body)}`);
+    return res.body.data.id as number;
+  };
+
+  return {
+    companyId,
+    companyName,
+    storeId,
+    admin,
+    gestor,
+    storeAdmin,
+    bankAccountId: await createAccount(`BCP Cierre ${stamp.slice(0, 6)}`, "bank"),
+    yapeAccountId: await createAccount(`Yape Cierre ${stamp.slice(0, 6)}`, "yape"),
+  };
+}
 
 /**
  * Crea un Administrador de empresa SIN tienda asignada y devuelve su token

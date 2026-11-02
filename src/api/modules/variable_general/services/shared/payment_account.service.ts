@@ -1,4 +1,4 @@
-import { QueryTypes } from "sequelize";
+import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { AppError } from "../../../../../core/errors/AppError";
 
@@ -24,10 +24,15 @@ export const resolvePaymentAccountId = async ({
   accountId,
   companyId,
   required,
+  transaction,
 }: {
   accountId: unknown;
   companyId: number;
   required: boolean;
+  // Si el caller está dentro de una transacción, se pasa: con el pool chico
+  // (max 5) pedir otra conexión mientras se sostiene una con filas
+  // bloqueadas puede agotar el pool bajo carga.
+  transaction?: Transaction;
 }): Promise<number | null> => {
   const isEmpty = accountId === null || accountId === undefined || accountId === "";
 
@@ -35,6 +40,7 @@ export const resolvePaymentAccountId = async ({
     if (!required) return null;
     const configured = await DataBase.instance.variable_general.count({
       where: { category: PAYMENT_ACCOUNT_CATEGORY, company_id: companyId, is_deleted: false },
+      transaction,
     });
     if (configured === 0) return null;
     throw new AppError(400, "Indica a qué cuenta (banco, Yape o Plin) fue el dinero", undefined, "PAYMENT_ACCOUNT_REQUIRED");
@@ -45,6 +51,7 @@ export const resolvePaymentAccountId = async ({
 
   const account = await DataBase.instance.variable_general.findOne({
     where: { id: parsedId, category: PAYMENT_ACCOUNT_CATEGORY },
+    transaction,
   });
   if (!account) throw new AppError(404, "La cuenta seleccionada no existe");
   if (account.company_id !== companyId) throw new AppError(403, "La cuenta seleccionada no pertenece a esta empresa");
@@ -56,12 +63,19 @@ export const resolvePaymentAccountId = async ({
 
 // Tablas que guardan la cuenta por la que se movió un dinero. Una cuenta que
 // aparece en cualquiera de ellas es parte de la historia de Caja.
+// Las tres últimas son del cierre de caja (saldo inicial declarado, saldos de
+// un mes cerrado y patas de ajuste): tienen FK RESTRICT a general_variable,
+// así que sin revisarlas acá borrar o re-categorizar la cuenta fallaba con un
+// error crudo de la base (500) en vez del 409 PAYMENT_ACCOUNT_IN_USE.
 const PAYMENT_ACCOUNT_REFERENCES = [
   "quotation_payment",
   "quotation_expense",
   "cash_movement",
   "employee_debt_payment",
   "employee_debt",
+  "cash_ledger_opening",
+  "cash_period_balance",
+  "cash_adjustment_entry",
 ] as const;
 
 export const isPaymentAccountInUse = async (accountId: number): Promise<boolean> => {

@@ -33,6 +33,12 @@ export const paginationAndFilterValidator = [
     .optional()
     .isBoolean()
     .withMessage("El parámetro 'admin' debe ser un booleano."),
+  // Modo de gestión (pantalla Variables Generales): excluye las globales para
+  // usuarios de empresa. Sin este parámetro el listado incluye las globales.
+  query("scope")
+    .optional()
+    .isIn(["manage"])
+    .withMessage("El parámetro 'scope' solo admite el valor 'manage'."),
 ];
 
 // ✨ Validar creación de registro

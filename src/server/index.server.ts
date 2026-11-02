@@ -32,6 +32,7 @@ import { router as CustomizationTechniqueRoutes } from "../api/modules/customiza
 import { router as QuotationRoutes } from "../api/modules/quotation/routes/quotation.routes";
 import { router as PurchaseOrderRoutes } from "../api/modules/purchase_order/routes/purchase_order.routes";
 import { router as CashMovementRoutes } from "../api/modules/cash_movement/routes/cash_movement.routes";
+import { router as CashClosingRoutes } from "../api/modules/cash_closing/routes/cash_closing.routes";
 import { router as PaymentRoutes } from "../api/modules/payment/routes/payment.routes";
 import { router as EmployeeDebtRoutes } from "../api/modules/employee_debt/routes/employee_debt.routes";
 import { router as ReceivableRoutes } from "../api/modules/receivable/routes/receivable.routes";
@@ -143,6 +144,7 @@ export default class Server {
     this._router.use("/quotation", QuotationRoutes);
     this._router.use("/purchase-order", PurchaseOrderRoutes);
     this._router.use("/cash-movement", CashMovementRoutes);
+    this._router.use("/cash-closing", CashClosingRoutes);
     this._router.use("/payment", PaymentRoutes);
     this._router.use("/employee-debt", EmployeeDebtRoutes);
     this._router.use("/receivable", ReceivableRoutes);

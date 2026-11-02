@@ -36,9 +36,15 @@ export interface KpiValues {
   // Monto promedio de una cotización ganada; null si no hubo ninguna.
   average_ticket: number | null;
   // Caja del periodo: pagos de clientes, otros ingresos y egresos.
+  // Las patas "Valor al cierre" de un mes cerrado ya van dentro de estos
+  // tres (con signo), así un mes cerrado muestra lo mismo que al cerrarse.
   collected: number;
   other_income: number;
   expenses: number;
+  // Cierre de caja: diferencias de meses cerrados registradas en el periodo
+  // (patas "Ajuste", con su efecto en el saldo). 0 si no hubo.
+  adjustments: number;
+  // collected + other_income − expenses + adjustments (= neto de Caja).
   net_cash: number;
   // Margen de las ganadas del periodo: subtotal (sin IGV) - gastos
   // registrados en esas cotizaciones. Estimado: un gasto aún no cargado no
@@ -55,6 +61,8 @@ export interface TrendPoint {
   // Pagos de clientes + otros ingresos de caja.
   income: number;
   expenses: number;
+  // Ajustes de meses cerrados registrados en el tramo (efecto en el saldo).
+  adjustments: number;
 }
 
 export interface StatusBreakdownItem {

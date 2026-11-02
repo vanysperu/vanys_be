@@ -1,10 +1,35 @@
 import { FindAndCountOptions, Op, WhereOptions } from "sequelize";
 import { DataBase } from "../../../../../database";
-import { PurchaseOrderAttributes } from "../../model/purchase_order.model";
+import { PurchaseOrderAttributes, PurchaseOrderModel } from "../../model/purchase_order.model";
+import { PurchaseOrderItemAttributes } from "../../model/purchase_order_item.model";
+import { loadPurchasesByItemIds, PurchaseListItem } from "./purchase_order_item_purchase.service";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
 
 const ACTOR_ATTRIBUTES = ["id", "name", "paternal_lastname"];
+
+// Orden ya serializada, con cada item y sus compras (anuladas incluidas,
+// con is_deleted y corrections_count). El `include` de items no se refleja
+// en el tipo de toJSON() (limitación de Sequelize): se tipa acá.
+type PurchaseOrderItemJson = PurchaseOrderItemAttributes & Record<string, unknown>;
+export type PurchaseOrderWithItems = PurchaseOrderAttributes &
+  Record<string, unknown> & { items: (PurchaseOrderItemJson & { purchases: PurchaseListItem[] })[] };
+
+// Las compras de todos los items de las órdenes en UNA consulta (nunca una
+// por item) — reemplaza el include "purchases", que no traía el gasto, la
+// deuda ni las correcciones.
+const withPurchases = async (orders: PurchaseOrderModel[]): Promise<PurchaseOrderWithItems[]> => {
+  const plainOrders = orders.map(
+    (order) => order.toJSON() as unknown as PurchaseOrderAttributes & Record<string, unknown> & { items?: PurchaseOrderItemJson[] }
+  );
+  const itemIds = plainOrders.flatMap((order) => (order.items ?? []).map((item) => Number(item.id)));
+  const purchasesByItem = await loadPurchasesByItemIds(itemIds);
+
+  return plainOrders.map((order) => ({
+    ...order,
+    items: (order.items ?? []).map((item) => ({ ...item, purchases: purchasesByItem.get(Number(item.id)) ?? [] })),
+  }));
+};
 
 export interface PurchaseOrderListFilter {
   companyId?: number | null;
@@ -105,7 +130,6 @@ const getPurchaseOrdersList = async ({
         association: "items",
         include: [
           { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name"] }] },
-          { association: "purchases" },
         ],
       },
     ],
@@ -117,11 +141,11 @@ const getPurchaseOrdersList = async ({
   };
 
   const { count, rows } = await DataBase.instance.purchase_order.findAndCountAll(queryOptions);
-  return { data: rows, meta: buildPaginationMeta(count, page, limit) };
+  return { data: await withPurchases(rows), meta: buildPaginationMeta(count, page, limit) };
 };
 
-const getPurchaseOrderById = async (id: number) => {
-  return DataBase.instance.purchase_order.findOne({
+const getPurchaseOrderById = async (id: number): Promise<PurchaseOrderWithItems | null> => {
+  const purchaseOrder = await DataBase.instance.purchase_order.findOne({
     where: { id },
     include: [
       { association: "quotation", attributes: ["id", "status", "company_id", "business_unit_id"] },
@@ -131,11 +155,13 @@ const getPurchaseOrderById = async (id: number) => {
         association: "items",
         include: [
           { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name"] }] },
-          { association: "purchases" },
         ],
       },
     ],
   });
+  if (!purchaseOrder) return null;
+  const [withItems] = await withPurchases([purchaseOrder]);
+  return withItems ?? null;
 };
 
 export { getPurchaseOrdersList, getPurchaseOrderById };

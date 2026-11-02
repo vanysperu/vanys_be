@@ -11,6 +11,23 @@
 | POST   | /purchase-order/create                | create                          | purchase_order |
 | PUT    | /purchase-order/item/:itemId/status   | cambiar estado de un item (pending/not_needed) | purchase_order |
 | POST   | /purchase-order/item/:itemId/purchases | registrar una compra de un item | purchase_order |
+| GET    | /purchase-order/purchase/find/:id      | compra por id (diálogo de corrección) | purchase_order (`purchase_order.purchase.find.endpoint`) |
+| PUT    | /purchase-order/purchase/update/:id    | corregir compra                  | purchase_order (`purchase_order.purchase.update.button`) |
+| PUT    | /purchase-order/purchase/disable/:id   | anular compra (una sola vía)     | purchase_order (`purchase_order.purchase.disable.button`) |
+| GET    | /purchase-order/purchase/:id/corrections | historial de correcciones (pag) | purchase_order (`purchase_order.purchase.corrections.button`) |
+
+### Corrección y anulación de compras
+- Campos corregibles: `amount`, `quantity` (entero ≥ 1), `funding_source`, `paid_by_user_id`, `payment_account_id` (solo con plata de la empresa), `spent_at` (fecha del gasto = `incurred_at` de la deuda). NO: el item ni la cotización. Motivo obligatorio; sin cambios → 400 `NO_CHANGES`.
+- Bloqueo SIEMPRE en el orden item → orden → compra → gasto → deuda (`services/shared/purchase_lock.service.ts`). Fuera del alcance de escritura → 404 (la excepción "el asignado puede tocar el item" no aplica a corregir/anular).
+- Cantidad: subirla por encima de lo que falta sin `allow_exceed` → 409 `PURCHASE_EXCEEDS_REMAINING` (con `ordered/already_purchased/requested`). Estado del item y de la orden se recalculan desde las compras NO anuladas (`services/shared/purchase_order_status.service.ts`, único cálculo — también lo usan registrar compra y cambiar estado de item). La descripción del gasto se rehace (`Compra: <producto> x<cant>[adicional]`) conservando las notas después del primer " — ".
+- Monto: se escribe en compra, gasto y deuda juntos. Con plata del trabajador y monto < lo ya repuesto → 409 `DEBT_BELOW_REIMBURSED`; igual → la deuda queda pagada. El estado de la deuda sale siempre de `recalculateDebtsState`.
+- Empresa → trabajador: cuenta en el body → 400 `PAYMENT_ACCOUNT_NOT_ALLOWED`; trabajador inactivo o de otra empresa → 400 `EMPLOYEE_NOT_AVAILABLE` (sin indicarlo, el que corrige, igual que al registrar). Se crea la deuda o se reactiva la anulada de esa compra (UNIQUE `purchase_order_item_purchase_id`). Trabajador → empresa o cambio de trabajador: solo sin nada repuesto (deuda anulada / reasignada); si no → 409 `PURCHASE_DEBT_REIMBURSED`. Explícito `paid_by_user_id` con plata de la empresa → 400 `PAID_BY_NOT_ALLOWED`.
+- Anular: con algo repuesto → 409 `PURCHASE_DEBT_REIMBURSED`; ya anulada → 409 `PURCHASE_ANNULLED` (también al corregir). Marca compra y gasto `is_deleted`, anula la deuda, recalcula item y orden. Sin restauración.
+- Historial: `money_correction` con fuente `quotation_expense` y el id del GASTO (la fila de Caja); guarda `payment_account_name`, `paid_by_user_name` y, si la deuda cambió, `debt_amount`/`debt_status` antes/después. Evento `purchase_updated` / `purchase_disabled` en la cotización + log.
+- Cierre mensual de caja (fase 2), con el id del GASTO como fila de Caja: registrar una compra es siempre hoy (mes abierto). Corregir o anular una compra **pagada por la empresa** de un mes cerrado es un **ajuste** (en el lugar + patas `hold`/`posting` + `money_correction.kind = 'adjustment'`; requiere `cash_closing.adjust.button`, si no 403 `CASH_PERIOD_ADJUST_FORBIDDEN`). Pasar de trabajador a empresa (o al revés) en un mes cerrado también deja patas; cambiar el monto de una compra del trabajador o la cantidad, no (no mueven caja). `PUT /purchase-order/purchase/disable/:id` acepta `{ reason?: string }` (5–500), obligatorio solo si es ajuste (400 `ADJUSTMENT_REASON_REQUIRED`). Mover `spent_at` a un mes cerrado (o a otro día dentro de él) → 409 `CASH_PERIOD_CLOSED`, aunque la compra sea del trabajador. Respuestas con `kind` y `adjusted_period`.
+- Invariante (revisado por SQL en tests/purchase-expense-correction.test.ts): cada compra vigente con plata de un trabajador tiene exactamente una deuda vigente con amount = compra = gasto, user_id = paid_by_user_id, incurred_at = spent_at; una compra de la empresa o anulada no tiene deuda vigente.
+- `GET /list` y `GET /find/:id` devuelven en cada item sus compras (anuladas incluidas) con `is_deleted`, gasto (`spent_at`, cuenta), quién pagó, deuda vigente y `corrections_count` — una sola consulta para todos los items.
+- Registrar compra / cambiar estado de item: alcance de ESCRITURA (un usuario ligado a una tienda no compra en otra aunque tenga "ver todas las tiendas"; el asignado sigue pudiendo).
 
 No existe acción de deshabilitar — una orden de compra no se "deshabilita",
 su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
@@ -23,6 +40,9 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
 - purchase_order.create.button
 - purchase_order.item.updateStatus.button
 - purchase_order.item.registerPurchase.button
+- purchase_order.purchase.update.button (lápiz por compra en el checklist, Gastos de la cotización y Caja)
+- purchase_order.purchase.disable.button (anular compra en el checklist)
+- purchase_order.purchase.corrections.button (abrir el badge "Corregido (n)")
 
 ## Reglas de negocio propias del módulo
 - Una orden de compra no tiene columna propia de tienda: hereda la de su

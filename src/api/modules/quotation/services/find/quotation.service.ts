@@ -2,6 +2,8 @@ import { FindAndCountOptions, literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
+import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
+import { loadCorrectionCounts } from "../../../money_correction/services/shared/corrections_count";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
 import { RECEIVABLE_MIN_BALANCE, RECEIVABLE_STATUSES } from "../../../receivable/services/find/receivable.service";
@@ -154,4 +156,50 @@ const getQuotationById = async (id: number) => {
   });
 };
 
-export { getQuotationsList, getQuotationById };
+// Gasto tal como lo muestra la pestaña Gastos: con `is_deleted` (los anulados
+// se ven tachados y no suman), la compra a la que pertenece (purchase_id:
+// esos se corrigen/anulan como compra) y cuántas correcciones tiene.
+export type QuotationExpenseListItem = QuotationExpenseAttributes & {
+  purchase_id: number | null;
+  corrections_count: number;
+};
+
+type QuotationDetailJson = QuotationAttributes & { expenses?: QuotationExpenseAttributes[] };
+
+/**
+ * Detalle de la cotización para la pantalla (GET /quotation/find/:id): el de
+ * getQuotationById más, en cada gasto, purchase_id y corrections_count. Dos
+ * consultas por IN sobre los ids de los gastos (nunca una por gasto). El PDF
+ * sigue usando getQuotationById (no necesita esto).
+ */
+const getQuotationDetailById = async (id: number) => {
+  const quotation = await getQuotationById(id);
+  if (!quotation) return null;
+
+  // `include` no se refleja en el tipo de toJSON() (misma limitación de
+  // Sequelize comentada en quotation_pdf.service.ts): paso por `unknown`.
+  const plain = quotation.toJSON() as unknown as QuotationDetailJson;
+  const expenses = plain.expenses ?? [];
+  const expenseIds = expenses.map((expense) => Number(expense.id));
+
+  const [purchases, correctionCounts] = await Promise.all([
+    expenseIds.length === 0
+      ? Promise.resolve([])
+      : DataBase.instance.purchase_order_item_purchase.findAll({
+          where: { quotation_expense_id: expenseIds },
+          attributes: ["id", "quotation_expense_id"],
+        }),
+    loadCorrectionCounts("quotation_expense", expenseIds),
+  ]);
+  const purchaseIdByExpense = new Map(purchases.map((purchase) => [Number(purchase.quotation_expense_id), purchase.id]));
+
+  const enrichedExpenses: QuotationExpenseListItem[] = expenses.map((expense) => ({
+    ...expense,
+    purchase_id: purchaseIdByExpense.get(Number(expense.id)) ?? null,
+    corrections_count: correctionCounts.get(Number(expense.id)) ?? 0,
+  }));
+
+  return { ...plain, expenses: enrichedExpenses };
+};
+
+export { getQuotationsList, getQuotationById, getQuotationDetailById };

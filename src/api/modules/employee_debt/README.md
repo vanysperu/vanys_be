@@ -13,6 +13,21 @@
 | PUT    | /employee-debt/pay/:userId           | registra una reposición (total o parcial, FIFO)               | employee_debt   |
 | GET    | /employee-debt/payments?userId=      | historial de reposiciones (pag)                               | employee_debt   |
 | PUT    | /employee-debt/payment/disable/:id   | anula una reposición registrada por error                     | employee_debt   |
+| GET    | /employee-debt/find/:id              | una deuda (diálogo "Corregir deuda")                          | employee_debt   |
+| PUT    | /employee-debt/update/:id            | corrige una deuda MANUAL (motivo + historial)                 | employee_debt   |
+| GET    | /employee-debt/:id/corrections       | historial de correcciones de una deuda (pag)                  | employee_debt   |
+| GET    | /employee-debt/payment/find/:id      | una reposición con su reparto y las deudas pendientes         | employee_debt   |
+| PUT    | /employee-debt/payment/update/:id    | corrige una reposición: monto, fecha, cuenta (re-reparto)     | employee_debt   |
+| GET    | /employee-debt/payment/:id/corrections | historial de correcciones de una reposición (pag)           | employee_debt   |
+
+Resources (seeder `20261101110100-seed-money-correction-resources.js`, WP0):
+`employee_debt.find.endpoint` y `employee_debt.update.button` (otorgados
+como `employee_debt.disable.button`), `employee_debt.corrections.button`
+(como `employee_debt.list.endpoint`), `employee_debt.payment.find.endpoint`
+y `employee_debt.payment.update.button` (como
+`employee_debt.payment.disable.button`),
+`employee_debt.payment.corrections.button` (como
+`employee_debt.payments.endpoint`).
 
 ## Vistas de frontend vinculadas
 - employee_debt.list (`/deudas-personal`) — "¿a quién se le debe y cuánto?",
@@ -24,6 +39,12 @@
 - employee_debt.create.button — "Registrar deuda" (deuda manual).
 - employee_debt.disable.button — "Anular deuda" (manual, sin reposiciones).
 - employee_debt.payment.disable.button — "Anular reposición".
+- employee_debt.update.button — lápiz "Corregir deuda" (solo manuales).
+- employee_debt.payment.update.button — lápiz "Corregir reposición".
+- employee_debt.corrections.button / employee_debt.payment.corrections.button —
+  badge "Corregido (n)" clicable (abre el historial).
+- Los diálogos `CorrectManualDebtDialog` y `CorrectReimbursementDialog`
+  (grulla_fe `modules/employeeDebts/components`) se usan también desde Caja.
 - Endpoints de lectura: employee_debt.list.endpoint,
   employee_debt.detail.endpoint, employee_debt.payments.endpoint.
 
@@ -67,7 +88,67 @@ quien lista; acciones → quien repone).
   simultáneas.
 - La cuenta debe ser de la empresa del trabajador y estar activa.
 
-### Corregir errores (siempre por anulación, nunca editando montos)
+### Corregir en el lugar (solo admin; motivo 5–500 obligatorio)
+Cada corrección es UNA transacción: cambia la fila, recalcula lo derivado
+desde la fuente (`services/shared/debt_state.service.ts`,
+`recalculateDebtsState`: paid_amount = Σ asignaciones vigentes, status,
+paid_at), inserta la fila inmutable de `money_correction` (solo lo que
+cambió + nombres del momento) y escribe `log`. Sin cambios → 400
+`NO_CHANGES`.
+
+- **Deuda manual** (`PUT /update/:id`): monto, descripción, categoría (misma
+  regla que al crear), `incurred_at`, tienda (de la empresa; un usuario
+  ligado a una tienda solo la suya) y trabajador (solo con nada repuesto,
+  activo, misma empresa → si no 409 `DEBT_REIMBURSED` / 400
+  `EMPLOYEE_NOT_AVAILABLE`). Monto < lo repuesto → 409
+  `DEBT_BELOW_REIMBURSED` (igual = queda pagada). Anulada → 409
+  `DEBT_CANCELLED`. De una compra → 409 `DEBT_FROM_PURCHASE` (se corrige
+  desde la compra). No mueve Caja.
+- **Reposición** (`PUT /payment/update/:id`): monto, `paid_at` (regla
+  `moneyDateRule`) y cuenta (la misma se conserva aunque esté deshabilitada;
+  una nueva debe ser de la empresa y activa; `null` = efectivo). El
+  trabajador no (400). Anulada → 409 `REIMBURSEMENT_ANNULLED`.
+  Re-reparto en céntimos (`services/shared/reimbursement_allocation.ts`,
+  función pura que el front replica para la vista previa):
+  - bajar: se achican SUS asignaciones desde la deuda creada más
+    recientemente (LIFO); una asignación que llega a 0 se borra (la foto
+    completa queda en el historial, `allocations` antes/después);
+  - subir: primero se completan las deudas que ya cubre (FIFO), después las
+    demás pendientes del trabajador (FIFO); más que lo pendiente → 400
+    `REIMBURSEMENT_EXCEEDS_PENDING`.
+  Orden de escritura pensado para los CHECK (asignación > 0, paid_amount ≤
+  amount): primero asignaciones (borrar/actualizar/crear con su monto
+  final), luego la reposición, al final `recalculateDebtsState`. Caja suma la
+  reposición como Σ asignaciones con su fecha y cuenta, así que queda
+  reflejada sola.
+- **Bloqueos**: corregir/anular una reposición bloquea primero TODAS las
+  deudas del trabajador (por id) y después la reposición
+  (`services/shared/reimbursement_lock.service.ts`). Es el mismo orden en
+  que `recalculateDebtsState` lee las reposiciones (sus subconsultas toman
+  bloqueos compartidos), así no hay interbloqueo con reponer, corregir una
+  deuda o una compra. Lo que se lee después del bloqueo es con `FOR UPDATE`.
+- **Alcance de escritura** (`resolveWriteScope`) en crear, reponer, anular
+  deuda, anular reposición y corregir: la tienda de una deuda es la de la
+  cotización de su compra o, si es manual, la suya
+  (`services/shared/debt_scope.service.ts`). Un usuario ligado a una tienda
+  solo registra deudas en su tienda, solo repone (y re-reparte) entre deudas
+  de su tienda y solo anula/corrige reposiciones que cubren deudas de su
+  tienda; fuera → 404.
+- **Cierre mensual de caja (fase 2)**: las deudas manuales no mueven caja:
+  crearlas, corregirlas o anularlas nunca se bloquea ni deja patas, aunque
+  `incurred_at` caiga en un mes cerrado. Reponer es siempre hoy (mes abierto).
+  Corregir o anular una **reposición** de un mes cerrado es un **ajuste**: la
+  reposición se corrige en el lugar (lo repuesto, el estado y el último abono
+  de cada deuda se recalculan desde la fuente) y la diferencia en caja se
+  registra con patas `hold`/`posting` por asignación (tienda de cada
+  deuda/cotización) y `money_correction.kind = 'adjustment'`. Requiere
+  `cash_closing.adjust.button` (403 `CASH_PERIOD_ADJUST_FORBIDDEN`).
+  `PUT /employee-debt/payment/disable/:id` acepta `{ reason?: string }`
+  (5–500), obligatorio solo si es ajuste (400 `ADJUSTMENT_REASON_REQUIRED`).
+  Mover `paid_at` a un mes cerrado → 409 `CASH_PERIOD_CLOSED`. Respuestas con
+  `kind` y `adjusted_period`.
+
+### Anular (sigue disponible)
 - **Anular una reposición**: sale de Caja y cada deuda recupera exactamente
   lo que esa reposición le cubrió (vuelve a pendiente). Es de una sola vía:
   si después sí correspondía, se registra una nueva (que vuelve a validar
@@ -76,7 +157,10 @@ quien lista; acciones → quien repone).
   409: primero se anula la reposición). Las deudas de compras no se anulan
   acá (se corrigen desde su orden de compra). Estado final `cancelled`: no
   cuenta en ningún total ni en Caja.
-- Cada anulación y cada deuda manual dejan una fila inmutable en `log`.
+- Anular una reposición recalcula las deudas desde la fuente
+  (`recalculateDebtsState`): una deuda que otra reposición sigue cubriendo
+  completa queda "pagada" (antes quedaba "pendiente" siempre).
+- Cada anulación, corrección y deuda manual dejan una fila inmutable en `log`.
 
 ### Invariantes (las cuidan los services, y la base con CHECKs)
 - Suma de las asignaciones de una reposición = su monto.

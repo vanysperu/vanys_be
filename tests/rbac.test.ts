@@ -77,6 +77,7 @@ describe("RBAC — Gestor vs Administrador en los módulos nuevos", () => {
       amount: 45,
       method: "cash",
       paid_at: "2026-10-11",
+      reason: "Corrección de prueba",
     });
     expect(updateRes.status).toBe(200);
 

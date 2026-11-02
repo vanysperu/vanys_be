@@ -30,9 +30,25 @@
   de ofrecerse en los selectores y su historial se conserva. La base también
   lo impide (llaves `RESTRICT`).
 - `company_id = NULL` significa variable **global**, visible para todas las
-  empresas (ej. tipos de documento, etapas de producción por defecto). Solo
-  un usuario `is_system` puede crear/editar/deshabilitar una fila con
-  `company_id NULL`; un usuario de empresa siempre queda forzado a la suya.
+  empresas (ej. tipos de documento, etapas de producción por defecto, métodos
+  de pago). **Solo el Super Administrador (`is_system`) las ve en la pantalla
+  de gestión y las crea/edita/deshabilita/elimina.** Un Administrador de
+  empresa conserva la pantalla pero ahí gestiona únicamente las filas de SU
+  empresa; al crear, `company_id` siempre queda forzado a la suya (se ignora
+  lo que mande el body) y el update nunca modifica `company_id`.
+- **Parámetro `scope=manage`** (`GET /variable_general/list`, solo valor
+  permitido `manage`): modo de la pantalla de gestión. Para un usuario no
+  `is_system` filtra `company_id = <suya>` estrictamente (sin filas globales);
+  para `is_system` no cambia nada. **Sin `scope`** el listado sigue incluyendo
+  las globales, porque los selectores de otras pantallas (Caja, Pagos, kanban
+  de etapas, cuentas de pago, documentos, deudas) las necesitan; solo
+  `VariableGeneralPage` envía `scope=manage`.
+- **403 `GLOBAL_VARIABLE_FORBIDDEN`**: un usuario no `is_system` que pide
+  detalle (`GET /detail/:id`), edita, deshabilita o elimina una fila global
+  recibe 403 con ese `code`. Una fila inexistente o de otra empresa sigue
+  siendo "no encontrada" (404 / `null`), sin revelar que existe.
+  Implementado en `services/shared/variable_scope.service.ts`
+  (`loadManageableVariable`).
 - El listado en modo "select" (`admin=false`) solo devuelve `{value, name}`
   para alimentar `<select>` de otros formularios (no pagina igual que la
   pantalla de administración).

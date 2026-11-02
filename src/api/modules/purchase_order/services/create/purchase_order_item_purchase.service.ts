@@ -1,9 +1,12 @@
-import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
 import { createQuotationExpense } from "../../../quotation/services/create/quotation_expense.service";
-import { PurchaseOrderItemModel } from "../../model/purchase_order_item.model";
-import { PurchaseOrderItemPurchaseModel } from "../../model/purchase_order_item_purchase.model";
+import {
+  recalculateItemStatus,
+  recalculatePurchaseOrderStatus,
+  sumPurchasedQuantity,
+} from "../shared/purchase_order_status.service";
+import { buildPurchaseExpenseDescription, notesToSuffix } from "../shared/purchase_expense_description";
 import { QuotationItemAttributes } from "../../../quotation/model/quotation_item.model";
 import { ProductAttributes } from "../../../product/model/product.model";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
@@ -51,25 +54,6 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   paymentAccountId?: unknown;
   createdBy?: number;
 }
-
-// El estado de la orden de compra NUNCA se pone a mano — se calcula solo a
-// partir de sus items (ver también purchase_order_item.service.ts). Recibe
-// la `transaction` del caller (antes se llamaba DESPUÉS del commit, sin
-// transacción propia — dos compras de items DISTINTOS de la misma orden
-// completándose en paralelo podían pisarse el estado final: CLAUDE.md
-// sección 12 exige transacción en toda escritura multi-paso).
-const recalculatePurchaseOrderStatus = async (purchaseOrderId: number, transaction: Transaction) => {
-  const items = await DataBase.instance.purchase_order_item.findAll({
-    where: { purchase_order_id: purchaseOrderId },
-    transaction,
-  });
-  const hasPending = items.some((item: PurchaseOrderItemModel) => item.status === "pending");
-
-  await DataBase.instance.purchase_order.update(
-    { status: hasPending ? "pending" : "purchased", purchased_at: hasPending ? null : nowUtc(), updated_at: nowUtc() },
-    { where: { id: purchaseOrderId }, transaction }
-  );
-};
 
 // Un producto de una orden puede conseguirse en varias compras distintas
 // (500 lapiceros: 100 acá, 200 allá, 200 más allá) — cada compra registra
@@ -124,21 +108,20 @@ const createPurchaseOrderItemPurchase = async ({
     // reposición, que registra su propia cuenta (Deudas a personal).
     const expenseAccountId =
       fundingSource === "company"
-        ? await resolvePaymentAccountId({ accountId: paymentAccountId, companyId: purchaseOrder.company_id, required: false })
+        ? await resolvePaymentAccountId({
+            accountId: paymentAccountId,
+            companyId: purchaseOrder.company_id,
+            required: false,
+            transaction,
+          })
         : null;
 
     // Comprar por encima de lo que falta exige confirmación explícita
     // (allowExceed). Sin confirmar, se rechaza: un "compré 500" en vez de
     // "50" por error de tipeo inflaría el gasto real de la cotización (y, si
     // era plata del trabajador, su deuda) sin que nadie lo note.
-    const previousPurchasesBefore = await DataBase.instance.purchase_order_item_purchase.findAll({
-      where: { purchase_order_item_id: itemId },
-      transaction,
-    });
-    const totalPurchasedBefore = previousPurchasesBefore.reduce(
-      (sum: number, row: PurchaseOrderItemPurchaseModel) => sum + row.quantity,
-      0
-    );
+    // Solo compras vigentes: una anulada ya no cuenta como comprada.
+    const totalPurchasedBefore = await sumPurchasedQuantity(itemId, transaction);
     const remaining = Math.max(item.quantity - totalPurchasedBefore, 0);
     const exceeds = quantity > remaining;
     if (exceeds && !allowExceed) {
@@ -152,25 +135,29 @@ const createPurchaseOrderItemPurchase = async ({
       );
     }
 
+    // Día calendario de Lima: el MISMO para el gasto y la deuda (invariante
+    // incurred_at = spent_at).
+    const spentAt = todayInBusinessTz();
     const productName = (item as unknown as ItemWithQuotationItem).quotationItem?.product?.name ?? "producto";
     // Una compra adicional confirmada queda marcada en el gasto, para que
     // quien revise los gastos de la cotización entienda por qué se compró
     // más de lo pedido.
-    const extraNote = exceeds ? ` (compra adicional: ${quantity - remaining} por encima de lo pedido)` : "";
+    const extraQuantity = exceeds ? quantity - remaining : 0;
     const expense = await createQuotationExpense({
       quotationId: purchaseOrder.quotation_id,
       input: {
-        description: notes
-          ? `Compra: ${productName} x${quantity}${extraNote} — ${notes}`
-          : `Compra: ${productName} x${quantity}${extraNote}`,
+        description: buildPurchaseExpenseDescription(productName, quantity, extraQuantity, notesToSuffix(notes)),
         amount,
         category: "compra",
         // Día calendario de Lima: antes era el día UTC, así que una compra
         // registrada después de las 7 p. m. quedaba con fecha de mañana.
-        spent_at: todayInBusinessTz(),
+        spent_at: spentAt,
         payment_account_id: expenseAccountId,
       },
       createdBy,
+      // Plata del trabajador: no mueve la caja de la empresa (gancho de
+      // cierre de caja, ver core/money/cashPeriod.ts).
+      movesCash: fundingSource === "company",
       // MUY IMPORTANTE: sin esto, el gasto (y su evento del timeline) se
       // guardaban sueltos, fuera de esta transacción — si algo fallaba
       // después (ej. una columna demasiado corta), el gasto ya quedaba
@@ -188,6 +175,7 @@ const createPurchaseOrderItemPurchase = async ({
         amount,
         funding_source: fundingSource,
         paid_by_user_id: fundingSource === "employee" ? paidByUserId ?? null : null,
+        is_deleted: false,
         created_by: createdBy ?? null,
         created_at: nowUtc(),
         updated_by: null,
@@ -212,7 +200,8 @@ const createPurchaseOrderItemPurchase = async ({
           category: null,
           // La tienda la da la cotización de la orden.
           business_unit_id: null,
-          incurred_at: todayInBusinessTz(),
+          // Invariante: la deuda nace el mismo día que el gasto de la compra.
+          incurred_at: spentAt,
           amount,
           paid_amount: 0,
           status: "pending",
@@ -226,18 +215,11 @@ const createPurchaseOrderItemPurchase = async ({
       );
     }
 
-    // Cantidad total ya comprada (compras previas + esta) vs. lo pedido —
-    // solo se marca "purchased" cuando ya no falta nada (también si se
-    // compró de más, confirmado).
-    const totalPurchased = totalPurchasedBefore + quantity;
-    const isComplete = totalPurchased >= item.quantity;
-
-    await DataBase.instance.purchase_order_item.update(
-      { status: isComplete ? "purchased" : "pending", updated_by: createdBy, updated_at: nowUtc() },
-      { where: { id: itemId }, transaction }
-    );
-
-    await recalculatePurchaseOrderStatus(item.purchase_order_id, transaction);
+    // Cantidad vigente comprada (compras previas + esta) vs. lo pedido — solo
+    // queda "purchased" cuando ya no falta nada (también si se compró de más,
+    // confirmado). Mismo cálculo que corregir/anular una compra.
+    await recalculateItemStatus(itemId, transaction, createdBy, false);
+    await recalculatePurchaseOrderStatus(item.purchase_order_id, transaction, createdBy);
 
     await transaction.commit();
 

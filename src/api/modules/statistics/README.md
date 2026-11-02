@@ -57,6 +57,30 @@ dos o ninguno; por defecto los últimos 30 días; máximo 3 años),
   una vista de gestión: el seeder la otorga solo al rol plantilla
   "Administrador"; si se le da a un rol atado a una tienda, ve solo su tienda.
 
+- **Gastos anulados** (`quotation_expense.is_deleted`: un gasto manual o una
+  compra anulados) no cuentan en "Gastos", en el margen ni en la tendencia:
+  todas las consultas que leen `quotation_expense` usan `EXPENSE_ACTIVE_SQL`
+  de `cash_movement/services/shared/cash_flow.sql.ts` (cubierto por prueba).
+
+- **Cierre de caja** (módulo `cash_closing`): las métricas de caja también leen
+  las patas de ajuste (`cash_adjustment_entry`), con el mismo alcance que Caja
+  (`ADJUSTMENT_ENTRY_SCOPE_SQL`) y por `entry_date`:
+  - patas **hold** ("Valor al cierre", con signo): las de pagos suman a
+    `collected`, las de ingresos manuales a `other_income` y todas las de
+    egreso a `expenses` → un mes cerrado muestra lo mismo que al cerrarse
+    aunque después se corrija una fila suya;
+  - patas **posting** ("Ajuste"): van al KPI nuevo `adjustments` (efecto en el
+    saldo: ingreso suma, egreso resta) y a `trend[].adjustments`;
+  - `net_cash = collected + other_income − expenses + adjustments` = neto de Caja;
+  - `payments_by_account` suma las patas hold de pagos (no cuentan como pagos en
+    `count`). Un hold sin cuenta se etiqueta con la misma regla que un pago vivo:
+    método del pago de origen `cash` → "Efectivo", otro → "Sin cuenta indicada".
+    Limitación: la pata no guarda el método, así que se usa el método ACTUAL del
+    pago; si el método también se corrigió después, el hold viejo se agrupa con
+    el método nuevo.
+  - `adjustments` está SIEMPRE presente (0 si no hubo). El margen (gastos por
+    fecha de emisión) no cambia: refleja la verdad ya corregida.
+
 ## Campos especiales
 - Índices agregados para estas consultas (migración
   `20261021120000-add-statistics-indexes`): `quotation(company_id,

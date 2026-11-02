@@ -4,6 +4,7 @@ import { nowUtc } from "../../../../../utils/dateUtils";
 import { formatSoles, fromCents, toCents } from "../../../../../core/utils/money";
 import { createLogService } from "../../../logs/services/create/log.services";
 import { LogAction } from "../../../logs/model/log.model";
+import { assertCashPeriodOpen } from "../../../../../core/money/cashPeriod";
 
 export class DuplicateManualDebtError extends Error {}
 
@@ -55,6 +56,16 @@ const createManualEmployeeDebt = async (input: CreateManualEmployeeDebtInput) =>
         "Esta deuda ya se registró hace un momento (misma persona, monto, fecha y descripción)."
       );
     }
+
+    // Cierre de caja (fase 2): la deuda no mueve caja, pero su fecha cae en
+    // un período.
+    await assertCashPeriodOpen({
+      companyId: input.companyId,
+      date: input.incurredAt,
+      source: "employee_debt",
+      movesCash: false,
+      transaction,
+    });
 
     const now = nowUtc();
     const debt = await DataBase.instance.employee_debt.create(

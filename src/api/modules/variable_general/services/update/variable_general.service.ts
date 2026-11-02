@@ -2,15 +2,22 @@ import { DataBase } from "../../../../../database";
 import { VariableGeneralPartialAttributes } from "../../models/variable_general.model";
 import { AppError } from "../../../../../core/errors/AppError";
 import { PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
+import { loadManageableVariable } from "../shared/variable_scope.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant.
 // Sin este WHERE, cualquier usuario autenticado podía editar por ID una
 // variable general de OTRA empresa con solo adivinar/conocer su id.
+// Una fila global (company_id NULL) solo la edita un is_system: para los
+// demás lanza 403 (ver loadManageableVariable).
 export async function updateVariableGeneralById(
   id: number,
   payload: VariableGeneralPartialAttributes,
   companyId: number | null
-) {
+): Promise<[number]> {
+  const current = await loadManageableVariable(id, companyId);
+  // Inexistente o de otra empresa: el controller responde 404.
+  if (!current) return [0];
+
   const model = DataBase.instance.variable_general;
   const where: Record<string, unknown> = { id };
   if (companyId !== null) where.company_id = companyId;
@@ -18,12 +25,14 @@ export async function updateVariableGeneralById(
   // Una cuenta de pago no cambia de categoría: dejaría de ser cuenta para
   // los pagos y movimientos que la usan (Caja perdería de dónde vino el
   // dinero). Para dejar de usarla, se deshabilita.
-  const current = await model.findOne({ where });
-  const changesCategory = payload.category !== undefined && payload.category !== current?.category;
-  if (current?.category === PAYMENT_ACCOUNT_CATEGORY && changesCategory) {
+  const changesCategory = payload.category !== undefined && payload.category !== current.category;
+  if (current.category === PAYMENT_ACCOUNT_CATEGORY && changesCategory) {
     throw new AppError(400, "Una cuenta de pago no puede cambiar de categoría. Si ya no se usa, deshabilítala.");
   }
 
+  // company_id NO se actualiza nunca: se listan los campos editables uno a
+  // uno, así un body con company_id (mass-assignment) no mueve la fila a
+  // otra empresa ni la vuelve global.
   return model.update(
     {
       category: payload.category,
@@ -37,5 +46,3 @@ export async function updateVariableGeneralById(
     { where }
   );
 }
-
-
