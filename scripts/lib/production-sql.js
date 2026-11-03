@@ -25,6 +25,7 @@ const { execSync } = require("child_process");
 const path = require("path");
 const mysql = require("mysql2/promise");
 const bcrypt = require("bcrypt");
+const { orderTablesByForeignKeys } = require("./table-order");
 
 const BACKEND_ROOT = path.resolve(__dirname, "..", "..");
 const BUILD_SCHEMA = "grulla_build_tmp";
@@ -146,8 +147,7 @@ const dumpSchema = async (conn, schema) => {
     [schema]
   );
 
-  const ddlParts = [];
-  const dataParts = [];
+  const dumped = [];
   const rowCounts = {};
 
   for (const { name } of tables) {
@@ -157,26 +157,37 @@ const dumpSchema = async (conn, schema) => {
       `CREATE TABLE \`${name}\``,
       `CREATE TABLE \`${exportName}\``
     );
-    ddlParts.push(`${ddl};`);
 
     const [rows, fields] = await conn.query(`SELECT * FROM \`${name}\``);
     rowCounts[exportName] = rows.length;
-    if (rows.length === 0) continue;
 
+    const inserts = [];
     const columns = fields.map((field) => `\`${field.name}\``).join(", ");
     for (let start = 0; start < rows.length; start += INSERT_BATCH_SIZE) {
       const values = rows
         .slice(start, start + INSERT_BATCH_SIZE)
         .map((row) => `(${conn.escape(fields.map((field) => row[field.name]))})`)
         .join(",\n  ");
-      dataParts.push(`INSERT INTO \`${exportName}\` (${columns}) VALUES\n  ${values};`);
+      inserts.push(`INSERT INTO \`${exportName}\` (${columns}) VALUES\n  ${values};`);
     }
+    dumped.push({ name: exportName, ddl, inserts });
   }
 
-  return { ddl: ddlParts.join("\n\n"), data: dataParts.join("\n\n"), rowCounts };
+  // Esquema y datos en orden de dependencias (ver table-order.js): cada
+  // tabla después de las tablas a las que apuntan sus foráneas.
+  const { ordered, deferredConstraints } = orderTablesByForeignKeys(dumped);
+  const insertsByName = new Map(dumped.map((table) => [table.name, table.inserts]));
+
+  return {
+    ddl: ordered.map((table) => `${table.ddl};`).join("\n\n"),
+    data: ordered.flatMap((table) => insertsByName.get(table.name) ?? []).join("\n\n"),
+    deferredConstraints: deferredConstraints.join("\n"),
+    tableOrder: ordered.map((table) => table.name),
+    rowCounts,
+  };
 };
 
-const renderSqlFile = ({ ddl, data, adminEmail }) =>
+const renderSqlFile = ({ ddl, data, deferredConstraints, adminEmail }) =>
   [
     "-- =====================================================================",
     "-- Vanys — base de datos de PRODUCCIÓN",
@@ -206,16 +217,31 @@ const renderSqlFile = ({ ddl, data, adminEmail }) =>
     "",
     data,
     "",
+    ...(deferredConstraints
+      ? [
+          "-- ---------------------------------------------------------------------",
+          "-- Foráneas entre tablas que se apuntan entre sí (se agregan al final)",
+          "-- ---------------------------------------------------------------------",
+          "",
+          deferredConstraints,
+          "",
+        ]
+      : []),
     "SET FOREIGN_KEY_CHECKS = 1;",
     "",
   ].join("\n");
 
 // Carga el .sql recién generado en un esquema limpio: si tiene un error de
 // sintaxis o de compatibilidad, falla acá y no en el phpMyAdmin del hosting.
+//
+// Se importa con la revisión de foráneas ACTIVADA (se quita el
+// SET FOREIGN_KEY_CHECKS = 0 del archivo): así se comprueba que el orden de
+// tablas y datos funciona aunque phpMyAdmin la active por su cuenta.
 const verifyImport = async (conn, sql) => {
   await recreateSchema(conn, VERIFY_SCHEMA);
   await conn.query(`USE \`${VERIFY_SCHEMA}\``);
-  await conn.query(sql);
+  await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+  await conn.query(sql.replace("SET FOREIGN_KEY_CHECKS = 0;", "-- (verificación con foráneas activadas)"));
 
   const [[{ tables }]] = await conn.query(
     "SELECT COUNT(*) AS tables FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?",
@@ -242,11 +268,11 @@ async function buildProductionSql({ adminEmail, adminPassword, adminName = "Supe
     await stripNonFactoryData(server);
     await insertSuperAdmin(server, { email: adminEmail, password: adminPassword, name: adminName, lastName: adminLastName });
 
-    const { ddl, data, rowCounts } = await dumpSchema(server, BUILD_SCHEMA);
-    const sql = renderSqlFile({ ddl, data, adminEmail });
+    const { ddl, data, deferredConstraints, tableOrder, rowCounts } = await dumpSchema(server, BUILD_SCHEMA);
+    const sql = renderSqlFile({ ddl, data, deferredConstraints, adminEmail });
 
     const verification = await verifyImport(server, sql);
-    return { sql, rowCounts, verification };
+    return { sql, rowCounts, verification, tableOrder };
   } finally {
     await dropSchema(server, BUILD_SCHEMA).catch(() => undefined);
     await dropSchema(server, VERIFY_SCHEMA).catch(() => undefined);
