@@ -1,24 +1,20 @@
 import { body, param } from "express-validator";
 import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
-import { DataBase } from "../../../../database";
+import { correctionIdParamRule, correctionReasonRule } from "../../money_correction/validators/money_correction.validator";
 import { CASH_PAYMENT_METHOD } from "../../quotation/validators/quotation.validator";
+import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
 
+// Solo la FORMA del id: la existencia y el alcance (empresa/tienda) los
+// resuelve el service, y un id ajeno responde igual que uno que no existe
+// (antes el validator confirmaba que un id de otra empresa existía).
 const paramPaymentIdValidator = param("id")
-  .not()
-  .isEmpty()
-  .withMessage("El id del pago es obligatorio")
-  .bail()
   .isInt({ gt: 0 })
-  .withMessage("El id del pago debe ser un número entero positivo")
-  .bail()
-  .custom(async (value: string) => {
-    const payment = await DataBase.instance.quotation_payment.findOne({ where: { id: Number(value) } });
-    if (!payment) throw new Error("El pago con el ID proporcionado no existe.");
-    return true;
-  });
+  .withMessage("El id del pago debe ser un número entero positivo");
 
 export const updatePaymentValidator = [
   paramPaymentIdValidator,
+  // Obligatorio: una corrección de dinero sin explicación no se puede auditar.
+  correctionReasonRule(),
   moneyAmountRule("amount"),
   body("method")
     .not()
@@ -43,4 +39,10 @@ export const updatePaymentValidator = [
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
 
-export const disablePaymentValidator = [paramPaymentIdValidator];
+// Motivo opcional: obligatorio solo si el pago es de un mes cerrado (ajuste).
+export const disablePaymentValidator = [paramPaymentIdValidator, optionalAdjustmentReasonRule()];
+
+export const findPaymentValidator = [paramPaymentIdValidator];
+
+// GET /payment/:id/corrections?page=&limit=
+export const listPaymentCorrectionsValidator = [correctionIdParamRule("id")];

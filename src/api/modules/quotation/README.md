@@ -15,7 +15,23 @@
 | PUT    | /quotation/item/:itemId/stage    | mover etapa de producción  | cotizacion      |
 | POST   | /quotation/:id/payments          | registrar pago             | cotizacion      |
 | POST   | /quotation/:id/expenses          | registrar gasto            | cotizacion      |
+| GET    | /quotation/expense/find/:id      | gasto por id (diálogo de corrección) | cotizacion (`cotizacion.expense.find.endpoint`) |
+| PUT    | /quotation/expense/update/:id    | corregir gasto manual      | cotizacion (`cotizacion.expense.update.button`) |
+| PUT    | /quotation/expense/disable/:id   | anular/restaurar gasto manual | cotizacion (`cotizacion.expense.disable.button`) |
+| GET    | /quotation/expense/:id/corrections | historial de correcciones (pag) | cotizacion (`cotizacion.expense.corrections.button`) |
 | POST   | /internal/jobs/expire-quotations | vencer cotizaciones (cron) | — (ver abajo)   |
+
+### Corrección y anulación de gastos manuales
+Botones (pestaña "Gastos" del detalle y Caja): `cotizacion.expense.update.button` (lápiz), `cotizacion.expense.disable.button` (anular/restaurar), `cotizacion.expense.corrections.button` (abrir el badge "Corregido (n)"). Un gasto de compra abre el diálogo de la compra (`purchase_order.purchase.update.button`).
+- Campos corregibles: `amount`, `description`, `category` (texto libre ≤ 50, `null` = sin categoría), `spent_at`, `payment_account_id` (`null` = efectivo). La cotización NO se corrige (400): se anula y se registra en la correcta. Motivo `reason` obligatorio (5–500). Sin cambios → 400 `NO_CHANGES`.
+- Se permite en cualquier estado de la cotización (corregir un error no registra dinero nuevo).
+- Gasto de una compra → 409 `EXPENSE_BELONGS_TO_PURCHASE` (se corrige/anula como compra, ver purchase_order). Gasto anulado → 409 `EXPENSE_ANNULLED` (restaurarlo antes).
+- Cada corrección: una transacción con el gasto bloqueado; UPDATE en el lugar + fila inmutable en `money_correction` (fuente `quotation_expense`, con `payment_account_name`) + evento `expense_updated` + log. Anular/restaurar: evento `expense_disabled` / `expense_restored` + log.
+- Cierre mensual de caja (fase 2): crear un gasto con `spent_at` en un mes cerrado → 409 `CASH_PERIOD_CLOSED`. Corregir o anular/restaurar un gasto de un mes cerrado es un **ajuste** (en el lugar + patas `hold`/`posting` + `money_correction.kind = 'adjustment'`; requiere `cash_closing.adjust.button`, si no 403 `CASH_PERIOD_ADJUST_FORBIDDEN`). `PUT /quotation/expense/disable/:id` acepta `{ reason?: string }` (5–500), obligatorio solo si es ajuste (400 `ADJUSTMENT_REASON_REQUIRED`). Mover `spent_at` a un mes cerrado → 409. Descripción/categoría → sin patas. Respuestas con `kind` y `adjusted_period`. Detalle: `cash_movement/README.md`.
+- Un gasto anulado (`is_deleted`) no suma en Caja, Estadísticas, márgenes ni en el total de la pestaña Gastos; el detalle (`GET /quotation/find/:id`) lo sigue devolviendo (tachado), con `purchase_id` y `corrections_count`.
+- Escritura con `resolveWriteScope`: fuera de alcance → 404. Al REGISTRAR pagos, adelantos o gastos, un usuario ligado a una tienda (aunque tenga "ver todas las tiendas") solo lo hace en cotizaciones de su tienda: si la ve pero no es suya → 403 `STORE_WRITE_SCOPE`.
+- `PAYMENT_EXCEEDS_BALANCE` (sobre-pago) llega con su código: el controller ya no lo re-envuelve.
+- Una compra anulada no bloquea rechazar/cancelar la cotización (`assertNoMoneyInvolved`). Los gastos manuales siguen sin bloquearla (fuera de alcance, decisión 6).
 
 `/internal/jobs/expire-quotations` no lo usa ningún usuario: lo llama cada
 hora el cron del hosting y se autentica con el secreto compartido

@@ -3,6 +3,7 @@ import { resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
 import { DataBase } from "../../../../../database";
 import { VariableGeneralAttributes, VariableGeneralModel } from "../../models/variable_general.model";
 import { buildPaginationMeta, getOffset } from "../../../../../core/utils/paginate";
+import { loadManageableVariable } from "../shared/variable_scope.service";
 
 export interface VariableGeneralListQuery {
   filter: {
@@ -14,6 +15,11 @@ export interface VariableGeneralListQuery {
     title?: string;
     name?: string;
     status?: string;
+    // Modo "gestión" (pantalla Variables Generales) para usuarios de empresa:
+    // SOLO las filas de companyId, sin las globales (company_id NULL). Las
+    // globales solo las gestiona el Super Administrador. No afecta al
+    // listado genérico, que sigue incluyendo las globales para los selectores.
+    ownCompanyOnly?: boolean;
   };
   pagination: {
     page: number | undefined;
@@ -44,7 +50,10 @@ const buildWhere = (filter: VariableGeneralListQuery["filter"]): WhereOptions<Va
   // empresa ve las suyas propias y las globales, nunca las de otra empresa.
   // is_system (companyId null/undefined acá) no filtra, ve todo.
   if (filter.companyId !== null && filter.companyId !== undefined) {
-    andConditions.push({ [Op.or]: [{ company_id: filter.companyId }, { company_id: null }] });
+    const companyCondition: WhereOptions<VariableGeneralAttributes> = filter.ownCompanyOnly
+      ? { company_id: filter.companyId }
+      : { [Op.or]: [{ company_id: filter.companyId }, { company_id: null }] };
+    andConditions.push(companyCondition);
   }
 
   // 🔹 Filtro por nombre (LIKE en "name" o "title")
@@ -130,10 +139,7 @@ export const getVariableGeneralList = async ({
 // cualquier usuario autenticado con acceso al módulo podía leer por id el
 // detalle de una variable general de OTRA empresa (el listado sí filtraba
 // por company_id, pero el detalle por id nunca lo hacía — IDOR de lectura).
-export const findVariableGeneralById = async (id: number, companyId: number | null) => {
-  const model = DataBase.instance.variable_general;
-  const item = await model.findByPk(id);
-  if (!item) return null;
-  if (companyId !== null && item.company_id !== null && item.company_id !== companyId) return null;
-  return item;
-};
+// El detalle alimenta la edición, así que una fila global (company_id NULL)
+// solo la ve un is_system: para los demás lanza 403 (ver loadManageableVariable).
+export const findVariableGeneralById = (id: number, companyId: number | null) =>
+  loadManageableVariable(id, companyId);

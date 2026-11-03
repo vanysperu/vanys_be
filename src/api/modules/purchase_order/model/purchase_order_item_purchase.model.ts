@@ -13,6 +13,9 @@ export interface PurchaseOrderItemPurchaseAttributes {
   // paid_by_user_id como acreedor (ver purchase_order_item_purchase.service.ts).
   funding_source: FundingSource;
   paid_by_user_id: number | null;
+  // Compra anulada (de una sola vía): deja de contar para el estado del item
+  // y de la orden; su gasto también queda anulado y su deuda cancelada.
+  is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -45,6 +48,7 @@ export function PurchaseOrderItemPurchaseFactory(sequelize: Sequelize): Purchase
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       funding_source: { type: DataTypes.ENUM("company", "employee"), allowNull: false, defaultValue: "company" },
       paid_by_user_id: { type: DataTypes.BIGINT, allowNull: true },
+      is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

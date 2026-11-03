@@ -10,6 +10,13 @@ export type QuotationEventAction =
   | "payment_updated"
   | "payment_disabled"
   | "expense_added"
+  // Corrección / anulación / restauración de un gasto manual.
+  | "expense_updated"
+  | "expense_disabled"
+  | "expense_restored"
+  // Corrección / anulación (de una sola vía) de una compra de orden de compra.
+  | "purchase_updated"
+  | "purchase_disabled"
   | "updated";
 
 export interface QuotationEventAttributes {

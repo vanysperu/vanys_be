@@ -1,6 +1,9 @@
 import { DataBase } from "../../../../../database";
 import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
 import { formatSoles, fromCents, toCents } from "../../../../../core/utils/money";
+import { WriteScope } from "../../../../../core/rbac/writeScope";
+import { assertCashPeriodOpen } from "../../../../../core/money/cashPeriod";
+import { filterDebtsInWriteScope } from "../shared/debt_scope.service";
 
 export class InvalidPaymentAmountError extends Error {}
 
@@ -18,11 +21,16 @@ export class InvalidPaymentAmountError extends Error {}
 // Todo en una transacción con las deudas bloqueadas (FOR UPDATE): dos
 // reposiciones simultáneas al mismo trabajador se serializan, y la segunda
 // ve lo que ya cubrió la primera — nunca se repone de más.
+//
+// Alcance de escritura: un usuario ligado a una tienda solo repone deudas de
+// SU tienda (aunque pueda ver todas): el reparto FIFO y el tope "pendiente"
+// se calculan solo sobre ellas.
 const registerEmployeeDebtPayment = async ({
   userId,
   companyId,
   amount,
   paymentAccountId,
+  scope,
   createdBy,
 }: {
   userId: number;
@@ -31,10 +39,11 @@ const registerEmployeeDebtPayment = async ({
   // Monto a reponer ahora; debe ser > 0 y no superar el total pendiente.
   amount: number;
   paymentAccountId: number | null;
+  scope: WriteScope;
   createdBy: number;
 }) => {
   return DataBase.instance.sequelize.transaction(async (transaction) => {
-    const pendingDebts = await DataBase.instance.employee_debt.findAll({
+    const lockedDebts = await DataBase.instance.employee_debt.findAll({
       where: { user_id: userId, company_id: companyId, status: "pending" },
       order: [
         ["created_at", "ASC"],
@@ -43,18 +52,21 @@ const registerEmployeeDebtPayment = async ({
       transaction,
       lock: transaction.LOCK.UPDATE,
     });
+    const pendingDebts = await filterDebtsInWriteScope(lockedDebts, scope, transaction);
+    const scopeNote = scope.businessUnitId === undefined ? "" : " en tu tienda";
 
     // Céntimos enteros: sin errores de redondeo al comparar ni al repartir.
     const amountCents = toCents(amount);
     const totalPendingCents = pendingDebts.reduce((sum, debt) => sum + toCents(debt.amount) - toCents(debt.paid_amount), 0);
-    if (totalPendingCents <= 0) throw new InvalidPaymentAmountError("Este trabajador no tiene deudas pendientes");
+    if (totalPendingCents <= 0) throw new InvalidPaymentAmountError(`Este trabajador no tiene deudas pendientes${scopeNote}`);
     if (amountCents <= 0 || amountCents > totalPendingCents) {
       throw new InvalidPaymentAmountError(
-        `El monto a reponer no puede ser mayor al total pendiente (${formatSoles(fromCents(totalPendingCents))})`
+        `El monto a reponer no puede ser mayor al total pendiente${scopeNote} (${formatSoles(fromCents(totalPendingCents))})`
       );
     }
 
     const paidAt = todayInBusinessTz();
+    await assertCashPeriodOpen({ companyId, date: paidAt, source: "employee_debt_payment", movesCash: true, transaction });
     const now = nowUtc();
 
     const payment = await DataBase.instance.employee_debt_payment.create(

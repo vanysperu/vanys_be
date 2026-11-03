@@ -2,6 +2,7 @@ import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { buildPaginationMeta, PaginatedResult } from "../../../../../core/utils/paginate";
 import { EmployeeDebtOrigin, EmployeeDebtStatus } from "../../model/employee_debt.model";
+import { correctionsCountSql } from "../../../money_correction/services/shared/corrections_count";
 
 // Cada deuda de un trabajador, una por fila: de qué es (compra de una orden o
 // gasto manual), cuánto, cuánto se le repuso y cuánto falta.
@@ -19,6 +20,8 @@ export interface EmployeeDebtDetailItem {
   quotation_id: number | null;
   purchase_order_id: number | null;
   registered_by_name: string | null;
+  // Cuántas correcciones tiene (badge "Corregido (n)"), en la misma consulta.
+  corrections_count: number;
 }
 
 export type EmployeeDebtDetailStatusFilter = EmployeeDebtStatus | "all";
@@ -45,6 +48,7 @@ interface RawDetailRow {
   quotation_id: number | null;
   purchase_order_id: number | null;
   registered_by_name: string | null;
+  corrections_count: number | string | null;
 }
 
 const getEmployeeDebtDetail = async (
@@ -74,7 +78,8 @@ const getEmployeeDebtDetail = async (
   const rows = (await DataBase.instance.sequelize.query(
     `SELECT ed.id, ed.origin, COALESCE(ed.description, qe.description) AS description, ed.category, ed.incurred_at,
             ed.amount, ed.paid_amount, ed.status, ed.paid_at, po.quotation_id, po.id AS purchase_order_id,
-            CONCAT(actor.name, ' ', actor.paternal_lastname) AS registered_by_name
+            CONCAT(actor.name, ' ', actor.paternal_lastname) AS registered_by_name,
+            ${correctionsCountSql("employee_debt", "ed.id")} AS corrections_count
      ${from}
      ORDER BY ed.incurred_at DESC, ed.id DESC
      LIMIT :limit OFFSET :offset`,
@@ -101,6 +106,7 @@ const getEmployeeDebtDetail = async (
       quotation_id: row.quotation_id,
       purchase_order_id: row.purchase_order_id,
       registered_by_name: row.registered_by_name,
+      corrections_count: Number(row.corrections_count ?? 0),
     };
   });
 

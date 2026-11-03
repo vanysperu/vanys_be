@@ -94,3 +94,55 @@ export const utcToBusinessParts = (instant: Date | string): { date: string; time
   const value = new Date(instant);
   return { date: toBusinessDateOnly(value), time: businessTimeFormatter.format(value) };
 };
+
+// ---------------------------------------------------------------------------
+// Períodos mensuales del cierre de caja ("YYYY-MM"). Aritmética de texto/UTC
+// pura sobre fechas DATEONLY, sin horas: ningún cambio de zona las corre.
+// ---------------------------------------------------------------------------
+
+// Formato exacto de un período: año de 4 dígitos + mes 01..12.
+export const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+export const isValidPeriod = (value: unknown): value is string => typeof value === "string" && PERIOD_PATTERN.test(value);
+
+// "2026-10-15" -> "2026-10".
+export const periodOf = (dateOnly: string): string => dateOnly.slice(0, 7);
+
+// Primer y último día (YYYY-MM-DD) de un período.
+export const periodBounds = (period: string): { start: string; end: string } => {
+  const [year = 0, month = 1] = period.split("-").map(Number);
+  // Día 0 del mes siguiente = último día de este mes.
+  const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  return { start: `${period}-01`, end };
+};
+
+// Corre un período n meses (n negativo = hacia atrás): ("2026-01", -1) -> "2025-12".
+export const shiftPeriod = (period: string, months: number): string => {
+  const [year = 0, month = 1] = period.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 + months, 1)).toISOString().slice(0, 7);
+};
+
+const SPANISH_MONTHS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+// "2026-10" -> "octubre 2026" (en minúscula: la UI o el mensaje lo capitaliza
+// si va al inicio de una oración).
+export const formatPeriodEs = (period: string): string => {
+  const [year = "", month = "1"] = period.split("-");
+  return `${SPANISH_MONTHS[Number(month) - 1] ?? month} ${year}`;
+};
+
+// Primera letra en mayúscula ("octubre 2026" -> "Octubre 2026").
+export const capitalizeEs = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);

@@ -19,6 +19,13 @@ import {
 import { DataBase } from "../../../../database";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
 import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitScope";
+import { resolveWriteScope } from "../../../../core/rbac/writeScope";
+import { isOutOfReadScope } from "../../quotation/services/shared/quotation_scope";
+import { findPurchaseById } from "../services/find/purchase_order_item_purchase.service";
+import { listPurchaseCorrections } from "../services/find/purchase_correction.service";
+import { correctPurchase } from "../services/update/purchase_order_item_purchase.service";
+import { annulPurchase } from "../services/disable/purchase_order_item_purchase.service";
+import { toggleReasonOf } from "../../cash_movement/validators/adjustment_reason.validator";
 
 // La orden de compra no tiene columna propia de tienda: hereda la de su
 // cotización (quotation_id), así que se resuelve con un lookup puntual en
@@ -133,10 +140,11 @@ const assertCanTouchPurchaseOrderItem = async (itemId: number, user: IToken) => 
     throw new AppError(403, "No tienes acceso a esta orden de compra");
   }
 
-  // Un admin de empresa limitado a su tienda no puede tocar items de
-  // órdenes de otra tienda (el propio asignado siempre puede, sin importar
-  // tienda: es su tarea personal, ver comentario del check anterior).
-  const scopedBusinessUnitId = resolveBusinessUnitFilter(user);
+  // Un usuario ligado a una tienda no puede tocar items de órdenes de otra
+  // tienda (el propio asignado siempre puede, sin importar tienda: es su
+  // tarea personal, ver comentario del check anterior). Alcance de ESCRITURA
+  // (decisión 4): "ver todas las tiendas" no habilita comprar en otra tienda.
+  const scopedBusinessUnitId = resolveWriteScope(user).businessUnitId;
   if (!isAssignee && scopedBusinessUnitId !== undefined && !(await belongsToBusinessUnit(purchaseOrder.quotation_id, scopedBusinessUnitId))) {
     throw new AppError(403, "No tienes acceso a esta orden de compra");
   }
@@ -207,4 +215,55 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
   }
 
   ok(res, 201, purchase, "Compra registrada correctamente");
+});
+
+// GET /purchase-order/purchase/find/:id — el diálogo de corrección carga la
+// compra actual. Es lectura: alcance de lectura; fuera de él, 404.
+export const findPurchaseController = asyncHandler(async (req: Request, res: Response) => {
+  const purchase = await findPurchaseById(Number(req.params.id));
+  if (!purchase || isOutOfReadScope(purchase, req.user as IToken)) throw new AppError(404, "La compra no existe");
+
+  ok(res, 200, purchase, "Compra obtenida correctamente");
+});
+
+// PUT /purchase-order/purchase/update/:id — corrige una compra.
+export const correctPurchaseController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, reason } = req.body;
+
+  const result = await correctPurchase({
+    purchaseId: Number(req.params.id),
+    input: { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, reason },
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+  });
+
+  ok(res, 200, result, "Compra corregida correctamente");
+});
+
+// PUT /purchase-order/purchase/disable/:id — anula una compra (sin vuelta atrás).
+export const annulPurchaseController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const result = await annulPurchase({
+    purchaseId: Number(req.params.id),
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+    // Motivo opcional: obligatorio solo si la compra es de un mes cerrado.
+    reason: toggleReasonOf(req.body?.reason),
+  });
+
+  ok(res, 200, result, "Compra anulada correctamente");
+});
+
+// GET /purchase-order/purchase/:id/corrections?page=&limit=
+export const listPurchaseCorrectionsController = asyncHandler(async (req: Request, res: Response) => {
+  const { page, limit } = parsePaginationParams(req.query);
+  const result = await listPurchaseCorrections({
+    purchaseId: Number(req.params.id),
+    user: req.user as IToken,
+    page,
+    limit,
+  });
+
+  ok(res, 200, result, "Historial de correcciones obtenido correctamente");
 });

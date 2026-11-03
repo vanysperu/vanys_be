@@ -49,6 +49,10 @@ import {
   PurchaseOrderItemPurchaseStatic,
 } from "../api/modules/purchase_order/model/purchase_order_item_purchase.model";
 import { CashMovementFactory, CashMovementStatic } from "../api/modules/cash_movement/model/cash_movement.model";
+import {
+  MoneyCorrectionFactory,
+  MoneyCorrectionStatic,
+} from "../api/modules/money_correction/model/money_correction.model";
 import { EmployeeDebtFactory, EmployeeDebtStatic } from "../api/modules/employee_debt/model/employee_debt.model";
 import {
   EmployeeDebtPaymentFactory,
@@ -61,6 +65,21 @@ import {
 import { employeeDebtAssociations } from "./associations/employee_debt";
 import { ReminderFactory, ReminderStatic } from "../api/modules/reminder/model/reminder.model";
 import { CompanyAssetFactory, CompanyAssetStatic } from "../api/modules/uploads/model/company_asset.model";
+import { CashLedgerFactory, CashLedgerStatic } from "../api/modules/cash_closing/model/cash_ledger.model";
+import {
+  CashLedgerOpeningFactory,
+  CashLedgerOpeningStatic,
+} from "../api/modules/cash_closing/model/cash_ledger_opening.model";
+import { CashPeriodFactory, CashPeriodStatic } from "../api/modules/cash_closing/model/cash_period.model";
+import {
+  CashPeriodBalanceFactory,
+  CashPeriodBalanceStatic,
+} from "../api/modules/cash_closing/model/cash_period_balance.model";
+import { CashPeriodEventFactory, CashPeriodEventStatic } from "../api/modules/cash_closing/model/cash_period_event.model";
+import {
+  CashAdjustmentEntryFactory,
+  CashAdjustmentEntryStatic,
+} from "../api/modules/cash_closing/model/cash_adjustment_entry.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -97,11 +116,19 @@ export class DataBase {
   public purchase_order_item: PurchaseOrderItemStatic;
   public purchase_order_item_purchase: PurchaseOrderItemPurchaseStatic;
   public cash_movement: CashMovementStatic;
+  public money_correction: MoneyCorrectionStatic;
   public employee_debt: EmployeeDebtStatic;
   public employee_debt_payment: EmployeeDebtPaymentStatic;
   public employee_debt_payment_allocation: EmployeeDebtPaymentAllocationStatic;
   public reminder: ReminderStatic;
   public company_asset: CompanyAssetStatic;
+  // Cierre mensual de caja (migración 20261102100000-create-cash-closing.js).
+  public cash_ledger: CashLedgerStatic;
+  public cash_ledger_opening: CashLedgerOpeningStatic;
+  public cash_period: CashPeriodStatic;
+  public cash_period_balance: CashPeriodBalanceStatic;
+  public cash_period_event: CashPeriodEventStatic;
+  public cash_adjustment_entry: CashAdjustmentEntryStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -159,11 +186,18 @@ export class DataBase {
     this.purchase_order_item = PurchaseOrderItemFactory(this.sequelize);
     this.purchase_order_item_purchase = PurchaseOrderItemPurchaseFactory(this.sequelize);
     this.cash_movement = CashMovementFactory(this.sequelize);
+    this.money_correction = MoneyCorrectionFactory(this.sequelize);
     this.employee_debt = EmployeeDebtFactory(this.sequelize);
     this.employee_debt_payment = EmployeeDebtPaymentFactory(this.sequelize);
     this.employee_debt_payment_allocation = EmployeeDebtPaymentAllocationFactory(this.sequelize);
     this.reminder = ReminderFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
+    this.cash_ledger = CashLedgerFactory(this.sequelize);
+    this.cash_ledger_opening = CashLedgerOpeningFactory(this.sequelize);
+    this.cash_period = CashPeriodFactory(this.sequelize);
+    this.cash_period_balance = CashPeriodBalanceFactory(this.sequelize);
+    this.cash_period_event = CashPeriodEventFactory(this.sequelize);
+    this.cash_adjustment_entry = CashAdjustmentEntryFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

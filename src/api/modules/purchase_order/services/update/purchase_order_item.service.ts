@@ -1,26 +1,9 @@
-import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
-import { PurchaseOrderItemModel, PurchaseOrderItemStatus } from "../../model/purchase_order_item.model";
-
+import { PurchaseOrderItemStatus } from "../../model/purchase_order_item.model";
 // El estado de la orden de compra NUNCA se pone a mano — se calcula solo a
-// partir de sus items, para que no haya dos fuentes de verdad divergentes
-// (pedido del usuario: "bien flexible, pero que no se rompa"). Mientras
-// quede al menos un item "pending", la orden sigue activa; cuando todos
-// quedan resueltos (comprados o marcados "ya no es necesario"), se cierra.
-const recalculatePurchaseOrderStatus = async (purchaseOrderId: number, transaction: Transaction) => {
-  const items = await DataBase.instance.purchase_order_item.findAll({ where: { purchase_order_id: purchaseOrderId }, transaction });
-  const hasPending = items.some((item: PurchaseOrderItemModel) => item.status === "pending");
-
-  await DataBase.instance.purchase_order.update(
-    {
-      status: hasPending ? "pending" : "purchased",
-      purchased_at: hasPending ? null : nowUtc(),
-      updated_at: nowUtc(),
-    },
-    { where: { id: purchaseOrderId }, transaction }
-  );
-};
+// partir de sus items (cálculo único compartido con las compras).
+import { recalculatePurchaseOrderStatus } from "../shared/purchase_order_status.service";
 
 export class DirectPurchaseNotAllowedError extends Error {}
 
@@ -34,7 +17,8 @@ export class ItemHasPurchasesError extends Error {}
 
 const assertItemHasNoPurchases = async (itemId: number): Promise<void> => {
   const purchases = await DataBase.instance.purchase_order_item_purchase.count({
-    where: { purchase_order_item_id: itemId },
+    // Una compra anulada ya no es plata gastada: no bloquea.
+    where: { purchase_order_item_id: itemId, is_deleted: false },
   });
   if (purchases > 0) {
     throw new ItemHasPurchasesError(
@@ -75,7 +59,7 @@ const updatePurchaseOrderItemStatus = async ({
       { where: { id: itemId }, transaction }
     );
 
-    await recalculatePurchaseOrderStatus(item.purchase_order_id, transaction);
+    await recalculatePurchaseOrderStatus(item.purchase_order_id, transaction, updatedBy);
   });
 
   return DataBase.instance.purchase_order_item.findOne({ where: { id: itemId } });

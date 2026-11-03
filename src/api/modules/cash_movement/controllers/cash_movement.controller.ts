@@ -10,10 +10,15 @@ import {
   getCashMovementsList,
 } from "../services/find/cash_movement.service";
 import { disableOrEnableCashMovementById } from "../services/delete/cash_movement.service";
+import { correctCashMovementById } from "../services/update/cash_movement.service";
+import { getCashMovementCorrections } from "../services/find/cash_movement_correction.service";
 import { resolveBusinessUnitFilter, resolveTargetBusinessUnitId } from "../../../../core/rbac/businessUnitScope";
+import { resolveWriteScope, WriteScope } from "../../../../core/rbac/writeScope";
+import { MoneyCorrectionSource, MONEY_CORRECTION_SOURCES } from "../../money_correction/types/money_correction.types";
 import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
 import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
+import { toggleReasonOf } from "../validators/adjustment_reason.validator";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
@@ -24,8 +29,13 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
   // si está limitado a una); el Super Administrador elige la empresa en el
   // formulario (antes se usaba `user.companyId`, null para él, y el
   // movimiento fallaba al guardarse).
+  const writeScope = resolveWriteScope(user);
   const companyId = await resolveTargetCompanyId(user, req.body.company_id, "movimientos");
-  const business_unit_id = await resolveTargetBusinessUnitId(user, req.body.business_unit_id, companyId);
+  // Alcance de ESCRITURA: un gestor con tienda propia crea SOLO en su tienda
+  // aunque tenga "ver todas las tiendas" (ese permiso es de lectura) — antes
+  // ese permiso le dejaba mandar la tienda que quisiera en el body.
+  const business_unit_id =
+    writeScope.businessUnitId ?? (await resolveTargetBusinessUnitId(user, req.body.business_unit_id, companyId));
 
   if (quotation_id) {
     const quotation = await DataBase.instance.quotation.findOne({ where: { id: quotation_id } });
@@ -98,19 +108,65 @@ export const listCashMovementsController = asyncHandler(async (req: Request, res
 
 export const disableCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { id } = req.params;
 
-  const movement = await getCashMovementById(Number(id));
-  if (!movement) throw new AppError(404, "El movimiento no existe");
-  if (!user.isSystem && movement.company_id !== user.companyId) {
-    throw new AppError(403, "No tienes acceso a este movimiento");
-  }
-  const scopedBusinessUnitId = resolveBusinessUnitFilter(user);
-  if (scopedBusinessUnitId !== undefined && movement.business_unit_id !== scopedBusinessUnitId) {
-    throw new AppError(403, "No tienes acceso a este movimiento");
-  }
-
-  const result = await disableOrEnableCashMovementById({ movementId: Number(id), updatedBy: user.userId });
+  // La empresa/tienda del movimiento se valida dentro del service con la fila
+  // bloqueada (alcance de escritura): fuera de alcance = 404.
+  const result = await disableOrEnableCashMovementById({
+    movementId: Number(req.params.id),
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+    // Motivo opcional: solo se exige si el movimiento es de un mes cerrado
+    // (se registra como ajuste).
+    reason: toggleReasonOf(req.body?.reason),
+  });
 
   ok(res, 200, result, "Proceso exitoso");
+});
+
+// Corrige un movimiento MANUAL (este endpoint solo conoce la tabla
+// cash_movement: un pago, gasto, deuda o reposición se corrige en su propio
+// módulo). Lista blanca explícita de campos: nunca `req.body` entero.
+export const updateCashMovementController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const { amount, category, occurred_at, payment_account_id, description, quotation_id, purchase_order_id, reason } =
+    req.body;
+
+  const result = await correctCashMovementById({
+    movementId: Number(req.params.id),
+    input: { amount, category, occurred_at, payment_account_id, description, quotation_id, purchase_order_id, reason },
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+  });
+
+  ok(res, 200, result, "Movimiento corregido correctamente");
+});
+
+// Fuente de la fila de Caja cuyo historial se pide (?source=). Sin ella, un
+// movimiento manual (compatibilidad con la ruta original).
+const sourceOf = (value: unknown): MoneyCorrectionSource =>
+  MONEY_CORRECTION_SOURCES.find((source) => source === value) ?? "manual";
+
+// Alcance de LECTURA del historial: misma empresa que el usuario y, si está
+// limitado a una tienda, la que su permiso de lectura permita (un gestor con
+// "ver todas las tiendas" lee el historial de toda su empresa).
+const readScopeOf = (user: IToken): WriteScope => ({
+  companyId: resolveWriteScope(user).companyId,
+  businessUnitId: resolveBusinessUnitFilter(user),
+});
+
+export const listCashMovementCorrectionsController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const page = Number(req.query.page) || 1;
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+
+  const resp = await getCashMovementCorrections({
+    source: sourceOf(req.query.source),
+    sourceId: Number(req.params.sourceId),
+    scope: readScopeOf(user),
+    page,
+    limit,
+  });
+
+  const message = resp.data.length === 0 ? "Esta fila no tiene correcciones" : "Historial de correcciones obtenido correctamente";
+  ok(res, 200, resp, message);
 });

@@ -1,6 +1,9 @@
-import { body, param } from "express-validator";
+import { body, param, query } from "express-validator";
+import { paginationValidator } from "../../../validators/pagination.validator";
+import { correctionIdParamRule } from "../../money_correction/validators/money_correction.validator";
+import { MONEY_CORRECTION_SOURCES } from "../../money_correction/types/money_correction.types";
 import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
-import { DataBase } from "../../../../database";
+import { optionalAdjustmentReasonRule } from "./adjustment_reason.validator";
 
 export const createCashMovementValidator = [
   body("direction").isIn(["income", "expense"]).withMessage("El tipo de movimiento debe ser ingreso o egreso"),
@@ -35,19 +38,65 @@ export const createCashMovementValidator = [
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
 
-const paramCashMovementIdValidator = param("id")
-  .not()
-  .isEmpty()
-  .withMessage("El id del movimiento es obligatorio")
-  .bail()
+// Solo la FORMA del id: la existencia y el alcance (empresa/tienda) los
+// resuelve el service con la fila bloqueada, y un id ajeno responde 404 igual
+// que uno que no existe (el validator de arriba confirmaba que un id de otra
+// empresa existe).
+const paramCashMovementIdShape = param("id")
   .isInt({ gt: 0 })
-  .withMessage("El id del movimiento debe ser un número entero positivo")
-  .bail()
-  .custom(async (value: string) => {
-    const movement = await DataBase.instance.cash_movement.findOne({ where: { id: Number(value) } });
-    if (!movement) throw new Error("El movimiento con el ID proporcionado no existe.");
-    return true;
-  })
-  .bail();
+  .withMessage("El id del movimiento debe ser un número entero positivo");
 
-export const disableCashMovementValidator = [paramCashMovementIdValidator];
+// Motivo opcional: obligatorio solo si el movimiento es de un mes cerrado
+// (ajuste); eso lo decide el service con la fila bloqueada.
+export const disableCashMovementValidator = [paramCashMovementIdShape, optionalAdjustmentReasonRule()];
+
+// Cada campo es opcional: ausente = se queda como está. Si viene, pasa por
+// las MISMAS reglas que al crear (monto y fecha de money.validator).
+const presentIn = (field: string) => body(field).exists();
+
+export const updateCashMovementValidator = [
+  paramCashMovementIdShape,
+  // Un ingreso que en realidad era un egreso es OTRO movimiento: se anula y
+  // se registra el correcto (ver README). Se rechaza explícito para que no
+  // parezca que se guardó.
+  body("direction")
+    .not()
+    .exists()
+    .withMessage("El tipo (ingreso/egreso) no se corrige: anula este movimiento y registra uno nuevo"),
+  moneyAmountRule("amount", "El monto debe ser mayor a 0", { onlyIf: presentIn("amount") }),
+  moneyDateRule("occurred_at", "La fecha no es válida", { onlyIf: presentIn("occurred_at") }),
+  body("category")
+    .optional()
+    .isString()
+    .withMessage("La categoría no es válida")
+    .bail()
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage("La categoría es obligatoria (máximo 50 caracteres)"),
+  body("description").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  body("quotation_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cotización debe ser un id válido"),
+  body("purchase_order_id")
+    .optional({ values: "null" })
+    .isInt({ gt: 0 })
+    .withMessage("La orden de compra debe ser un id válido"),
+  // Obligatorio: una corrección de caja sin explicación no se puede auditar.
+  body("reason")
+    .isString()
+    .withMessage("Indica el motivo de la corrección")
+    .bail()
+    .trim()
+    .isLength({ min: 5, max: 500 })
+    .withMessage("El motivo de la corrección debe tener entre 5 y 500 caracteres"),
+];
+
+// GET /cash-movement/:sourceId/corrections?source=<fuente>&page=&limit=
+// `source` es una de las 5 fuentes de Caja (por defecto, manual).
+export const listCashMovementCorrectionsValidator = [
+  correctionIdParamRule("sourceId"),
+  query("source")
+    .optional()
+    .isIn([...MONEY_CORRECTION_SOURCES])
+    .withMessage("La fuente del movimiento no es válida"),
+  ...paginationValidator,
+];

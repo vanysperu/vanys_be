@@ -21,15 +21,18 @@ import {
   updateQuotationById,
 } from "../services/update/quotation.service";
 import { changeItemStage } from "../services/update/quotation_item.service";
-import {
-  createQuotationPayment,
-  CreateQuotationPaymentInput,
-  PaymentExceedsBalanceError,
-} from "../services/create/quotation_payment.service";
+import { createQuotationPayment, CreateQuotationPaymentInput } from "../services/create/quotation_payment.service";
 import { QuotationNotActiveError } from "../services/shared/active_quotation";
 import { hasRouteAccess } from "../../../../middlewares/user-access";
 import { createQuotationExpense } from "../services/create/quotation_expense.service";
-import { getQuotationById, getQuotationsList } from "../services/find/quotation.service";
+import { getQuotationDetailById, getQuotationsList } from "../services/find/quotation.service";
+import { findQuotationExpenseById } from "../services/find/quotation_expense.service";
+import { listQuotationExpenseCorrections } from "../services/find/quotation_expense_correction.service";
+import { correctQuotationExpense } from "../services/update/quotation_expense.service";
+import { toggleQuotationExpense } from "../services/disable/quotation_expense.service";
+import { toggleReasonOf } from "../../cash_movement/validators/adjustment_reason.validator";
+import { assertQuotationWritable, isOutOfReadScope } from "../services/shared/quotation_scope";
+import { resolveWriteScope } from "../../../../core/rbac/writeScope";
 import { generateQuotationPdf } from "../services/pdf/quotation_pdf.service";
 import { QuotationStatus } from "../model/quotation.model";
 import { DataBase } from "../../../../database";
@@ -118,7 +121,7 @@ export const getQuotationController = asyncHandler(async (req: Request, res: Res
     throw new AppError(403, "No tienes acceso a esta cotización");
   }
 
-  const quotation = await getQuotationById(Number(id));
+  const quotation = await getQuotationDetailById(Number(id));
 
   ok(res, 200, quotation, "Cotización obtenida correctamente");
 });
@@ -157,6 +160,8 @@ export const changeQuotationStatusController = asyncHandler(async (req: Request,
   if (advancePayment && !hasRouteAccess(user, `/quotation/${id}/payments`, "POST")) {
     throw new AppError(403, "No tienes permiso para registrar pagos");
   }
+  // ...y el mismo alcance de escritura: solo en cotizaciones de su tienda.
+  if (advancePayment) await assertQuotationWritable(Number(id), user, "registrar pagos");
 
   try {
     const result = await changeQuotationStatus({
@@ -171,9 +176,11 @@ export const changeQuotationStatusController = asyncHandler(async (req: Request,
     if (
       err instanceof InvalidTransitionError ||
       err instanceof QuotationHasMoneyInvolvedError ||
-      err instanceof AdvanceOnlyOnAcceptError ||
-      err instanceof PaymentExceedsBalanceError
+      err instanceof AdvanceOnlyOnAcceptError
     ) {
+      // Un adelanto por encima del total ya llega como AppError 400 con
+      // código PAYMENT_EXCEEDS_BALANCE (quotation_payment.service.ts): no se
+      // re-envuelve, para no perder el código.
       throw new AppError(400, err.message);
     }
     if (err instanceof QuotationNotActiveError) throw notActiveError(err);
@@ -209,15 +216,15 @@ export const createQuotationPaymentController = asyncHandler(async (req: Request
   const user = req.user as IToken;
   const { id } = req.params;
 
-  if (!(await assertQuotationBelongsToCaller(Number(id), user))) {
-    throw new AppError(403, "No tienes acceso a esta cotización");
-  }
+  // Alcance de ESCRITURA (decisión 4): "ver todas las tiendas" no habilita
+  // registrar pagos en otra tienda.
+  await assertQuotationWritable(Number(id), user, "registrar pagos");
 
   let payment;
   try {
     payment = await createQuotationPayment({ quotationId: Number(id), input: req.body, createdBy: user.userId });
   } catch (err: unknown) {
-    if (err instanceof PaymentExceedsBalanceError) throw new AppError(400, err.message);
+    // PAYMENT_EXCEEDS_BALANCE ya es un AppError con su código: pasa tal cual.
     if (err instanceof QuotationNotActiveError) throw notActiveError(err);
     throw err;
   }
@@ -229,9 +236,7 @@ export const createQuotationExpenseController = asyncHandler(async (req: Request
   const user = req.user as IToken;
   const { id } = req.params;
 
-  if (!(await assertQuotationBelongsToCaller(Number(id), user))) {
-    throw new AppError(403, "No tienes acceso a esta cotización");
-  }
+  await assertQuotationWritable(Number(id), user, "registrar gastos");
 
   // La cuenta (vacío = efectivo) tiene que ser de la empresa DUEÑA de la
   // cotización y estar activa.
@@ -255,6 +260,58 @@ export const createQuotationExpenseController = asyncHandler(async (req: Request
     if (err instanceof QuotationNotActiveError) throw notActiveError(err);
     throw err;
   }
+});
+
+// GET /quotation/expense/find/:id — el diálogo de corrección carga el gasto
+// actual. Es lectura: alcance de lectura; fuera de él, 404.
+export const findQuotationExpenseController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const expense = await findQuotationExpenseById(Number(req.params.id));
+  if (!expense || isOutOfReadScope(expense, user)) throw new AppError(404, "El gasto no existe");
+
+  ok(res, 200, expense, "Gasto obtenido correctamente");
+});
+
+// PUT /quotation/expense/update/:id — corrige un gasto manual.
+export const correctQuotationExpenseController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const { amount, description, category, spent_at, payment_account_id, reason } = req.body;
+
+  const result = await correctQuotationExpense({
+    expenseId: Number(req.params.id),
+    input: { amount, description, category, spent_at, payment_account_id, reason },
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+  });
+
+  ok(res, 200, result, "Gasto corregido correctamente");
+});
+
+// PUT /quotation/expense/disable/:id — anula o restaura un gasto manual.
+export const toggleQuotationExpenseController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const result = await toggleQuotationExpense({
+    expenseId: Number(req.params.id),
+    scope: resolveWriteScope(user),
+    updatedBy: user.userId,
+    // Motivo opcional: obligatorio solo si el gasto es de un mes cerrado.
+    reason: toggleReasonOf(req.body?.reason),
+  });
+
+  ok(res, 200, result, result.is_deleted ? "Gasto anulado correctamente" : "Gasto restaurado correctamente");
+});
+
+// GET /quotation/expense/:id/corrections?page=&limit=
+export const listQuotationExpenseCorrectionsController = asyncHandler(async (req: Request, res: Response) => {
+  const { page, limit } = parsePaginationParams(req.query);
+  const result = await listQuotationExpenseCorrections({
+    expenseId: Number(req.params.id),
+    user: req.user as IToken,
+    page,
+    limit,
+  });
+
+  ok(res, 200, result, "Historial de correcciones obtenido correctamente");
 });
 
 export const downloadQuotationPdfController = asyncHandler(async (req: Request, res: Response) => {

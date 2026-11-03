@@ -11,6 +11,9 @@ export interface QuotationExpenseAttributes {
   // una compra pagada con plata de un trabajador no la usa: ese dinero sale
   // de la empresa recién al reponerle (employee_debt_payment).
   payment_account_id: number | null;
+  // Gasto anulado (registrado por error): deja de sumar en Caja, márgenes y
+  // totales. Una compra de orden anulada anula también su gasto.
+  is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -38,6 +41,7 @@ export function QuotationExpenseFactory(sequelize: Sequelize): QuotationExpenseS
       category: { type: DataTypes.STRING(50), allowNull: true },
       spent_at: { type: DataTypes.DATEONLY, allowNull: false },
       payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
+      is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

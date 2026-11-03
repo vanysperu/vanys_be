@@ -101,7 +101,9 @@ const assertNoMoneyInvolved = async (quotation: QuotationModel, action: string, 
      FROM purchase_order_item_purchase poip
      INNER JOIN purchase_order_item poi ON poi.id = poip.purchase_order_item_id
      INNER JOIN purchase_order po ON po.id = poi.purchase_order_id
-     WHERE po.quotation_id = :quotationId`,
+     WHERE po.quotation_id = :quotationId
+       -- Una compra anulada ya no es plata gastada: no bloquea cancelar.
+       AND poip.is_deleted = false`,
     { type: QueryTypes.SELECT, replacements: { quotationId: quotation.id }, transaction }
   )) as { total: number }[];
 

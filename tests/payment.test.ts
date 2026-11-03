@@ -66,6 +66,7 @@ describe("Módulo de pagos", () => {
       amount: 120,
       method: "cash",
       paid_at: "2026-10-11",
+      reason: "Corrección de prueba",
     });
     expect(updated.status).toBe(200);
 

@@ -1,6 +1,12 @@
 import { body, param } from "express-validator";
 import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
+import {
+  correctionHistoryValidator,
+  correctionIdParamRule,
+  correctionReasonRule,
+} from "../../money_correction/validators/money_correction.validator";
 import { DataBase } from "../../../../database";
+import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
 import { QUOTATION_STATUSES } from "../model/quotation.model";
 import { QUOTATION_ITEM_PRICING_MODES } from "../model/quotation_item.model";
 
@@ -220,3 +226,45 @@ export const createQuotationExpenseValidator = [
   // la empresa de la cotización y esté activa lo valida el controller.
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
 ];
+
+// ---- Corrección / anulación de gastos manuales ----
+
+// Solo la FORMA del id: existencia y alcance los resuelve el service (un id
+// ajeno responde 404, igual que uno que no existe).
+export const quotationExpenseIdValidator = [correctionIdParamRule("id")];
+
+// PUT /quotation/expense/disable/:id — motivo opcional: obligatorio solo si el
+// gasto es de un mes cerrado (se registra como ajuste, cierre de caja).
+export const toggleQuotationExpenseValidator = [correctionIdParamRule("id"), optionalAdjustmentReasonRule()];
+
+const presentIn = (field: string) => body(field).exists();
+
+// PUT /quotation/expense/update/:id — cada campo es opcional (ausente = se
+// queda como está) y, si viene, pasa por las MISMAS reglas que al crear.
+export const correctQuotationExpenseValidator = [
+  correctionIdParamRule("id"),
+  // La cotización de un gasto no se corrige: se anula y se registra en la
+  // correcta.
+  body("quotation_id")
+    .not()
+    .exists()
+    .withMessage("La cotización de un gasto no se corrige: anula este gasto y regístralo en la cotización correcta"),
+  moneyAmountRule("amount", "El monto debe ser mayor a 0", { onlyIf: presentIn("amount") }),
+  moneyDateRule("spent_at", "La fecha del gasto no es válida", { onlyIf: presentIn("spent_at") }),
+  body("description")
+    .optional()
+    .isString()
+    .withMessage("La descripción no es válida")
+    .bail()
+    .trim()
+    .isLength({ min: 1, max: 300 })
+    .withMessage("La descripción es obligatoria (máximo 300 caracteres)"),
+  // Texto libre (como al crear); null = sin categoría.
+  body("category").optional({ values: "null" }).isString().isLength({ max: 50 }).withMessage("Máximo 50 caracteres"),
+  // null = efectivo. Que sea de la empresa y esté activa lo valida el service.
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  correctionReasonRule(),
+];
+
+// GET /quotation/expense/:id/corrections?page=&limit=
+export { correctionHistoryValidator as quotationExpenseCorrectionsValidator };

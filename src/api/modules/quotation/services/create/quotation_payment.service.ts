@@ -1,5 +1,7 @@
 import { Op, QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
+import { AppError } from "../../../../../core/errors/AppError";
+import { assertCashPeriodOpen } from "../../../../../core/money/cashPeriod";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
@@ -10,7 +12,20 @@ import { assertQuotationIsActive } from "../shared/active_quotation";
 // (ver computeQuotationTotal) — nunca para disfrazar un sobre-pago real.
 const OVERPAY_TOLERANCE = 0.01;
 
-export class PaymentExceedsBalanceError extends Error {}
+// Sobre-pago: 400 con código estable (PAYMENT_EXCEEDS_BALANCE) para que el
+// frontend lo distinga. Es un AppError: el errorHandler central lo responde
+// solo, sin que cada controller tenga que re-envolverlo.
+export class PaymentExceedsBalanceError extends AppError {
+  constructor(remaining: number) {
+    super(
+      400,
+      `Con este monto la cotización queda sobre-pagada — el saldo pendiente es S/ ${remaining.toFixed(2)}`,
+      undefined,
+      "PAYMENT_EXCEEDS_BALANCE"
+    );
+    this.name = "PaymentExceedsBalanceError";
+  }
+}
 
 // Antes no existía NINGÚN tope: se podía registrar/editar un pago por
 // cualquier monto, dejando `total_paid` por encima de `quotation.total` sin
@@ -31,6 +46,8 @@ const assertPaymentWithinBalance = async ({
   excludePaymentId?: number;
   transaction: Transaction;
 }) => {
+  // Cotización ya bloqueada (FOR UPDATE): se devuelve para que el caller
+  // (empresa/tienda, período de caja) no la vuelva a leer.
   const quotation = await DataBase.instance.quotation.findOne({
     where: { id: quotationId },
     transaction,
@@ -51,10 +68,10 @@ const assertPaymentWithinBalance = async ({
 
   if (projectedTotal > total + OVERPAY_TOLERANCE) {
     const remaining = Math.max(total - existingTotal, 0);
-    throw new PaymentExceedsBalanceError(
-      `Este pago deja la cotización sobre-pagada — el saldo pendiente es S/ ${remaining.toFixed(2)}`
-    );
+    throw new PaymentExceedsBalanceError(remaining);
   }
+
+  return quotation;
 };
 
 export interface CreateQuotationPaymentInput {
@@ -123,6 +140,7 @@ const resolvePaymentAccountForQuotation = async ({
     accountId,
     companyId: quotation.company_id,
     required: true,
+    transaction,
   });
 };
 
@@ -144,7 +162,17 @@ const insertQuotationPayment = async ({
   // Adelanto al aceptar la cotización: solo cambia el texto del historial.
   isAdvance?: boolean;
 }) => {
-  await assertPaymentWithinBalance({ quotationId, amount: input.amount, transaction });
+  const quotation = await assertPaymentWithinBalance({ quotationId, amount: input.amount, transaction });
+
+  // Cierre mensual de caja (fase 2): un pago nuevo (o el adelanto al aceptar)
+  // no entra en un mes cerrado. Va después de los locks de la cotización.
+  await assertCashPeriodOpen({
+    companyId: quotation.company_id,
+    date: input.paid_at,
+    source: "quotation_payment",
+    movesCash: true,
+    transaction,
+  });
 
   const paymentAccountId = await resolvePaymentAccountForQuotation({
     quotationId,

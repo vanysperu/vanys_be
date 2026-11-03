@@ -10,6 +10,8 @@ import {
   toMoney,
 } from "../shared/scope";
 import {
+  ADJUSTMENT_ENTRY_SCOPE_SQL,
+  EXPENSE_ACTIVE_SQL,
   EXPENSE_FUNDING_JOIN_SQL,
   EXPENSE_PAID_BY_COMPANY_SQL,
   REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
@@ -32,7 +34,7 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
     fmt: BUCKET_SQL_FORMAT[period.granularity],
   };
 
-  const [quotations, payments, quotationExpenses, reimbursements, manualCash] = await Promise.all([
+  const [quotations, payments, quotationExpenses, reimbursements, manualCash, legs] = await Promise.all([
     selectRows<BucketRow>(
       `SELECT DATE_FORMAT(${EMISSION_DATE_SQL}, :fmt) AS bucket,
               COALESCE(SUM(q.total), 0) AS quoted,
@@ -55,7 +57,7 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
        FROM quotation_expense qe
        INNER JOIN quotation q ON q.id = qe.quotation_id
        ${EXPENSE_FUNDING_JOIN_SQL}
-       WHERE ${MONEY_SCOPE_SQL} AND ${EXPENSE_PAID_BY_COMPANY_SQL} AND qe.spent_at BETWEEN :from AND :to
+       WHERE ${MONEY_SCOPE_SQL} AND ${EXPENSE_ACTIVE_SQL} AND ${EXPENSE_PAID_BY_COMPANY_SQL} AND qe.spent_at BETWEEN :from AND :to
        GROUP BY bucket`,
       replacements
     ),
@@ -75,6 +77,19 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
        GROUP BY bucket`,
       replacements
     ),
+    // Cierre de caja: "Valor al cierre" (hold) suma a ingresos/egresos con
+    // signo; "Ajuste" (posting) va aparte con su efecto en el saldo.
+    selectRows<BucketRow>(
+      `SELECT DATE_FORMAT(e.entry_date, :fmt) AS bucket,
+              COALESCE(SUM(CASE WHEN e.leg = 'hold' AND e.direction = 'income' THEN e.amount ELSE 0 END), 0) AS income,
+              COALESCE(SUM(CASE WHEN e.leg = 'hold' AND e.direction = 'expense' THEN e.amount ELSE 0 END), 0) AS expense,
+              COALESCE(SUM(CASE WHEN e.leg = 'posting' AND e.direction = 'income' THEN e.amount
+                                WHEN e.leg = 'posting' THEN -e.amount ELSE 0 END), 0) AS adjustments
+       FROM cash_adjustment_entry e
+       WHERE ${ADJUSTMENT_ENTRY_SCOPE_SQL} AND e.entry_date BETWEEN :from AND :to
+       GROUP BY bucket`,
+      replacements
+    ),
   ]);
 
   const byBucket = (rows: BucketRow[]) => new Map(rows.map((row) => [row.bucket, row]));
@@ -83,16 +98,21 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
   const expenseMap = byBucket(quotationExpenses);
   const reimbursementMap = byBucket(reimbursements);
   const manualMap = byBucket(manualCash);
+  const legMap = byBucket(legs);
 
   return buildBuckets(period).map((bucket) => ({
     bucket,
     quoted: toMoney(quotationMap.get(bucket)?.quoted),
     won: toMoney(quotationMap.get(bucket)?.won),
-    income: toMoney(toMoney(paymentMap.get(bucket)?.amount) + toMoney(manualMap.get(bucket)?.income)),
+    income: toMoney(
+      toMoney(paymentMap.get(bucket)?.amount) + toMoney(manualMap.get(bucket)?.income) + toMoney(legMap.get(bucket)?.income)
+    ),
     expenses: toMoney(
       toMoney(expenseMap.get(bucket)?.amount) +
         toMoney(reimbursementMap.get(bucket)?.amount) +
-        toMoney(manualMap.get(bucket)?.expense)
+        toMoney(manualMap.get(bucket)?.expense) +
+        toMoney(legMap.get(bucket)?.expense)
     ),
+    adjustments: toMoney(legMap.get(bucket)?.adjustments),
   }));
 }

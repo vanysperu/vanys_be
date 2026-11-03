@@ -1,6 +1,7 @@
 import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
+import { assertCashPeriodOpen } from "../../../../../core/money/cashPeriod";
 import { logQuotationEvent, truncateForTimeline } from "../timeline/quotation_event.service";
 import { assertQuotationIsActive } from "../shared/active_quotation";
 
@@ -22,16 +23,36 @@ const createQuotationExpense = async ({
   input,
   createdBy,
   transaction,
+  movesCash = true,
 }: {
   quotationId: number;
   input: CreateQuotationExpenseInput;
   createdBy?: number;
   transaction?: Transaction;
+  // false = gasto de una compra pagada con plata de un trabajador: no mueve
+  // la caja de la empresa (su egreso es la reposición). Solo informa al
+  // gancho de cierre de caja.
+  movesCash?: boolean;
 }) => {
   const run = async (t: Transaction) => {
     // Solo en una cotización aceptada o en curso (con lock: no se cuela un
     // gasto en una cotización que se está cancelando).
     await assertQuotationIsActive(quotationId, "registrar un gasto", t);
+
+    // Cierre de caja (fase 2): el mes del gasto tiene que estar abierto.
+    const quotation = await DataBase.instance.quotation.findOne({
+      where: { id: quotationId },
+      attributes: ["id", "company_id"],
+      transaction: t,
+    });
+    if (!quotation) throw new Error("La cotización no existe");
+    await assertCashPeriodOpen({
+      companyId: quotation.company_id,
+      date: input.spent_at,
+      source: "quotation_expense",
+      movesCash,
+      transaction: t,
+    });
 
     const expense = await DataBase.instance.quotation_expense.create(
       {
@@ -42,6 +63,7 @@ const createQuotationExpense = async ({
         category: input.category ?? null,
         spent_at: input.spent_at,
         payment_account_id: input.payment_account_id ?? null,
+        is_deleted: false,
         created_by: createdBy ?? null,
         created_at: nowUtc(),
         updated_by: null,

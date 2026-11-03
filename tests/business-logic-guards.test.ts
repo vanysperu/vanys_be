@@ -61,8 +61,10 @@ describe("Guardas de negocio encontradas en auditoría", () => {
         amount: total + 1000,
         method: "cash",
         paid_at: "2026-10-11",
+        reason: "Corrección de prueba",
       });
       expect(res.status).toBe(400);
+      expect(res.body.code).toBe("PAYMENT_EXCEEDS_BALANCE");
     });
   });
 

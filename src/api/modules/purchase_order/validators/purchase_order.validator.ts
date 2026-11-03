@@ -1,6 +1,12 @@
 import { body, param } from "express-validator";
-import { moneyAmountRule } from "../../../../core/validators/money.validator";
+import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
+import {
+  correctionHistoryValidator,
+  correctionIdParamRule,
+  correctionReasonRule,
+} from "../../money_correction/validators/money_correction.validator";
 import { DataBase } from "../../../../database";
+import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
 
 export const createPurchaseOrderValidator = [
   body("company_id").not().isEmpty().withMessage("La empresa es obligatoria").bail().isInt({ gt: 0 }),
@@ -96,3 +102,44 @@ export const createPurchaseOrderItemPurchaseValidator = [
     return true;
   }),
 ];
+
+// ---- Corrección / anulación de compras ----
+
+// Solo la FORMA del id: existencia y alcance los resuelve el service (un id
+// ajeno responde 404, igual que uno que no existe).
+export const purchaseIdValidator = [correctionIdParamRule("id")];
+
+// PUT /purchase-order/purchase/disable/:id — motivo opcional: obligatorio solo
+// si la compra (pagada por la empresa) es de un mes cerrado: se registra como
+// ajuste (cierre de caja).
+export const annulPurchaseValidator = [correctionIdParamRule("id"), optionalAdjustmentReasonRule()];
+
+const presentIn = (field: string) => body(field).exists();
+
+// PUT /purchase-order/purchase/update/:id — cada campo es opcional (ausente =
+// se queda como está). Las reglas cruzadas (cuenta solo con plata de la
+// empresa, trabajador activo de la empresa, deuda ya repuesta) las aplica el
+// service con los valores ya bloqueados.
+export const correctPurchaseValidator = [
+  correctionIdParamRule("id"),
+  // El item (y con él la cotización) de una compra no se corrige: se anula y
+  // se registra la correcta.
+  body(["purchase_order_item_id", "item_id", "quotation_id"])
+    .not()
+    .exists()
+    .withMessage("El producto de una compra no se corrige: anula esta compra y registra la correcta"),
+  moneyAmountRule("amount", "El monto debe ser mayor a 0", { onlyIf: presentIn("amount") }),
+  body("quantity").optional().isInt({ gt: 0 }).withMessage("La cantidad comprada debe ser un número entero positivo"),
+  body("funding_source")
+    .optional()
+    .isIn(["company", "employee"])
+    .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),
+  body("paid_by_user_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El trabajador debe ser un id válido"),
+  body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  moneyDateRule("spent_at", "La fecha de la compra no es válida", { onlyIf: presentIn("spent_at") }),
+  body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
+  correctionReasonRule(),
+];
+
+// GET /purchase-order/purchase/:id/corrections?page=&limit=
+export { correctionHistoryValidator as purchaseCorrectionsValidator };

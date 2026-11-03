@@ -162,7 +162,15 @@ describe("Módulo de estadísticas", () => {
     const res = await overview();
     const trend = res.body.data.trend as { bucket: string }[];
     expect(trend).toHaveLength(30);
-    expect(trend[trend.length - 1]).toEqual({ bucket: limaDate(), quoted: 1870, won: 1100, income: 450, expenses: 180 });
+    // adjustments: ajustes de meses cerrados (cierre de caja); 0 sin caja configurada.
+    expect(trend[trend.length - 1]).toEqual({
+      bucket: limaDate(),
+      quoted: 1870,
+      won: 1100,
+      income: 450,
+      expenses: 180,
+      adjustments: 0,
+    });
   });
 
   it("con un rango largo agrupa por mes", async () => {
@@ -266,5 +274,46 @@ describe("Módulo de estadísticas", () => {
   ])("rechaza %s", async (_label, query) => {
     const res = await overview(query);
     expect(res.status).toBe(400);
+  });
+
+  // Un gasto anulado deja de existir para el dinero: ni "Gastos" de caja ni el
+  // margen lo cuentan (EXPENSE_ACTIVE_SQL). Se crea uno propio y se anula, así
+  // los números del escenario base no cambian.
+  it("un gasto anulado sale de los gastos, del margen, de la tendencia y de Caja", async () => {
+    const api = authedRequest(token);
+    const before = (await overview()).body.data.kpis.current;
+    const cashBefore = (await api.get(`/cash-movement/list?limit=100&dateFrom=${limaDate()}&dateTo=${limaDate()}`)).body
+      .data.summary;
+
+    const expense = await api.post(`/quotation/${quotationA}/expenses`, {
+      description: "Gasto que se anulará",
+      amount: 70,
+      category: "compra",
+      spent_at: limaDate(),
+    });
+    expect(expense.status).toBe(201);
+    const expenseId: number = expense.body.data.id;
+
+    const during = (await overview()).body.data.kpis.current;
+    expect(during.expenses).toBe(before.expenses + 70);
+    expect(during.margin_amount).toBe(before.margin_amount - 70);
+
+    // Endpoint de anulación de gastos de cotización (plan §2.4).
+    const annulled = await api.put(`/quotation/expense/disable/${expenseId}`);
+    expect(annulled.status).toBe(200);
+
+    const after = (await overview()).body.data.kpis.current;
+    expect(after.expenses).toBe(before.expenses);
+    expect(after.margin_amount).toBe(before.margin_amount);
+    expect(after.net_cash).toBe(before.net_cash);
+
+    const trend = (await overview()).body.data.trend as { bucket: string; expenses: number }[];
+    expect(trend[trend.length - 1]?.expenses).toBe(before.expenses);
+
+    // Caja y Estadísticas siguen cuadrando: la fila anulada no se lista ni suma.
+    const cashAfter = await api.get(`/cash-movement/list?limit=100&dateFrom=${limaDate()}&dateTo=${limaDate()}`);
+    expect(cashAfter.body.data.summary.expense).toBe(cashBefore.expense);
+    const rows = cashAfter.body.data.data as { source: string; source_id: number }[];
+    expect(rows.some((row) => row.source === "quotation_expense" && row.source_id === expenseId)).toBe(false);
   });
 });
