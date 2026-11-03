@@ -1,3 +1,4 @@
+import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { addDaysToDateOnly, nowUtc, toBusinessDateOnly } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
@@ -226,6 +227,65 @@ const computeDefaultValidUntil = async (createdAt: Date, companyId: number): Pro
   return addDaysToDateOnly(toBusinessDateOnly(createdAt), days);
 };
 
+export interface PricedQuotationItem extends CreateQuotationItemInput {
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+}
+
+// Valida y cotiza los items de una cotización con las reglas completas
+// (producto/técnica de la empresa y activos, técnica según el producto,
+// precio cargado en el modo elegido). Lo usan crear y "completar" una
+// cotización que llegó desde la web (services/update/quotation_items.service.ts):
+// así las dos rutas cobran exactamente igual.
+const priceQuotationItems = async ({
+  items,
+  companyId,
+  transaction,
+}: {
+  items: CreateQuotationItemInput[];
+  companyId: number;
+  transaction: Transaction;
+}): Promise<{ items: PricedQuotationItem[]; subtotal: number }> => {
+  const productIds = items.map((item) => item.product_id);
+  const techniqueIds = items.map((item) => item.technique_id).filter((id): id is number => Boolean(id));
+
+  const [products, techniques] = await Promise.all([
+    DataBase.instance.product.findAll({ where: { id: productIds }, transaction }),
+    techniqueIds.length > 0
+      ? DataBase.instance.customization_technique.findAll({ where: { id: techniqueIds }, transaction })
+      : Promise.resolve([]),
+  ]);
+
+  const pricedItems = items.map((item) => {
+    const product = products.find((row: ProductModel) => row.id === item.product_id);
+    if (!product) throw new Error(`El producto ${item.product_id} no existe`);
+    if (product.company_id !== companyId) {
+      throw new TenantMismatchError(`El producto "${product.name}" no pertenece a esta empresa`);
+    }
+    if (product.is_deleted) {
+      throw new DisabledCatalogEntityError(`El producto "${product.name}" está deshabilitado`);
+    }
+
+    const technique = resolveItemTechnique(product, item.technique_id, techniques, companyId);
+
+    const quantity = resolveQuantity(item.quantity);
+    const basePrice = resolveBasePrice(product, item.pricing_mode, item.custom_price);
+    // Se redondea el precio unitario ANTES de multiplicar para que
+    // "precio unitario × cantidad = subtotal" cuadre exactamente con lo
+    // que ve el cliente en el PDF — si se redondeara solo al final, un
+    // precio con técnica porcentual (ej. 12.345) mostraría 12.35 pero
+    // multiplicaría por 12.345 y el total no cerraría a mano.
+    const unitPrice = roundMoney(resolveUnitPrice(basePrice, technique, item.pricing_mode, item.custom_technique_price));
+    const subtotal = roundMoney(computeItemSubtotal(unitPrice, quantity));
+
+    return { ...item, quantity, unit_price: unitPrice, subtotal };
+  });
+
+  const subtotal = roundMoney(pricedItems.reduce((sum, item) => sum + item.subtotal, 0));
+  return { items: pricedItems, subtotal };
+};
+
 const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInput; createdBy?: number }) => {
   const transaction = await DataBase.instance.sequelize.transaction();
 
@@ -250,42 +310,11 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
       }
     }
 
-    const productIds = input.items.map((item) => item.product_id);
-    const techniqueIds = input.items.map((item) => item.technique_id).filter((id): id is number => Boolean(id));
-
-    const [products, techniques] = await Promise.all([
-      DataBase.instance.product.findAll({ where: { id: productIds }, transaction }),
-      techniqueIds.length > 0
-        ? DataBase.instance.customization_technique.findAll({ where: { id: techniqueIds }, transaction })
-        : Promise.resolve([]),
-    ]);
-
-    const itemsWithPricing = input.items.map((item) => {
-      const product = products.find((row: ProductModel) => row.id === item.product_id);
-      if (!product) throw new Error(`El producto ${item.product_id} no existe`);
-      if (product.company_id !== input.company_id) {
-        throw new TenantMismatchError(`El producto "${product.name}" no pertenece a esta empresa`);
-      }
-      if (product.is_deleted) {
-        throw new DisabledCatalogEntityError(`El producto "${product.name}" está deshabilitado`);
-      }
-
-      const technique = resolveItemTechnique(product, item.technique_id, techniques, input.company_id);
-
-      const quantity = resolveQuantity(item.quantity);
-      const basePrice = resolveBasePrice(product, item.pricing_mode, item.custom_price);
-      // Se redondea el precio unitario ANTES de multiplicar para que
-      // "precio unitario × cantidad = subtotal" cuadre exactamente con lo
-      // que ve el cliente en el PDF — si se redondeara solo al final, un
-      // precio con técnica porcentual (ej. 12.345) mostraría 12.35 pero
-      // multiplicaría por 12.345 y el total no cerraría a mano.
-      const unitPrice = roundMoney(resolveUnitPrice(basePrice, technique, item.pricing_mode, item.custom_technique_price));
-      const subtotal = roundMoney(computeItemSubtotal(unitPrice, quantity));
-
-      return { ...item, quantity, unit_price: unitPrice, subtotal };
+    const { items: itemsWithPricing, subtotal } = await priceQuotationItems({
+      items: input.items,
+      companyId: input.company_id,
+      transaction,
     });
-
-    const subtotal = roundMoney(itemsWithPricing.reduce((sum, item) => sum + item.subtotal, 0));
     const igvRate = await getIgvRate(input.company_id);
     const total = roundMoney(computeQuotationTotal(subtotal, Boolean(input.includes_igv), igvRate));
 
@@ -370,5 +399,5 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
   }
 };
 
-export { createQuotation, MissingProductPriceError, MissingQuantityError };
+export { createQuotation, priceQuotationItems, computeDefaultValidUntil, MissingProductPriceError, MissingQuantityError };
 

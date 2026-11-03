@@ -11,6 +11,8 @@ import {
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getIgvRate } from "../shared/tax_config";
 import { CreateQuotationPaymentInput, insertQuotationPayment } from "../create/quotation_payment.service";
+import { computeDefaultValidUntil } from "../create/quotation.service";
+import { assertRequestedQuotationIsComplete } from "./quotation_items.service";
 
 // Solo al aceptar se puede registrar un adelanto junto con el cambio de
 // estado (pedido explícito del usuario: al pasar a "Aceptada" preguntar si
@@ -55,6 +57,10 @@ const buildAllowedTransitions = (): Record<QuotationStatus, QuotationStatus[]> =
     map[status] = [...steps, ...(EXIT_TRANSITIONS[status] ?? [])];
   });
 
+  // Pedido de la web: se completa y pasa a Pendiente (recién ahí se le
+  // envía al cliente), o se descarta como Rechazada. No se vuelve a
+  // "Pendiente de cotizar" desde Pendiente: sus items ya se cotizaron.
+  map.quote_requested = ["pending", "rejected"];
   map.rejected = [];
   map.expired = [];
   map.cancelled = [];
@@ -238,8 +244,17 @@ const changeQuotationStatus = async ({
     const blockedAction = MONEY_BLOCKED_TARGETS[nextStatus];
     if (blockedAction) await assertNoMoneyInvolved(current, blockedAction, transaction);
 
+    const sendsWebRequestToClient = currentStatus === "quote_requested" && nextStatus === "pending";
+    if (sendsWebRequestToClient) await assertRequestedQuotationIsComplete(quotationId, transaction);
+
+    // La vigencia de un pedido de la web se cuenta desde que se le envía al
+    // cliente (pasa a Pendiente), no desde que llegó: si el equipo tardó en
+    // completarla, igual tiene sus días completos antes de que el job la venza.
+    const now = nowUtc();
+    const validUntil = sendsWebRequestToClient ? await computeDefaultValidUntil(now, current.company_id) : undefined;
+
     const result = await DataBase.instance.quotation.update(
-      { status: nextStatus, updated_by: updatedBy, updated_at: nowUtc() },
+      { status: nextStatus, updated_by: updatedBy, updated_at: now, ...(validUntil ? { valid_until: validUntil } : {}) },
       { where: { id: quotationId }, transaction }
     );
 

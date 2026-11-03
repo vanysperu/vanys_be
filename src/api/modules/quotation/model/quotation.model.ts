@@ -2,6 +2,10 @@ import { BuildOptions, DataTypes, Model, Sequelize } from "sequelize";
 import { roundMoney } from "../../../../utils/numbers";
 
 export type QuotationStatus =
+  // Pedido que llegó desde la web (POST /public/quotation-request): el
+  // cliente eligió productos y cantidades; el equipo completa técnica y
+  // precio y recién ahí la pasa a "pending" (ver web_quote_request/README.md).
+  | "quote_requested"
   | "pending"
   | "accepted"
   | "rejected"
@@ -14,6 +18,7 @@ export type QuotationStatus =
   | "finished";
 
 export const QUOTATION_STATUSES: QuotationStatus[] = [
+  "quote_requested",
   "pending",
   "accepted",
   "rejected",
@@ -29,6 +34,7 @@ export const QUOTATION_STATUSES: QuotationStatus[] = [
 // Espejo de QUOTATION_STATUS_LABEL en el frontend — usado en los mensajes
 // del timeline (grulla_fe: modules/quotations/types/quotation.types.ts).
 export const QUOTATION_STATUS_LABEL: Record<QuotationStatus, string> = {
+  quote_requested: "Pendiente de cotizar",
   pending: "Pendiente",
   accepted: "Aceptada",
   rejected: "Rechazada",

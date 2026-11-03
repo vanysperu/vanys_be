@@ -106,6 +106,7 @@ const writeProductionPackageJson = () => {
     engines: source.engines,
     scripts: {
       start: "node dist/index.js",
+      "api-key": "node scripts/api-key.js",
       build: "node -e \"console.log('El build ya viene incluido en el paquete (dist/ y public/).')\"",
     },
     dependencies: source.dependencies,
@@ -253,6 +254,10 @@ async function main() {
   copyDir(path.join(BACKEND_ROOT, "dist"), path.join(STAGE_DIR, "dist"), (source) => !source.endsWith(".map"));
   copyDir(path.join(FRONTEND_ROOT, "dist"), path.join(STAGE_DIR, "public"));
   copyDir(path.join(BACKEND_ROOT, "assets"), path.join(STAGE_DIR, "assets"));
+  // Gestión de API keys (web pública): se corre en el hosting con
+  // `npm run api-key -- create ...` (solo usa dotenv y mysql2, ya incluidas).
+  fs.mkdirSync(path.join(STAGE_DIR, "scripts"), { recursive: true });
+  fs.copyFileSync(path.join(BACKEND_ROOT, "scripts", "api-key.js"), path.join(STAGE_DIR, "scripts", "api-key.js"));
   writeProductionPackageJson();
   // Lockfile alineado al package.json de producción (mismas versiones que
   // desarrollo, sin devDependencies): reproducible y válido para `npm ci`.

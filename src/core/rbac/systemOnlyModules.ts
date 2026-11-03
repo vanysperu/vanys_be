@@ -9,7 +9,10 @@
 //   - no se le puede otorgar a un rol que no es de plataforma, ni siquiera
 //     desde la cuenta del Super Administrador (roles_resources);
 //   - sus endpoints de escritura exigen requireSystemRole.
-export const SYSTEM_ONLY_MODULE_CODES = ["roles_access"] as const;
+// "api_key": pantalla de API keys de integración (una key da acceso sin sesión
+// a crear clientes y cotizaciones de una empresa; pedido explícito del
+// usuario: "que solo pueda ver el super admin").
+export const SYSTEM_ONLY_MODULE_CODES = ["roles_access", "api_key"] as const;
 
 // Excepción: "Ver todas las tiendas" vive (por historia) dentro de
 // roles_access, pero NO es una pantalla: es un permiso de alcance de datos que

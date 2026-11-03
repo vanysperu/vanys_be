@@ -10,39 +10,9 @@ import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adj
 import { QUOTATION_STATUSES } from "../model/quotation.model";
 import { QUOTATION_ITEM_PRICING_MODES } from "../model/quotation_item.model";
 
-export const createQuotationValidator = [
-  body("company_id")
-    .not()
-    .isEmpty()
-    .withMessage("La empresa es obligatoria")
-    .bail()
-    .isInt({ gt: 0 })
-    .withMessage("La empresa debe ser un id válido"),
-  body("client_id")
-    .not()
-    .isEmpty()
-    .withMessage("El cliente es obligatorio")
-    .bail()
-    .isInt({ gt: 0 })
-    .withMessage("El cliente debe ser un id válido"),
-  // Tienda: opcional (una empresa puede tener una sola tienda y no
-  // obligar a elegir), pero si se manda debe ser un id válido — el
-  // service valida que pertenezca a la misma empresa de la cotización.
-  body("business_unit_id").optional({ values: "null" }).isInt({ gt: 0 }),
-  body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
-  body("valid_until").optional({ values: "null" }).isISO8601(),
-  // Opcional: la cotización sale a nombre de otra persona/empresa en el
-  // PDF, pero el cliente vinculado (client_id) sigue siendo el mismo.
-  body("billing_name").optional({ values: "null" }).isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
-  body("billing_document_number")
-    .optional({ values: "null" })
-    .isString()
-    .isLength({ max: 20 })
-    .withMessage("Máximo 20 caracteres"),
-  body("production_days")
-    .optional({ values: "null" })
-    .isInt({ min: 1, max: 365 })
-    .withMessage("Los días de producción deben ser un número entero entre 1 y 365"),
+// Reglas de los items, compartidas por crear y por "completar" una
+// cotización que llegó desde la web (PUT /quotation/:id/items).
+const quotationItemsRules = [
   body("items").isArray({ min: 1 }).withMessage("La cotización debe tener al menos un producto"),
   body("items.*.product_id").isInt({ gt: 0 }).withMessage("Cada item necesita un producto válido"),
   // Opcional en la forma: si es obligatoria o no depende del producto
@@ -76,6 +46,42 @@ export const createQuotationValidator = [
     if (missingPrice) throw new Error("Los items con precio personalizado necesitan un precio");
     return true;
   }),
+];
+
+export const createQuotationValidator = [
+  body("company_id")
+    .not()
+    .isEmpty()
+    .withMessage("La empresa es obligatoria")
+    .bail()
+    .isInt({ gt: 0 })
+    .withMessage("La empresa debe ser un id válido"),
+  body("client_id")
+    .not()
+    .isEmpty()
+    .withMessage("El cliente es obligatorio")
+    .bail()
+    .isInt({ gt: 0 })
+    .withMessage("El cliente debe ser un id válido"),
+  // Tienda: opcional (una empresa puede tener una sola tienda y no
+  // obligar a elegir), pero si se manda debe ser un id válido — el
+  // service valida que pertenezca a la misma empresa de la cotización.
+  body("business_unit_id").optional({ values: "null" }).isInt({ gt: 0 }),
+  body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
+  body("valid_until").optional({ values: "null" }).isISO8601(),
+  // Opcional: la cotización sale a nombre de otra persona/empresa en el
+  // PDF, pero el cliente vinculado (client_id) sigue siendo el mismo.
+  body("billing_name").optional({ values: "null" }).isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
+  body("billing_document_number")
+    .optional({ values: "null" })
+    .isString()
+    .isLength({ max: 20 })
+    .withMessage("Máximo 20 caracteres"),
+  body("production_days")
+    .optional({ values: "null" })
+    .isInt({ min: 1, max: 365 })
+    .withMessage("Los días de producción deben ser un número entero entre 1 y 365"),
+  ...quotationItemsRules,
   body("includes_delivery").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
   body("includes_design").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
   body("includes_igv").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
@@ -100,6 +106,27 @@ export const updateQuotationValidator = [
   paramQuotationIdValidator,
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("valid_until").optional({ values: "null" }).isISO8601(),
+  body("billing_name").optional({ values: "null" }).isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
+  body("billing_document_number")
+    .optional({ values: "null" })
+    .isString()
+    .isLength({ max: 20 })
+    .withMessage("Máximo 20 caracteres"),
+  body("production_days")
+    .optional({ values: "null" })
+    .isInt({ min: 1, max: 365 })
+    .withMessage("Los días de producción deben ser un número entero entre 1 y 365"),
+  body("includes_delivery").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
+  body("includes_design").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
+  body("includes_igv").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
+];
+
+// PUT /quotation/:id/items — completa una cotización "Pendiente de cotizar":
+// items con las mismas reglas que crear + los datos que se eligen al cotizar.
+export const completeQuotationValidator = [
+  paramQuotationIdValidator,
+  ...quotationItemsRules,
+  body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("billing_name").optional({ values: "null" }).isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
   body("billing_document_number")
     .optional({ values: "null" })

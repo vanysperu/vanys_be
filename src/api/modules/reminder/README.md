@@ -33,9 +33,11 @@ Filtros de `list`: `box` (`received` = me llegan, `sent` = los creé yo),
   tiempo que yo le coloque para que me recuerde cosas a mí o a otro
   usuario".
 - **Sin cron ni sockets**: el recordatorio "suena" cuando `remind_at <=
-  ahora`. La campana consulta `GET /reminder/due` cada minuto (también con la
-  pestaña en segundo plano, para el aviso del navegador). Funciona igual en
-  un hosting donde la app se duerme (Hostinger sin VPS).
+  ahora`. La campana consulta `GET /reminder/due` **cada 5 minutos** (también
+  con la pestaña en segundo plano, para el aviso del navegador) y **al hacer
+  clic en ella** (pedido explícito del usuario). Un aviso automático puede
+  llegar hasta 5 minutos tarde; abrir la campana lo trae al instante.
+  Funciona igual en un hosting donde la app se duerme (Hostinger sin VPS).
 - Se avisa solo dentro de la app (toast + campana) y, si el usuario lo
   activa, con una notificación del navegador. No hay correo/WhatsApp.
 - Destinatario: uno mismo (por defecto) u otro usuario **activo de la misma

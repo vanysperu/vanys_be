@@ -21,8 +21,11 @@ export const LOST_STATUSES: QuotationStatus[] = ["rejected", "expired", "cancell
 export const EMISSION_DATE_SQL = "DATE(CONVERT_TZ(q.created_at, '+00:00', '-05:00'))";
 
 // Alcance sobre la cotización `q`, para métricas de cotizaciones (mismo
-// criterio que Por cobrar).
+// criterio que Por cobrar). Un pedido de la web que todavía está en
+// "Pendiente de cotizar" no es una cotización emitida (no tiene precio final
+// ni se le envió al cliente): no cuenta hasta que pasa a Pendiente.
 export const QUOTATION_SCOPE_SQL = `q.is_deleted = false
+  AND q.status <> 'quote_requested'
   AND (:companyId IS NULL OR q.company_id = :companyId)
   AND (:businessUnitId IS NULL OR q.business_unit_id = :businessUnitId)`;
 

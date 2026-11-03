@@ -119,11 +119,28 @@ const getQuotationById = async (id: number) => {
         // Mismo orden en que se cargaron en el formulario.
         order: [["id", "ASC"]],
         include: [
+          // Con sku/requires_customization/is_deleted el formulario de
+          // "Completar cotización" (pedido de la web) arma el item aunque el
+          // producto no esté entre los que carga su selector.
           {
             association: "product",
-            attributes: ["id", "name", "price_unit", "price_hundred", "price_half_thousand", "price_thousand"],
+            attributes: [
+              "id",
+              "company_id",
+              "name",
+              "sku",
+              "price_unit",
+              "price_hundred",
+              "price_half_thousand",
+              "price_thousand",
+              "requires_customization",
+              "is_deleted",
+            ],
           },
-          { association: "technique", attributes: ["id", "name"] },
+          {
+            association: "technique",
+            attributes: ["id", "company_id", "name", "price_unit", "price_hundred", "price_half_thousand", "price_thousand", "is_deleted"],
+          },
           // "stage" es una fila de general_variable (category=production_stage):
           // name = nombre de la etapa, ref1 = color, ref2 = posición/orden.
           { association: "stage", attributes: ["id", "name", "ref1", "ref2"] },

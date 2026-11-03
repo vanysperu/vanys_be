@@ -5,6 +5,7 @@ import { paginationValidator } from "../../../validators/pagination.validator";
 import {
   changeItemStageValidator,
   changeStatusValidator,
+  completeQuotationValidator,
   createQuotationExpenseValidator,
   createQuotationPaymentValidator,
   correctQuotationExpenseValidator,
@@ -30,6 +31,7 @@ import {
   listQuotationsController,
   updateQuotationController,
 } from "../controllers/quotation.controller";
+import { completeQuotationController } from "../controllers/complete.controller";
 
 export const router: Router = Router();
 
@@ -52,5 +54,7 @@ router.post("/create", verifyAccess, createQuotationValidator, allValidator, cre
 router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, updateQuotationController);
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);
 router.put("/item/:itemId/stage", verifyAccess, changeItemStageValidator, allValidator, changeItemStageController);
+// Completar una cotización "Pendiente de cotizar" (llegó desde la web).
+router.put("/:id/items", verifyAccess, completeQuotationValidator, allValidator, completeQuotationController);
 router.post("/:id/payments", verifyAccess, createQuotationPaymentValidator, allValidator, createQuotationPaymentController);
 router.post("/:id/expenses", verifyAccess, createQuotationExpenseValidator, allValidator, createQuotationExpenseController);

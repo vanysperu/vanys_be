@@ -14,7 +14,8 @@
     "db:reset-factory": "node scripts/reset-to-factory.js",
     "db:seed-qa": "node scripts/seed-qa-fixtures.js",
     "release": "node scripts/package-release.js",
-    "db:upgrade-production": "node scripts/upgrade-production.js"
+    "db:upgrade-production": "node scripts/upgrade-production.js",
+    "api-key": "node scripts/api-key.js"
   },
   "keywords": [],
   "author": "",

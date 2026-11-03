@@ -24,7 +24,8 @@ export async function getStatusBreakdownService(
   );
 
   const byStatus = new Map(rows.map((row) => [row.status, row]));
-  return QUOTATION_STATUSES.map((status) => ({
+  // "Pendiente de cotizar" queda afuera, igual que en QUOTATION_SCOPE_SQL.
+  return QUOTATION_STATUSES.filter((status) => status !== "quote_requested").map((status) => ({
     status,
     count: toCount(byStatus.get(status)?.count),
     amount: toMoney(byStatus.get(status)?.amount),

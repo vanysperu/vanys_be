@@ -12,6 +12,7 @@
 | POST   | /quotation/create                | create                     | cotizacion      |
 | PUT    | /quotation/update/:id            | update                     | cotizacion      |
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
+| PUT    | /quotation/:id/items             | completar pedido de la web ("Pendiente de cotizar") | cotizacion (`cotizacion.complete.button`) |
 | PUT    | /quotation/item/:itemId/stage    | mover etapa de producción  | cotizacion      |
 | POST   | /quotation/:id/payments          | registrar pago             | cotizacion      |
 | POST   | /quotation/:id/expenses          | registrar gasto            | cotizacion      |
@@ -57,6 +58,23 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   `client_id`, `status` o `total` por fuera de sus flujos.
 
 ### Estados
+- **`quote_requested` ("Pendiente de cotizar")**: pedido que llegó desde la
+  web (`POST /api/public/quotation-request`, ver
+  [`web_quote_request`](../web_quote_request/README.md)). Solo puede pasar a
+  `pending` o `rejected`, y nunca se vuelve a él. Mientras esté así:
+  - `PUT /quotation/:id/items` reemplaza todos sus items con las mismas
+    reglas y cálculo que crear (`priceQuotationItems`), más notas, IGV,
+    delivery/diseño, días de producción y "a nombre de". Cliente, empresa y
+    tienda no cambian. En cualquier otro estado → 409
+    `QUOTATION_NOT_EDITABLE`. Mismo alcance de escritura que pagos
+    (`assertQuotationWritable`).
+  - Pasarla a `pending` exige que esté completa (al menos un producto,
+    técnica donde el producto la requiere, precio > 0); si no → 409
+    `QUOTATION_INCOMPLETE`. Al pasar, `valid_until` se calcula desde ese día.
+  - No cuenta en Estadísticas (`QUOTATION_SCOPE_SQL`) ni en "Por cobrar".
+  - Botón del detalle: `cotizacion.complete.button` (otorgado a todo rol con
+    `cotizacion.update.button`, Gestor incluido). Abre el mismo formulario
+    de "Nueva cotización" en modo completar.
 - Cadena principal + transiciones de salida; `rejected`, `expired`,
   `cancelled` y **`finished`** son terminales. Que `finished` no estuviera
   en esa lista permitía revertir una cotización ya cerrada y cobrada hasta

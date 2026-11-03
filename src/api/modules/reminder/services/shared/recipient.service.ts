@@ -16,14 +16,14 @@ export interface RecipientRow {
   company_id: number | null;
 }
 
-// Usuarios activos de la MISMA empresa del que avisa (is_system: de todas)
-// que pueden ver recordatorios. `userId` acota a uno puntual (validación).
-const findEligibleRecipients = async ({
-  actor,
+// Usuarios activos de una empresa (null: de todas) que pueden ver
+// recordatorios. `userId` acota a uno puntual (validación).
+const queryRecipients = async ({
+  companyId,
   search,
   userId,
 }: {
-  actor: IToken;
+  companyId: number | null;
   search?: string;
   userId?: number;
 }): Promise<RecipientRow[]> => {
@@ -54,7 +54,7 @@ const findEligibleRecipients = async ({
     {
       type: QueryTypes.SELECT,
       replacements: {
-        companyId: actor.isSystem ? null : actor.companyId,
+        companyId,
         accessCode: REMINDER_ACCESS_CODE,
         // Valor bindeado (nunca interpolado): el % va dentro del parámetro.
         search: search ? `%${search}%` : null,
@@ -63,6 +63,15 @@ const findEligibleRecipients = async ({
     }
   )) as RecipientRow[];
 };
+
+// Usuarios de la MISMA empresa del que avisa (is_system: de todas).
+const findEligibleRecipients = ({ actor, search, userId }: { actor: IToken; search?: string; userId?: number }) =>
+  queryRecipients({ companyId: actor.isSystem ? null : actor.companyId, search, userId });
+
+// Todos los usuarios de una empresa que pueden ver recordatorios: avisos que
+// genera el sistema para "toda la empresa" (ej. un pedido de la web con
+// productos que no existen), sin un usuario que los envíe a mano.
+const findCompanyRecipients = (companyId: number) => queryRecipients({ companyId });
 
 // Destinatario validado: uno mismo, o un usuario de la propia empresa que
 // pueda ver recordatorios. Nunca se confía en un id del body sin validarlo.
@@ -78,4 +87,4 @@ const resolveRecipient = async (actor: IToken, recipientUserId: number | null | 
   return recipient;
 };
 
-export { findEligibleRecipients, resolveRecipient };
+export { findEligibleRecipients, findCompanyRecipients, resolveRecipient };

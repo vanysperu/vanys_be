@@ -37,6 +37,8 @@ import { router as PaymentRoutes } from "../api/modules/payment/routes/payment.r
 import { router as EmployeeDebtRoutes } from "../api/modules/employee_debt/routes/employee_debt.routes";
 import { router as ReceivableRoutes } from "../api/modules/receivable/routes/receivable.routes";
 import { router as ReminderRoutes } from "../api/modules/reminder/routes/reminder.routes";
+import { router as PublicWebRoutes } from "../api/modules/web_quote_request/routes/web_quote_request.routes";
+import { router as ApiKeyRoutes } from "../api/modules/api_key/routes/api_key.routes";
 import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
 import { serveCompanyAssetController } from "../api/modules/uploads/controllers/uploads.controller";
@@ -107,6 +109,11 @@ export default class Server {
     // con un secreto compartido, no con sesión (ver requireCronSecret).
     this._router.post("/internal/jobs/expire-quotations", requireCronSecret, expireQuotationsJobController);
 
+    // Integraciones sin sesión (la web pública de cada empresa): se
+    // autentican con API key por empresa, no con token (que vence). Ver
+    // web_quote_request/README.md.
+    this._router.use("/public", PublicWebRoutes);
+
     // Chequeo de salud para el panel del hosting / monitoreo externo: además
     // de "el proceso responde", confirma que la base de datos contesta.
     this._router.get("/health", async (_req: Request, res: Response) => {
@@ -149,6 +156,7 @@ export default class Server {
     this._router.use("/employee-debt", EmployeeDebtRoutes);
     this._router.use("/receivable", ReceivableRoutes);
     this._router.use("/reminder", ReminderRoutes);
+    this._router.use("/api-key", ApiKeyRoutes);
     this._router.use("/statistics", StatisticsRoutes);
     this._router.use("/uploads", UploadsRoutes);
 
