@@ -4,7 +4,9 @@ dist/
 
 # Imágenes subidas a disco ANTES de que se guardaran en la base de datos
 # (hoy van a la tabla company_asset). Nunca se versionan.
-uploads/
+# Con "/" al inicio: solo la carpeta de la raíz. Sin él también ignoraba el
+# CÓDIGO de src/api/modules/uploads/, que nunca llegó al repositorio.
+/uploads/
 
 # Environment files (.env.example SÍ se versiona: no tiene valores reales)
 .env
