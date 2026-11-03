@@ -158,6 +158,38 @@ describe("Imágenes de marca: se borran las que ya no se usan, solo de la misma 
     expect(await assetExists(companyId, fileNameOf(qr))).toBe(false);
   });
 
+  // Antes el Super Administrador recibía "No se recibió ninguna imagen": la
+  // empresa solo se leía del token y él no tiene empresa propia.
+  it("el Super Administrador sube la imagen a la empresa que elige", async () => {
+    const superToken = (await login("qa.superadmin@grulla.test", "Test1234")).token;
+    const uploadAsSuperAdmin = (targetCompanyId?: number) => {
+      const upload = request(BASE_URL)
+        .post("/api/uploads/company-asset")
+        .set("Authorization", `Bearer ${superToken}`);
+      if (targetCompanyId !== undefined) upload.field("company_id", String(targetCompanyId));
+      return upload.attach("file", PNG_BYTES, { filename: "logo.png", contentType: "image/png" });
+    };
+
+    const res = await uploadAsSuperAdmin(otherCompanyId);
+    expect(res.status).toBe(201);
+    const path = res.body.data.path as string;
+    expect(companyIdOf(path)).toBe(otherCompanyId);
+    otherCompanyFiles.push(fileNameOf(path));
+
+    expect((await uploadAsSuperAdmin()).status).toBe(400);
+  });
+
+  it("un usuario de empresa no puede subir imágenes a otra empresa", async () => {
+    const res = await request(BASE_URL)
+      .post("/api/uploads/company-asset")
+      .set("Authorization", `Bearer ${token}`)
+      .field("company_id", String(otherCompanyId))
+      .attach("file", PNG_BYTES, { filename: "logo.png", contentType: "image/png" });
+
+    expect(res.status).toBe(201);
+    expect(companyIdOf(res.body.data.path as string)).toBe(companyId);
+  });
+
   it("al cambiar el QR de una cuenta se borra el anterior", async () => {
     const firstQr = await upload();
     const accountId = await createPaymentAccount(firstQr);
