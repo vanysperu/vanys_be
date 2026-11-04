@@ -4,6 +4,7 @@ import {
   PAYMENT_ACCOUNT_CATEGORY,
 } from "../shared/payment_account.service";
 import { loadManageableVariable } from "../shared/variable_scope.service";
+import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/company_asset.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant.
 // Una fila global (company_id NULL) solo la elimina un is_system: para los
@@ -20,5 +21,13 @@ export async function deleteVariableGeneralById(id: number, companyId: number | 
   // pasaría a "Efectivo" (ver assertPaymentAccountCanBeRemoved).
   if (row.category === PAYMENT_ACCOUNT_CATEGORY) await assertPaymentAccountCanBeRemoved(id);
 
-  return DataBase.instance.variable_general.destroy({ where });
+  // El QR de la fila eliminada ya no lo usa nadie: se borra en la misma
+  // transacción (deshabilitar no lo borra: la fila sigue y puede volver).
+  return DataBase.instance.sequelize.transaction(async (transaction) => {
+    const deleted = await DataBase.instance.variable_general.destroy({ where, transaction });
+    if (deleted > 0 && row.company_id !== null) {
+      await purgeUnusedCompanyAssets({ companyId: row.company_id, replacedPaths: [row.ref2], transaction });
+    }
+    return deleted;
+  });
 }

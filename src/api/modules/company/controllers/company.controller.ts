@@ -6,7 +6,7 @@ import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import { createCompany } from "../services/create/company.service";
-import { updateCompanyById } from "../services/update/company.service";
+import { updateCompanyReplacingLogo } from "../services/update/company_logo.service";
 import { getCompaniesList, getCompanyById } from "../services/find/company.service";
 import { disableOrEnableCompanyById } from "../services/delete/company.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
@@ -47,7 +47,7 @@ export const updateCompanyController = asyncHandler(async (req: Request, res: Re
   // Una empresa inactiva SÍ se puede seguir editando (pedido explícito del
   // usuario) — a diferencia de roles/clientes, acá no se bloquea la edición
   // por estado.
-  const result = await updateCompanyById({ company: req.body, companyId: Number(id), updatedBy: user.userId });
+  const result = await updateCompanyReplacingLogo({ company: req.body, companyId: Number(id), updatedBy: user.userId });
 
   ok(res, 200, result, "Empresa actualizada correctamente");
 });
@@ -95,7 +95,7 @@ export const updateMyCompanyDocumentSettingsController = asyncHandler(async (req
   // lugar donde cargarlo, se aplica a todas las cotizaciones de la
   // empresa (pedido explícito del usuario).
   const { business_name, address, phone, logo_url, legal_terms_caption } = req.body;
-  const result = await updateCompanyById({
+  const result = await updateCompanyReplacingLogo({
     company: { business_name, address, phone, logo_url, legal_terms_caption },
     companyId,
     updatedBy: userId,
