@@ -344,12 +344,65 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(other.body.data.meta.total).toBe(0);
   });
 
-  it("una categoría de otra empresa falla ese producto en todas las empresas (nunca a medias)", async () => {
+  it("en la réplica, lo que no existe se guarda sin esa categoría; en la empresa de la key sigue siendo error", async () => {
+    const mainOnlySubId = await createVariable({
+      category: "product_subcategory",
+      title: "Subcategoría",
+      prefix_id: `MS${Date.now()}`,
+      name: `Sub de global jest ${sku}`,
+      ref1: String(categoryId),
+      company_id: mainCompanyId,
+    });
+    const replicaCategoryId = await createVariable({
+      category: "product_category",
+      title: "Categoría",
+      prefix_id: `RC${Date.now()}`,
+      name: `De la réplica jest ${sku}`,
+      company_id: replicaCompanyId,
+    });
+    const send = (products: object[]) =>
+      publicPost("/products/bulk", { replicate: true, company_ids: [replicaCompanyId], products });
+    const inCompany = async (companyId: number, productSku: string) =>
+      (await api().get(`/product/list?companyId=${companyId}&sku=${productSku}`)).body.data.data[0];
+
+    // Categoría solo de la empresa de la key: en la réplica queda sin categoría.
+    const noCategory = await send([{ sku: `${sku}-C`, name: "Categoría propia", price_unit: 1, category_id: mainOnlyCategoryId }]);
+    expect(noCategory.body.data.results[0].status).toBe("ok");
+    expect(noCategory.body.data.results[0].companies).toEqual([
+      expect.objectContaining({ company_id: mainCompanyId, action: "created" }),
+      expect.objectContaining({ company_id: replicaCompanyId, action: "created", category_skipped: true }),
+    ]);
+    expect(noCategory.body.data.results[0].companies[0].category_skipped).toBeUndefined();
+    expect(noCategory.body.data.warnings.join(" ")).toContain(`empresa ${replicaCompanyId}, 1 producto(s)`);
+    expect((await inCompany(mainCompanyId, `${sku}-C`)).category).toMatchObject({ id: mainOnlyCategoryId });
+    expect((await inCompany(replicaCompanyId, `${sku}-C`)).category).toBeNull();
+
+    // Categoría global + subcategoría propia: en la réplica se conserva la
+    // categoría y solo se quita la subcategoría.
+    await send([
+      { sku: `${sku}-S`, name: "Sub propia", price_unit: 1, category_id: categoryId, subcategory_id: mainOnlySubId },
+    ]);
+    const replicaProduct = await inCompany(replicaCompanyId, `${sku}-S`);
+    expect(replicaProduct.category).toMatchObject({ id: categoryId });
+    expect(replicaProduct.subcategory).toBeNull();
+
+    // Si el producto ya tiene categoría en la réplica, no se la borra.
+    await api().put(`/product/update/${replicaProduct.id}`, { category_id: replicaCategoryId });
+    await send([{ sku: `${sku}-S`, category_id: mainOnlyCategoryId }]);
+    expect((await inCompany(replicaCompanyId, `${sku}-S`)).category).toMatchObject({ id: replicaCategoryId });
+
+    // Categoría que NO sirve en la empresa de la key: error y no se guarda en ninguna.
+    const invalid = await send([{ sku: `${sku}-X`, name: "Inválida", price_unit: 1, category_id: replicaCategoryId }]);
+    expect(invalid.body.data.results[0]).toMatchObject({ status: "error", code: "INVALID_CATEGORY" });
+    expect(await inCompany(mainCompanyId, `${sku}-X`)).toBeUndefined();
+    expect(await inCompany(replicaCompanyId, `${sku}-X`)).toBeUndefined();
+  });
+
+  it("un producto con error no frena al resto del envío", async () => {
     const res = await publicPost("/products/bulk", {
       replicate: true,
       company_ids: [replicaCompanyId],
       products: [
-        { sku: `${sku}-C`, name: "Categoría ajena", price_unit: 1, category_id: mainOnlyCategoryId },
         { sku: `${sku}-OK`, name: "Correcto", price_unit: 2 },
         { sku: `${sku}-OK`, name: "Repetido", price_unit: 3 },
         { sku: `${sku}-P`, name: "Sin precio" },
@@ -357,14 +410,9 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     });
     expect(res.status).toBe(200);
     const bySku = Object.fromEntries(res.body.data.results.map((result: { sku: string }) => [result.sku, result]));
-    expect(bySku[`${sku}-C`]).toMatchObject({ status: "error", code: "INVALID_CATEGORY" });
     expect(bySku[`${sku}-P`]).toMatchObject({ status: "error", code: "PRICE_REQUIRED" });
     expect(res.body.data.results.filter((result: { sku: string; status: string }) => result.sku === `${sku}-OK`).map((r: { status: string }) => r.status)).toEqual(["ok", "error"]);
-    expect(res.body.data.summary.failed).toBe(3);
-
-    // Se revirtió también en la empresa principal (donde la categoría sí era válida).
-    const main = await api().get(`/product/list?companyId=${mainCompanyId}&sku=${sku}-C`);
-    expect(main.body.data.meta.total).toBe(0);
+    expect(res.body.data.summary.failed).toBe(2);
   });
 
   it("la limpieza de imágenes conserva las fotos de productos y borra las subidas abandonadas", async () => {

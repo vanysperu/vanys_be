@@ -23,6 +23,9 @@ export interface BulkProductCompanyResult {
   company_id: number;
   product_id: number;
   action: BulkProductAction;
+  // Réplica: la categoría o subcategoría no existe en esta empresa y se
+  // guardó sin ella.
+  category_skipped?: boolean;
 }
 
 export interface BulkProductResult {

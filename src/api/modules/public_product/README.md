@@ -68,8 +68,14 @@ empresa de la key. Respuesta `201`:
   o actualiza en esas empresas, pero **solo si el Super Administrador se las
   habilitó a esa key** (Configuración → API keys → "Puede replicar productos
   a"). Una empresa no permitida → `403 REPLICATE_NOT_ALLOWED` y no se toca nada.
-  Cada empresa recibe **su propia copia** de la foto. Para replicar con
-  categoría, usar categorías **globales** (una de la empresa A no sirve en B).
+  Cada empresa recibe **su propia copia** de la foto.
+- **Categoría en la réplica** (decisión del usuario): en la empresa de la key
+  la categoría tiene que ser válida (si no, el producto da error y no se guarda
+  en ninguna). En una empresa de réplica, si la categoría o subcategoría no
+  existe ahí (no es global ni de esa empresa), el producto **se guarda igual sin
+  ella**: uno nuevo queda sin categoría y uno existente conserva la que tenía.
+  Se avisa con `category_skipped: true` en `results[].companies[]` y un aviso por
+  empresa en `warnings`. Con categorías **globales** se conserva en todas.
 - **Transacción por producto**: un producto queda guardado en todas las
   empresas destino o en ninguna. Un producto con error no frena a los demás.
 

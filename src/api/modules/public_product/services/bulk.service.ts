@@ -3,6 +3,7 @@ import { DataBase } from "../../../../database";
 import { AppError } from "../../../../core/errors/AppError";
 import { ApiKeyContext } from "../../api_key/types/api_key.types";
 import { getAllowedReplicateCompanyIds } from "../../api_key/services/shared/replicate_companies";
+import { keepUsableCategories } from "../../product/services/shared/catalog";
 import { companiesWithProductImages, copyCompanyAsset } from "../../product/services/shared/images";
 import { createProductRecord, ProductWriteInput, updateProductRecord } from "../../product/services/shared/save_product";
 import {
@@ -72,7 +73,21 @@ async function upsertInCompany(
   apiKey: ApiKeyContext,
   transaction: Transaction
 ): Promise<BulkProductCompanyResult> {
-  const input = { ...toWriteInput(item), image_path: await imageForCompany(item.image_path, companyId, apiKey, transaction) };
+  // En la empresa de la key la categoría tiene que ser válida (si no, error).
+  // En una réplica, lo que no exista ahí simplemente no se guarda (pedido
+  // explícito del usuario): el producto se replica igual, sin esa categoría.
+  const isReplica = companyId !== apiKey.companyId;
+  const categories = isReplica
+    ? await keepUsableCategories({ companyId, categoryId: item.category_id, subcategoryId: item.subcategory_id, transaction })
+    : { categoryId: item.category_id, subcategoryId: item.subcategory_id, dropped: false };
+  const categorySkipped = categories.dropped ? { category_skipped: true } : {};
+
+  const input = {
+    ...toWriteInput(item),
+    category_id: categories.categoryId,
+    subcategory_id: categories.subcategoryId,
+    image_path: await imageForCompany(item.image_path, companyId, apiKey, transaction),
+  };
   const existing = await DataBase.instance.product.findOne({
     where: { company_id: companyId, sku: input.sku ?? "" },
     order: [["id", "ASC"]],
@@ -84,10 +99,10 @@ async function upsertInCompany(
   // (no hay usuario en la sesión).
   if (existing) {
     await updateProductRecord({ product: existing, input, actorId: apiKey.issuedBy, transaction });
-    return { company_id: companyId, product_id: Number(existing.id), action: "updated" };
+    return { company_id: companyId, product_id: Number(existing.id), action: "updated", ...categorySkipped };
   }
   const created = await createProductRecord({ companyId, input, actorId: apiKey.issuedBy, transaction });
-  return { company_id: companyId, product_id: Number(created.id), action: "created" };
+  return { company_id: companyId, product_id: Number(created.id), action: "created", ...categorySkipped };
 }
 
 const describeError = (error: unknown): { error: string; code?: string } => {
@@ -136,12 +151,21 @@ export async function bulkUpsertProductsService(
   const companyResults = results.flatMap((result) => result.companies ?? []);
   const sentImages = request.products.some((item) => Boolean(item.image_path));
   const withoutImages = targets.filter((companyId) => !withImages.has(companyId));
-  const warnings =
+  const imageWarnings =
     sentImages && withoutImages.length > 0
       ? [
           `Las fotos se guardaron, pero no se muestran en las empresas ${withoutImages.join(", ")} porque no tienen habilitadas las fotos de productos.`,
         ]
       : [];
+  // Un aviso por empresa (no uno por producto): en un envío de 200 productos
+  // la lista sería ilegible. El detalle va en results[].companies[].
+  const categoryWarnings = targets.flatMap((companyId) => {
+    const skipped = companyResults.filter((result) => result.company_id === companyId && result.category_skipped).length;
+    return skipped > 0
+      ? [`En la empresa ${companyId}, ${skipped} producto(s) se guardaron sin categoría o subcategoría porque no existe ahí.`]
+      : [];
+  });
+  const warnings = [...imageWarnings, ...categoryWarnings];
 
   return {
     summary: {

@@ -32,6 +32,38 @@ const loadUsableVariable = async (
 };
 
 /**
+ * Para la RÉPLICA a otra empresa (pedido explícito del usuario: "si no existe,
+ * guárdalo sin esa categoría"): conserva solo lo que `companyId` puede usar.
+ * Lo que no existe ahí se quita (`undefined` = no tocar: un producto nuevo
+ * queda sin categoría y uno existente conserva la suya). Sin categoría, su
+ * subcategoría tampoco se conserva. `dropped` = se quitó algo.
+ */
+export async function keepUsableCategories({
+  companyId,
+  categoryId,
+  subcategoryId,
+  transaction,
+}: {
+  companyId: number;
+  categoryId: number | null | undefined;
+  subcategoryId: number | null | undefined;
+  transaction?: Transaction;
+}): Promise<{ categoryId: number | null | undefined; subcategoryId: number | null | undefined; dropped: boolean }> {
+  const category = categoryId ? await loadUsableVariable(categoryId, PRODUCT_CATEGORY, companyId, transaction) : null;
+  const subcategory = subcategoryId
+    ? await loadUsableVariable(subcategoryId, PRODUCT_SUBCATEGORY, companyId, transaction)
+    : null;
+
+  const dropsCategory = Boolean(categoryId) && !category;
+  const dropsSubcategory = Boolean(subcategoryId) && (!subcategory || dropsCategory);
+  return {
+    categoryId: dropsCategory ? undefined : categoryId,
+    subcategoryId: dropsSubcategory ? undefined : subcategoryId,
+    dropped: dropsCategory || dropsSubcategory,
+  };
+}
+
+/**
  * Valida la categoría/subcategoría de un producto de `companyId`:
  * - tienen que existir, estar activas y ser globales o de ESA empresa;
  * - la subcategoría tiene que colgar de la categoría elegida;
