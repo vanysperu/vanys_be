@@ -60,6 +60,10 @@ export const listProductsController = asyncHandler(async (req: Request, res: Res
     status,
     dateFrom: req.query.dateFrom,
     dateTo: req.query.dateTo,
+    productCategoryId: Number(req.query.categoryId) > 0 ? Number(req.query.categoryId) : undefined,
+    productSubcategoryId: Number(req.query.subcategoryId) > 0 ? Number(req.query.subcategoryId) : undefined,
+    color: (req.query.color as string | undefined)?.trim() || undefined,
+    code: (req.query.code as string | undefined)?.trim() || undefined,
   });
   const message = resp.data.length === 0 ? "No se encontraron productos" : "Lista de productos obtenida correctamente";
 

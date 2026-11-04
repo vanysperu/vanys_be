@@ -26,6 +26,13 @@ export interface ProductAttributes {
   // Si es false, el producto se cotiza SIN técnica de personalización (no
   // hay selector de técnica en la cotización ni técnica en el PDF).
   requires_customization: boolean;
+  // Categoría / subcategoría: filas de Variables Generales (category =
+  // "product_category" / "product_subcategory"). Ver services/shared/catalog.ts.
+  category_id: number | null;
+  subcategory_id: number | null;
+  // Ruta pública de la foto (company_asset de la MISMA empresa). Solo se
+  // muestra si la empresa tiene habilitadas las fotos de productos.
+  image_path: string | null;
   is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
@@ -57,6 +64,9 @@ export function ProductFactory(sequelize: Sequelize): ProductStatic {
       price_half_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       requires_customization: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      category_id: { type: DataTypes.BIGINT, allowNull: true },
+      subcategory_id: { type: DataTypes.BIGINT, allowNull: true },
+      image_path: { type: DataTypes.STRING(255), allowNull: true },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

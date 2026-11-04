@@ -1,5 +1,6 @@
 import { body, param } from "express-validator";
 import { DataBase } from "../../../../database";
+import { productCatalogRules } from "./product_catalog.rules";
 
 // SKU: código alfanumérico (con guion/guion bajo) — no es un nombre propio,
 // pero tampoco debe llevar espacios ni símbolos raros. Columna STRING(50).
@@ -51,6 +52,7 @@ export const createProductValidator = [
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por medio millar debe ser un número positivo"),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por millar debe ser un número positivo"),
   body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
+  ...productCatalogRules(),
   atLeastOnePriceValidator,
 ];
 
@@ -87,6 +89,7 @@ export const updateProductValidator = [
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
+  ...productCatalogRules(),
 ];
 
 export const disableProductValidator = [paramProductIdValidator];

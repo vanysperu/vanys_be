@@ -65,6 +65,9 @@ import {
 import { employeeDebtAssociations } from "./associations/employee_debt";
 import { ReminderFactory, ReminderStatic } from "../api/modules/reminder/model/reminder.model";
 import { ApiKeyFactory, ApiKeyStatic } from "../api/modules/api_key/model/api_key.model";
+import { ApiKeyCompanyFactory, ApiKeyCompanyStatic } from "../api/modules/api_key/model/api_key_company.model";
+import { ProductColorFactory, ProductColorStatic } from "../api/modules/product/model/product_color.model";
+import { ProductCodeFactory, ProductCodeStatic } from "../api/modules/product/model/product_code.model";
 import { CompanyAssetFactory, CompanyAssetStatic } from "../api/modules/uploads/model/company_asset.model";
 import { CashLedgerFactory, CashLedgerStatic } from "../api/modules/cash_closing/model/cash_ledger.model";
 import {
@@ -123,6 +126,9 @@ export class DataBase {
   public employee_debt_payment_allocation: EmployeeDebtPaymentAllocationStatic;
   public reminder: ReminderStatic;
   public api_key: ApiKeyStatic;
+  public api_key_company: ApiKeyCompanyStatic;
+  public product_color: ProductColorStatic;
+  public product_code: ProductCodeStatic;
   public company_asset: CompanyAssetStatic;
   // Cierre mensual de caja (migración 20261102100000-create-cash-closing.js).
   public cash_ledger: CashLedgerStatic;
@@ -194,6 +200,9 @@ export class DataBase {
     this.employee_debt_payment_allocation = EmployeeDebtPaymentAllocationFactory(this.sequelize);
     this.reminder = ReminderFactory(this.sequelize);
     this.api_key = ApiKeyFactory(this.sequelize);
+    this.api_key_company = ApiKeyCompanyFactory(this.sequelize);
+    this.product_color = ProductColorFactory(this.sequelize);
+    this.product_code = ProductCodeFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
     this.cash_ledger = CashLedgerFactory(this.sequelize);
     this.cash_ledger_opening = CashLedgerOpeningFactory(this.sequelize);

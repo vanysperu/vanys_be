@@ -5,6 +5,7 @@ import { CreateApiKeyDto, CreatedApiKeyDto } from "../types/api_key.types";
 import { apiKeyDisplayPrefix, generateApiKey, hashApiKey } from "./shared/api_key_hash";
 import { getApiKeyDtoById } from "./shared/api_key_mapper";
 import { assertBusinessUnitOfCompany } from "./shared/business_unit";
+import { assertReplicateCompanies, replaceReplicateCompanies } from "./shared/replicate_companies";
 
 // Emite una key nueva para una empresa. La key en texto plano se devuelve
 // UNA sola vez en esta respuesta: en la base solo queda su SHA-256.
@@ -37,6 +38,9 @@ export async function createApiKeyService(dto: CreateApiKeyDto, actorId: number)
       },
       { transaction }
     );
+
+    const replicateIds = await assertReplicateCompanies(dto.replicate_company_ids ?? [], dto.company_id, transaction);
+    await replaceReplicateCompanies({ apiKeyId: created.id, companyIds: replicateIds, actorId, transaction });
 
     const dtoOut = await getApiKeyDtoById(created.id, transaction);
     if (!dtoOut) throw new AppError(500, "No se pudo leer la API key recién creada");

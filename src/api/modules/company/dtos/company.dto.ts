@@ -8,6 +8,7 @@ export interface CreateCompanyDto {
   tagline?: string | null;
   logo_url?: string | null;
   theme_color?: string;
+  product_images_enabled?: boolean;
 }
 
 export interface UpdateCompanyDto {
@@ -20,5 +21,6 @@ export interface UpdateCompanyDto {
   tagline?: string | null;
   logo_url?: string | null;
   theme_color?: string;
+  product_images_enabled?: boolean;
   legal_terms_caption?: string | null;
 }

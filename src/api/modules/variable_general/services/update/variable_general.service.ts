@@ -5,6 +5,7 @@ import { PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
 import { loadManageableVariable } from "../shared/variable_scope.service";
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/company_asset.service";
+import { assertProductSubcategoryParent, assertUniqueProductCategoryName } from "../shared/product_category.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant.
 // Sin este WHERE, cualquier usuario autenticado podía editar por ID una
@@ -37,6 +38,23 @@ export async function updateVariableGeneralById(
   // transacción (pedido explícito del usuario: no dejar imágenes huérfanas).
   const replacesRef2 = payload.ref2 !== undefined && payload.ref2 !== current.ref2;
   if (replacesRef2) await assertCompanyAssetUsable(payload.ref2, current.company_id);
+
+  // Subcategoría de producto: su categoría (ref1) tiene que seguir siendo válida.
+  await assertProductSubcategoryParent({
+    category: payload.category ?? current.category,
+    ref1: payload.ref1 !== undefined ? payload.ref1 : current.ref1,
+    companyId: current.company_id === null ? null : Number(current.company_id),
+  });
+  // Sin nombres repetidos (solo importa si la fila está activa).
+  if (!current.is_deleted) {
+    await assertUniqueProductCategoryName({
+      id,
+      category: payload.category ?? current.category,
+      name: payload.name ?? current.name,
+      ref1: payload.ref1 !== undefined ? payload.ref1 : current.ref1,
+      companyId: current.company_id === null ? null : Number(current.company_id),
+    });
+  }
 
   // company_id NO se actualiza nunca: se listan los campos editables uno a
   // uno, así un body con company_id (mass-assignment) no mueve la fila a

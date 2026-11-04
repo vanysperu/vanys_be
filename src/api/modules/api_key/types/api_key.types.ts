@@ -39,11 +39,16 @@ export interface CreateApiKeyDto {
   company_id: number;
   business_unit_id?: number | null;
   name: string;
+  // Empresas EXTRA a las que la key puede replicar productos en la subida
+  // masiva (además de la suya). Vacío = solo su empresa.
+  replicate_company_ids?: number[];
 }
 
 export interface UpdateApiKeyDto {
   name?: string;
   business_unit_id?: number | null;
+  // Reemplaza la lista completa; undefined = no se toca.
+  replicate_company_ids?: number[];
 }
 
 // Fecha y hora de Lima separadas (regla de fechas del proyecto).
@@ -64,6 +69,8 @@ export interface ApiKeyDto {
   created_at: LocalDateTime;
   created_by: { id: number; name: string } | null;
   revoked_at: LocalDateTime | null;
+  // Empresas extra a las que puede replicar productos.
+  replicate_companies: { id: number; name: string }[];
 }
 
 // Respuesta de crear: la key en texto plano viaja UNA sola vez.

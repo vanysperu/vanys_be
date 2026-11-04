@@ -1,4 +1,5 @@
 import { QueryTypes } from "sequelize";
+import { companyProductImagesEnabled } from "../../../product/services/shared/images";
 import { DataBase } from "../../../../../database";
 import { buildTree } from "../../../../../utils/object";
 import { MyAccessModuleItem, MyAccessResponse, MyAccessViewItem } from "../../interfaces/access.interface";
@@ -74,11 +75,12 @@ export const getMyAccess = async (
   const roleIds = roles.map((role) => role.id);
   const roleName = roles.length > 0 ? roles.map((role) => role.name).join(", ") : null;
 
-  const [themeColor, businessUnitName, companyName, igvRate] = await Promise.all([
+  const [themeColor, businessUnitName, companyName, igvRate, productImagesEnabled] = await Promise.all([
     getCompanyThemeColor(companyId),
     getBusinessUnitName(businessUnitId),
     getCompanyName(companyId),
     getIgvRate(companyId),
+    companyId ? companyProductImagesEnabled(companyId) : Promise.resolve(false),
   ]);
 
   if (roleIds.length === 0) {
@@ -94,6 +96,7 @@ export const getMyAccess = async (
       businessUnitId,
       companyName,
       igvRate,
+      productImagesEnabled,
     };
   }
 
@@ -182,5 +185,6 @@ export const getMyAccess = async (
     businessUnitId,
     companyName,
     igvRate,
+    productImagesEnabled,
   };
 };

@@ -11,9 +11,15 @@ de personalización ([`customization_technique`](../customization_technique/READ
 | POST   | /product/create       | create           | producto        |
 | PUT    | /product/update/:id   | update           | producto        |
 | PUT    | /product/disable/:id  | disable (toggle) | producto        |
+| POST   | /product/image        | subir foto       | producto (`producto.image.upload.button`) |
 
 Filtros de `list`: `searchTerm`, `name`, `sku`, `status` (`active`/`inactive`,
-CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
+CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima), `code`, `categoryId`,
+`subcategoryId`, `color` (el nombre del color contiene el texto). Cada fila trae
+`category`, `subcategory` (`{id, name}`), `colors` (`[{name, hex}]`), `codes`
+(`[{code, supplier}]`) e
+`images_enabled` (la empresa del producto muestra fotos). Para integraciones
+ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 
 ## Vistas de frontend vinculadas
 - producto.list (`/productos`, pestaña "Productos" de la pantalla "Productos")
@@ -22,6 +28,7 @@ CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
 - producto.create.button
 - producto.update.button
 - producto.disable.button
+- producto.image.upload.button
 
 ## Reglas de negocio propias del módulo
 - Hasta 4 precios por unidad según el volumen (unidad, ciento, medio millar,
@@ -42,6 +49,40 @@ CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
   `id`, `is_deleted` ni auditoría); `company_id` debe ser el de la sesión.
 - Un SKU vacío (`""`) se guarda como `null` (sin SKU).
 - Un producto deshabilitado no se puede usar en cotizaciones nuevas.
+- **Categoría y subcategoría** (pedido explícito del usuario): filas de
+  Variables Generales (`product_category` / `product_subcategory`, la
+  subcategoría guarda en `ref1` el id de su categoría). Tienen que estar activas
+  y ser globales o de la empresa del producto; la subcategoría, de la categoría
+  elegida (`services/shared/catalog.ts`). Cambiar la categoría sin mandar
+  subcategoría la limpia.
+- **Un solo SKU, varios códigos** (tabla `product_code`, pedido explícito del
+  usuario): cada proveedor puede identificar el producto con su propio código.
+  Cada código lleva el nombre del proveedor opcional (texto libre: no hay
+  entidad de proveedores). Hasta 50; guardar reemplaza la lista completa. El
+  SKU sigue siendo uno solo y es la llave de la subida masiva. La búsqueda
+  general (`searchTerm`) encuentra por nombre, SKU **o código**; el filtro
+  `code` busca solo en los códigos.
+- **Los códigos no se repiten** (pedido explícito del usuario), dentro de la
+  empresa y sin distinguir mayúsculas:
+  - ni dentro del mismo producto, aunque cambie el proveedor
+    (`400 DUPLICATE_PRODUCT_CODE`);
+  - ni en otro producto, ni como SKU de otro producto; y un SKU no puede ser el
+    código de otro producto (`409 PRODUCT_CODE_TAKEN`, el mensaje dice cuál).
+  - La base lo garantiza con el índice único `(company_id, code)` (migración
+    `20261104120000`). Entre empresas distintas sí puede repetirse: la réplica
+    de la subida masiva copia los códigos a cada empresa.
+- **Colores** (tabla `product_color`): nombre + hex opcional, en orden, hasta
+  30 y sin repetidos. Guardar los colores reemplaza la lista completa.
+- **Foto** (`image_path`, imagen de `company_asset` de la MISMA empresa): solo si
+  la empresa tiene `product_images_enabled` (la habilita el Super
+  Administrador en Empresas; si no, `403 PRODUCT_IMAGES_DISABLED`). Quitarla
+  siempre se puede. Al reemplazarla o quitarla, la anterior se borra en la
+  misma transacción. En la pantalla, un producto con foto muestra una miniatura
+  y el clic abre la foto en grande.
+- Crear/editar (con colores) va en **una transacción**; la lógica es la misma
+  que usa la subida masiva (`services/shared/save_product.ts`).
+- `orderBy` del listado acepta `created_at`, `name`, `sku`, `price_unit`,
+  `updated_at`; cualquier otro valor ordena por fecha de creación.
 
 ## Campos especiales
 - Precios `DECIMAL(10,2)` opcionales; `requires_customization` BOOLEAN

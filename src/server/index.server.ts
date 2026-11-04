@@ -38,6 +38,7 @@ import { router as EmployeeDebtRoutes } from "../api/modules/employee_debt/route
 import { router as ReceivableRoutes } from "../api/modules/receivable/routes/receivable.routes";
 import { router as ReminderRoutes } from "../api/modules/reminder/routes/reminder.routes";
 import { router as PublicWebRoutes } from "../api/modules/web_quote_request/routes/web_quote_request.routes";
+import { router as PublicProductRoutes } from "../api/modules/public_product/routes/public_product.routes";
 import { router as ApiKeyRoutes } from "../api/modules/api_key/routes/api_key.routes";
 import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
@@ -113,6 +114,7 @@ export default class Server {
     // autentican con API key por empresa, no con token (que vence). Ver
     // web_quote_request/README.md.
     this._router.use("/public", PublicWebRoutes);
+    this._router.use("/public", PublicProductRoutes);
 
     // Chequeo de salud para el panel del hosting / monitoreo externo: además
     // de "el proceso responde", confirma que la base de datos contesta.

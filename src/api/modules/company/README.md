@@ -42,3 +42,8 @@
 ## Campos especiales
 - `logo_url`: ruta pública `/uploads/company-assets/<company_id>/<uuid>.<ext>`
   de una imagen guardada en `company_asset`.
+- `product_images_enabled` (BOOLEAN, default `false`): fotos de productos
+  habilitadas para la empresa. Solo lo cambia el Super Administrador (crear o
+  editar empresa). Apagado: no se suben ni se muestran fotos de productos (las
+  ya guardadas se conservan). `/access/me` lo expone como
+  `productImagesEnabled`. Ver `product/README.md`.

@@ -1,40 +1,21 @@
 import { DataBase } from "../../../../../database";
-import { nowUtc } from "../../../../../utils/dateUtils";
-import { ProductAttributes } from "../../model/product.model";
+import { ProductWriteInput, createProductRecord } from "../shared/save_product";
+import { assertProductImagesEnabled } from "../shared/images";
 
-export type CreateProductDto = Pick<
-  ProductAttributes,
-  "company_id" | "name" | "description" | "sku" | "price_unit" | "price_hundred" | "price_half_thousand" | "price_thousand"
-> & { requires_customization?: boolean };
+export type CreateProductDto = ProductWriteInput & { company_id: number; name: string };
 
-const createProduct = async ({
-  product,
-  createdBy,
-}: {
-  product: CreateProductDto;
-  createdBy?: number;
-}) => {
-  // Lista blanca explícita — nunca `...product` directo: el body podía
-  // traer `id`, `is_deleted` o columnas de auditoría.
-  return DataBase.instance.product.create({
-    id: 0,
-    company_id: product.company_id,
-    name: product.name,
-    description: product.description ?? null,
-    // "" (campo vacío) se guarda como null: sin SKU.
-    sku: product.sku || null,
-    price_unit: product.price_unit ?? null,
-    price_hundred: product.price_hundred ?? null,
-    price_half_thousand: product.price_half_thousand ?? null,
-    price_thousand: product.price_thousand ?? null,
-    // Apagado por defecto (decisión del usuario): la mayoría no se personaliza.
-    requires_customization: product.requires_customization ?? false,
-    is_deleted: false,
-    created_by: createdBy ?? null,
-    created_at: nowUtc(),
-    updated_by: null,
-    updated_at: null,
+// Producto + colores en una transacción (si fallan los colores, no queda un
+// producto a medias). La foto solo se acepta si la empresa tiene habilitadas
+// las fotos de productos.
+const createProduct = async ({ product, createdBy }: { product: CreateProductDto; createdBy?: number }) =>
+  DataBase.instance.sequelize.transaction(async (transaction) => {
+    if (product.image_path) await assertProductImagesEnabled(product.company_id, transaction);
+    return createProductRecord({
+      companyId: product.company_id,
+      input: product,
+      actorId: createdBy ?? null,
+      transaction,
+    });
   });
-};
 
 export { createProduct };

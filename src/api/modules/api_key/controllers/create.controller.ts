@@ -8,7 +8,7 @@ import { createApiKeyService } from "../services/create.service";
 // mostrar nunca.
 export const createApiKeyController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { company_id, business_unit_id, name } = req.body;
-  const created = await createApiKeyService({ company_id, business_unit_id, name }, user.userId);
+  const { company_id, business_unit_id, name, replicate_company_ids } = req.body;
+  const created = await createApiKeyService({ company_id, business_unit_id, name, replicate_company_ids }, user.userId);
   ok(res, 201, created, "API key creada. Cópiala ahora: no se vuelve a mostrar");
 });

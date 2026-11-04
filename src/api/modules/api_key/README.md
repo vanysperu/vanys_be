@@ -20,7 +20,7 @@ usuario: "que solo pueda ver el super admin"):
 |--------|-------------------------|-------------------------------|-----------------------|
 | GET    | /api-key/list           | list (pag, filtros)           | api_key + system role |
 | POST   | /api-key/create         | create (devuelve la key 1 vez)| api_key + system role |
-| PUT    | /api-key/update/:id     | update (nombre, tienda)       | api_key + system role |
+| PUT    | /api-key/update/:id     | update (nombre, tienda, empresas para replicar) | api_key + system role |
 | PUT    | /api-key/disable/:id    | revocar (de una sola vía)     | api_key + system role |
 
 Filtros de `list`: `companyId`, `status` (`active` | `revoked` | `all`, por
@@ -41,6 +41,12 @@ defecto `all`), `name` (contiene). Orden: más recientes primero.
   endpoint devuelve la key ni su hash. Si se pierde: revocar y crear otra.
 - La **empresa no se cambia** al editar (otra empresa = otra key). La tienda
   sí, y debe ser una tienda activa de esa empresa (si no → 400).
+- **Empresas para replicar productos** (tabla `api_key_company`,
+  `replicate_company_ids` al crear/editar, `replicate_companies` en la
+  respuesta): empresas EXTRA a las que la key puede copiar productos en la
+  subida masiva (`replicate: true`, ver [`public_product`](../public_product/README.md)).
+  Vacío = solo su propia empresa. Deben existir y estar activas; la propia se
+  ignora. Editar reemplaza la lista completa.
 - **Revocar es de una sola vía** (soft-delete `is_deleted = true`): una key se
   revoca porque se filtró o ya no se usa, y reactivarla volvería a abrir el
   acceso a quien la tenga. Revocar otra vez o editar una revocada → 409

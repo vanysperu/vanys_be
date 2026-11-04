@@ -3,6 +3,7 @@ import { DataBase } from "../../../../database";
 import { buildPaginationMeta, PaginatedResult } from "../../../../core/utils/paginate";
 import { ApiKeyDto, ApiKeyListFilter, ApiKeyStatusFilter } from "../types/api_key.types";
 import { API_KEY_SELECT, ApiKeyRow, toApiKeyDto } from "./shared/api_key_mapper";
+import { loadReplicateCompanies } from "./shared/replicate_companies";
 
 // Condición SQL por estado. Texto fijo de este archivo, nunca del usuario.
 const STATUS_CONDITION: Record<ApiKeyStatusFilter, string> = {
@@ -40,8 +41,9 @@ export async function listApiKeysService(filter: ApiKeyListFilter): Promise<Pagi
     }
   )) as ApiKeyRow[];
 
+  const replicate = await loadReplicateCompanies(rows.map((row) => Number(row.id)));
   return {
-    data: rows.map(toApiKeyDto),
+    data: rows.map((row) => toApiKeyDto(row, replicate.get(Number(row.id)) ?? [])),
     meta: buildPaginationMeta(Number(countRow?.total ?? 0), filter.page, filter.limit),
   };
 }

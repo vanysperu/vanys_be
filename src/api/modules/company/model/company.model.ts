@@ -36,6 +36,9 @@ export interface CompanyAttributes {
 
   // Código de la paleta de marca (select cerrado; la BD tiene default 'blue' y FK a themes.code)
   theme_color?: string;
+  // Fotos de productos habilitadas para esta empresa (lo decide el Super
+  // Administrador). Apagado: no se suben ni se muestran fotos de productos.
+  product_images_enabled?: boolean;
 
   is_deleted?: boolean;
   created_at: Date;
@@ -173,6 +176,11 @@ export function CompanyFactory(sequelize: Sequelize): CompanyStatic {
         allowNull: false,
         defaultValue: "blue",
         comment: "Código de la paleta de marca (select cerrado, no hex libre)",
+      },
+      product_images_enabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       is_deleted: {
         type: DataTypes.BOOLEAN,

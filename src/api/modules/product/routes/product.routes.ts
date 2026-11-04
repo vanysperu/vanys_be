@@ -9,6 +9,7 @@ import {
   listProductsController,
   updateProductController,
 } from "../controllers/product.controller";
+import { uploadProductImageController } from "../controllers/upload_image.controller";
 
 export const router: Router = Router();
 
@@ -16,3 +17,5 @@ router.get("/list", verifyAccess, paginationValidator, allValidator, listProduct
 router.post("/create", verifyAccess, createProductValidator, allValidator, createProductController);
 router.put("/update/:id", verifyAccess, updateProductValidator, allValidator, updateProductController);
 router.put("/disable/:id", verifyAccess, disableProductValidator, allValidator, disableProductController);
+// Foto del producto (solo si la empresa tiene habilitadas las fotos).
+router.post("/image", verifyAccess, uploadProductImageController);

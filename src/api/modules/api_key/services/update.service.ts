@@ -4,9 +4,11 @@ import { nowUtc } from "../../../../utils/dateUtils";
 import { ApiKeyDto, UpdateApiKeyDto } from "../types/api_key.types";
 import { getApiKeyDtoById } from "./shared/api_key_mapper";
 import { assertBusinessUnitOfCompany } from "./shared/business_unit";
+import { assertReplicateCompanies, replaceReplicateCompanies } from "./shared/replicate_companies";
 
-// Solo se editan el nombre y la tienda. La key en sí y su empresa no cambian
-// (otra empresa = otra key). Una key revocada ya no se edita.
+// Se editan el nombre, la tienda y las empresas extra para replicar
+// productos. La key en sí y su empresa no cambian (otra empresa = otra key).
+// Una key revocada ya no se edita.
 export async function updateApiKeyService(id: number, dto: UpdateApiKeyDto, actorId: number): Promise<ApiKeyDto> {
   return DataBase.instance.sequelize.transaction(async (transaction) => {
     const apiKey = await DataBase.instance.api_key.findOne({ where: { id }, transaction, lock: transaction.LOCK.UPDATE });
@@ -26,6 +28,11 @@ export async function updateApiKeyService(id: number, dto: UpdateApiKeyDto, acto
       },
       { where: { id }, transaction }
     );
+
+    if (dto.replicate_company_ids !== undefined) {
+      const replicateIds = await assertReplicateCompanies(dto.replicate_company_ids, Number(apiKey.company_id), transaction);
+      await replaceReplicateCompanies({ apiKeyId: id, companyIds: replicateIds, actorId, transaction });
+    }
 
     const updated = await getApiKeyDtoById(id, transaction);
     if (!updated) throw new AppError(404, "La API key no existe");

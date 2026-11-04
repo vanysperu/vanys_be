@@ -54,4 +54,8 @@ export interface MyAccessResponse {
   // usa para la previsualización de "Nueva cotización" antes de guardar —
   // el backend recalcula el total real igual al crear/actualizar.
   igvRate: number;
+  // La empresa del usuario tiene habilitadas las fotos de productos (las
+  // habilita el Super Administrador). Para el Super Administrador (sin
+  // empresa) es false: él ve la bandera de cada producto en el listado.
+  productImagesEnabled: boolean;
 }

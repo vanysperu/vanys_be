@@ -2,6 +2,7 @@ import { literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { loadManageableVariable } from "../shared/variable_scope.service";
+import { assertUniqueProductCategoryName } from "../shared/product_category.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant,
 // igual que en update/find -- ver comentario en update.service.ts.
@@ -24,6 +25,19 @@ export async function disableOrEnableVariableGeneralById({
 
   const where: Record<string, unknown> = { id };
   if (companyId !== null) where.company_id = companyId;
+
+  // Rehabilitar una categoría/subcategoría de producto no puede dejar dos
+  // activas con el mismo nombre (así se colaban los duplicados en el selector
+  // del producto). Deshabilitar siempre se puede.
+  if (current.is_deleted) {
+    await assertUniqueProductCategoryName({
+      id,
+      category: current.category,
+      name: current.name,
+      ref1: current.ref1,
+      companyId: current.company_id === null ? null : Number(current.company_id),
+    });
+  }
 
   return DataBase.instance.variable_general.update(
     {

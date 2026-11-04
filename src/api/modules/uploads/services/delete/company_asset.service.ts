@@ -32,6 +32,14 @@ const findReferencedFileNames = async (companyId: number, transaction?: Transact
     attributes: ["ref2"],
     transaction,
   });
+  // Fotos de productos (también las de productos deshabilitados: al
+  // rehabilitarlo, su foto tiene que seguir ahí). Sin esto, la limpieza las
+  // trataba como subidas abandonadas y las borraba a las 24 h.
+  const products = await db.product.findAll({
+    where: { company_id: companyId, image_path: { [Op.like]: ASSET_PATH_LIKE } },
+    attributes: ["image_path"],
+    transaction,
+  });
 
   return ownCompanyAssetFileNames(
     [
@@ -41,6 +49,7 @@ const findReferencedFileNames = async (companyId: number, transaction?: Transact
       company?.yape_logo_url,
       ...stores.map((store) => store.logo_url),
       ...variables.map((variable) => variable.ref2),
+      ...products.map((product) => product.image_path),
     ],
     companyId
   );

@@ -46,7 +46,8 @@ la empresa" y se autoriza con el resource de ese módulo.
 - **No quedan imágenes huérfanas** (`purgeUnusedCompanyAssets`): una imagen
   se borra cuando ya no la usa ninguna fila de SU empresa (`company.logo_url`
   y columnas de imagen heredadas, `business_unit.logo_url`, `ref2` de
-  `general_variable`):
+  `general_variable` y `product.image_path` — fotos de productos, también de
+  productos deshabilitados):
   - Al reemplazar el logo o el QR de una cuenta, o al eliminar la cuenta, la
     imagen anterior se borra en la misma transacción.
   - El front sube la imagen al elegir el archivo y la asigna recién al

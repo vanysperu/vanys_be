@@ -2,6 +2,7 @@ import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { utcToBusinessParts } from "../../../../../utils/dateUtils";
 import { ApiKeyDto } from "../../types/api_key.types";
+import { CompanyRef, loadReplicateCompanies } from "./replicate_companies";
 
 // Fila cruda: key + empresa, tienda y usuario que la emitió. Nunca se
 // selecciona `key_hash`: no sale del backend.
@@ -37,7 +38,7 @@ const toLocal = (value: Date | null) => (value ? utcToBusinessParts(value) : nul
 // Fechas guardadas en UTC -> fecha y hora de Lima separadas, recién al salir.
 // Una key revocada ya no se edita, así que su `updated_at` es el momento en
 // que se revocó.
-export const toApiKeyDto = (row: ApiKeyRow): ApiKeyDto => {
+export const toApiKeyDto = (row: ApiKeyRow, replicateCompanies: CompanyRef[] = []): ApiKeyDto => {
   const isRevoked = Boolean(row.is_deleted);
   return {
     id: Number(row.id),
@@ -59,6 +60,7 @@ export const toApiKeyDto = (row: ApiKeyRow): ApiKeyDto => {
             name: [row.creator_name, row.creator_lastname].filter(Boolean).join(" ") || `Usuario #${row.created_by}`,
           },
     revoked_at: isRevoked ? toLocal(row.updated_at) : null,
+    replicate_companies: replicateCompanies,
   };
 };
 
@@ -68,5 +70,7 @@ export async function getApiKeyDtoById(id: number, transaction?: Transaction): P
     replacements: { id },
     transaction,
   })) as ApiKeyRow[];
-  return row ? toApiKeyDto(row) : null;
+  if (!row) return null;
+  const replicate = await loadReplicateCompanies([Number(row.id)], transaction);
+  return toApiKeyDto(row, replicate.get(Number(row.id)) ?? []);
 }

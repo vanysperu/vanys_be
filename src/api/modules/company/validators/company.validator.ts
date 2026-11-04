@@ -50,6 +50,7 @@ export const createCompanyValidator = [
     .isLength({ max: 150 })
     .withMessage("Máximo 150 caracteres"),
   themeColorValidator,
+  body("product_images_enabled").optional().isBoolean().withMessage("product_images_enabled debe ser verdadero o falso").toBoolean(),
 ];
 
 // Campos que un admin de empresa puede tocar de SU propia empresa para el
@@ -92,6 +93,14 @@ const paramCompanyIdValidator = param("id")
   })
   .bail();
 
-export const updateCompanyValidator = [paramCompanyIdValidator, themeColorValidator];
+// product_images_enabled: el Super Administrador habilita o deshabilita las
+// fotos de productos de la empresa.
+const productImagesEnabledValidator = body("product_images_enabled")
+  .optional()
+  .isBoolean()
+  .withMessage("product_images_enabled debe ser verdadero o falso")
+  .toBoolean();
+
+export const updateCompanyValidator = [paramCompanyIdValidator, themeColorValidator, productImagesEnabledValidator];
 
 export const disableCompanyValidator = [paramCompanyIdValidator];

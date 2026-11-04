@@ -54,6 +54,21 @@
   siendo "no encontrada" (404 / `null`), sin revelar que existe.
   Implementado en `services/shared/variable_scope.service.ts`
   (`loadManageableVariable`).
+- **Categorías de productos** (`category = "product_category"`) y
+  **subcategorías** (`"product_subcategory"`, con `ref1` = id de su categoría):
+  al crear o editar una subcategoría, `ref1` tiene que ser una categoría
+  activa del mismo ámbito (una global cuelga de una global; una de empresa, de
+  una global o de una de SU empresa); si no, `400`. La pantalla elige la
+  categoría padre con un selector. Ver `product/README.md`.
+- **Sin nombres repetidos** (pedido explícito del usuario: se veían duplicadas
+  en el selector del producto). Entre filas ACTIVAS, sin distinguir mayúsculas
+  ni espacios de los extremos (`409 DUPLICATE_PRODUCT_CATEGORY`):
+  - una categoría de empresa no repite el nombre de otra de su empresa ni de
+    una global; una global no repite el de otra global ni el de una categoría
+    de cualquier empresa (esa empresa la vería dos veces);
+  - una subcategoría no se repite dentro de su categoría.
+  - Se valida al crear, al editar y **al rehabilitar** (deshabilitar siempre se
+    puede). `shared/product_category.service.ts` → `assertUniqueProductCategoryName`.
 - El listado en modo "select" (`admin=false`) solo devuelve `{value, name}`
   para alimentar `<select>` de otros formularios (no pagina igual que la
   pantalla de administración).
