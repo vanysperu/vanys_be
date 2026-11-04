@@ -42,7 +42,7 @@ empresa de la key. Respuesta `201`:
       "category_id": 120,
       "subcategory_id": 121,
       "colors": [{ "name": "Negro", "hex": "#111111" }, { "name": "Azul" }],
-      "codes": [{ "code": "ZX-4410", "supplier": "Distribuidora Andina" }, { "code": "9981" }],
+      "codes": [{ "code": "ZX-4410", "supplier": "Distribuidora Andina", "color": "Negro" }, { "code": "9981" }],
       "image_path": "/uploads/company-assets/12/5f0c….png"
     }
   ]
@@ -60,6 +60,10 @@ empresa de la key. Respuesta `201`:
   completa; sin `codes`, se conservan los actuales. **No se repiten** en la
   empresa: ni en el mismo producto, ni en otro producto, ni como SKU de otro
   (ver `product/README.md`).
+- `codes[].color` (opcional): vincula el código con uno de los `colors` del
+  producto, por nombre y sin distinguir mayúsculas. Un color que el producto no
+  tiene da `CODE_COLOR_NOT_FOUND`. Si se quita un color, los códigos que lo
+  usaban siguen, sin color.
 - `category_id` / `subcategory_id`: ids de **Variables Generales**
   (`product_category` / `product_subcategory`). Solo la subcategoría alcanza:
   se toma su categoría. Tienen que estar activas y ser **globales o de la
@@ -95,6 +99,7 @@ Respuesta `200`:
 suma 3). Errores por producto: `{ "status": "error", "error": "…", "code": "…" }`
 con `code` `INVALID_CATEGORY`, `INVALID_SUBCATEGORY`, `PRICE_REQUIRED`,
 `NAME_REQUIRED`, `INVALID_IMAGE_PATH`, `DUPLICATE_SKU`, `DUPLICATE_PRODUCT_CODE`,
+`CODE_COLOR_NOT_FOUND`,
 `PRODUCT_CODE_TAKEN` o `INTERNAL_ERROR`.
 
 ### Categorías de la empresa

@@ -6,7 +6,7 @@ import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/compa
 import { ProductModel } from "../../model/product.model";
 import { resolveProductCategories } from "./catalog";
 import { ProductColorInput, replaceProductColors } from "./colors";
-import { assertSkuNotUsedAsCode, ProductCodeInput, replaceProductCodes } from "./codes";
+import { assertSkuNotUsedAsCode, detachRemovedColors, ProductCodeInput, replaceProductCodes } from "./codes";
 import { assertProductImageUsable } from "./images";
 
 // Lo que se puede escribir de un producto, desde la pantalla o la subida
@@ -181,6 +181,9 @@ export async function updateProductRecord({
   if (input.codes) {
     await replaceProductCodes({ productId: product.id, companyId, codes: input.codes, actorId, transaction });
   }
+  // Cambiaron los colores pero no los códigos: un código no puede quedar
+  // apuntando a un color que ya no existe.
+  if (input.colors && !input.codes) await detachRemovedColors(product.id, transaction);
   if (replacesImage && product.image_path) {
     await purgeUnusedCompanyAssets({ companyId, replacedPaths: [product.image_path], transaction });
   }

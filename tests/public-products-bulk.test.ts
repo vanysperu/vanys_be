@@ -237,13 +237,14 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(replicaProduct.colors).toEqual([{ name: "Rojo", hex: "#FF0000" }]);
     // Sin `codes` en la actualización, se conservan los del alta.
     expect(replicaProduct.codes).toEqual([
-      { code: `PROV-A-${sku}`, supplier: "Proveedor A" },
-      { code: `PROV-B-${sku}`, supplier: null },
+      { code: `PROV-A-${sku}`, supplier: "Proveedor A", color: null },
+      { code: `PROV-B-${sku}`, supplier: null, color: null },
     ]);
     expect(replicaProduct.sku).toBe(sku);
     expect(replicaProduct.category).toMatchObject({ id: categoryId });
     expect(replicaProduct.subcategory).toMatchObject({ id: subcategoryId });
     expect(replicaProduct.images_enabled).toBe(false);
+    expect(replicaProduct.company_name).toContain("BulkReplica");
   });
 
   it("el catálogo por API key nunca devuelve productos deshabilitados", async () => {
@@ -413,6 +414,80 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(bySku[`${sku}-P`]).toMatchObject({ status: "error", code: "PRICE_REQUIRED" });
     expect(res.body.data.results.filter((result: { sku: string; status: string }) => result.sku === `${sku}-OK`).map((r: { status: string }) => r.status)).toEqual(["ok", "error"]);
     expect(res.body.data.summary.failed).toBe(2);
+  });
+
+  it("un código se puede vincular a un color del producto", async () => {
+    const colorSku = `${sku}-COL`;
+    const codeBlack = `NEG-${sku}`;
+    const codeBlue = `AZU-${sku}`;
+    const send = (product: object) =>
+      publicPost("/products/bulk", { replicate: true, company_ids: [replicaCompanyId], products: [{ sku: colorSku, ...product }] });
+    const codesIn = async (companyId: number) =>
+      (await api().get(`/product/list?companyId=${companyId}&sku=${colorSku}`)).body.data.data[0].codes;
+
+    // Sin distinguir mayúsculas: se guarda el nombre tal como está en colors.
+    const created = await send({
+      name: "Con color por código",
+      price_unit: 1,
+      colors: [{ name: "Negro", hex: "#111111" }, { name: "Azul" }],
+      codes: [{ code: codeBlack, color: "negro" }, { code: codeBlue, color: "Azul" }],
+    });
+    expect(created.body.data.results[0].status).toBe("ok");
+    expect(await codesIn(mainCompanyId)).toEqual([
+      { code: codeBlack, supplier: null, color: "Negro" },
+      { code: codeBlue, supplier: null, color: "Azul" },
+    ]);
+    // La réplica conserva el vínculo.
+    expect((await codesIn(replicaCompanyId))[0]).toMatchObject({ code: codeBlack, color: "Negro" });
+
+    // Un color que el producto no tiene: error y no cambia nada.
+    const invalid = await send({ codes: [{ code: codeBlack, color: "Verde" }] });
+    expect(invalid.body.data.results[0]).toMatchObject({ status: "error", code: "CODE_COLOR_NOT_FOUND" });
+    expect(await codesIn(mainCompanyId)).toHaveLength(2);
+
+    // Quitar un color sin mandar códigos: el código sigue, sin color.
+    await send({ colors: [{ name: "Azul" }] });
+    expect(await codesIn(mainCompanyId)).toEqual([
+      { code: codeBlack, supplier: null, color: null },
+      { code: codeBlue, supplier: null, color: "Azul" },
+    ]);
+  });
+
+  it("cambiar o quitar la foto borra la anterior, también en la réplica", async () => {
+    const photoSku = `${sku}-FOTO`;
+    const uploadImage = async () =>
+      (
+        await request(BASE_URL)
+          .post("/api/public/products/images")
+          .set("X-Api-Key", plainKey)
+          .attach("file", PNG_1X1, { filename: "f.png", contentType: "image/png" })
+      ).body.data.image_path as string;
+    const send = (product: object) =>
+      publicPost("/products/bulk", { replicate: true, company_ids: [replicaCompanyId], products: [{ sku: photoSku, ...product }] });
+    const stored = async (path: string) => (await request(BASE_URL).get(path)).status;
+    const imageIn = async (companyId: number) =>
+      (await api().get(`/product/list?companyId=${companyId}&sku=${photoSku}`)).body.data.data[0].image_path as string | null;
+
+    const first = await uploadImage();
+    await send({ name: "Con foto", price_unit: 1, image_path: first });
+    const firstReplica = (await imageIn(replicaCompanyId)) as string;
+    expect(await stored(first)).toBe(200);
+    expect(await stored(firstReplica)).toBe(200);
+
+    // Cambiar la foto: las anteriores se borran y quedan las nuevas.
+    const second = await uploadImage();
+    await send({ image_path: second });
+    const secondReplica = (await imageIn(replicaCompanyId)) as string;
+    expect(await stored(first)).toBe(404);
+    expect(await stored(firstReplica)).toBe(404);
+    expect(await stored(second)).toBe(200);
+    expect(await stored(secondReplica)).toBe(200);
+
+    // Quitar la foto: también se borra.
+    await send({ image_path: null });
+    expect(await imageIn(mainCompanyId)).toBeNull();
+    expect(await stored(second)).toBe(404);
+    expect(await stored(secondReplica)).toBe(404);
   });
 
   it("la limpieza de imágenes conserva las fotos de productos y borra las subidas abandonadas", async () => {

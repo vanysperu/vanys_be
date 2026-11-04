@@ -11,6 +11,8 @@ export interface ProductCodeAttributes {
   code: string;
   // Nombre del proveedor que usa este código (texto libre, opcional).
   supplier: string | null;
+  // Color del producto al que corresponde este código (nombre; opcional).
+  color: string | null;
   position: number;
   created_by: number | null;
   created_at: Date;
@@ -33,6 +35,7 @@ export function ProductCodeFactory(sequelize: Sequelize): ProductCodeStatic {
       product_id: { type: DataTypes.BIGINT, allowNull: false },
       code: { type: DataTypes.STRING(60), allowNull: false },
       supplier: { type: DataTypes.STRING(150), allowNull: true },
+      color: { type: DataTypes.STRING(60), allowNull: true },
       position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

@@ -49,6 +49,12 @@ export const productCatalogRules = (prefix = "") => [
     .trim()
     .isLength({ max: 150 })
     .withMessage("El proveedor tiene máximo 150 caracteres"),
+  body(`${prefix}codes.*.color`)
+    .optional({ values: "falsy" })
+    .isString()
+    .trim()
+    .isLength({ max: 60 })
+    .withMessage("El color del código tiene máximo 60 caracteres"),
   body(`${prefix}image_path`)
     .optional({ values: "null" })
     .isString()

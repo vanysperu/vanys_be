@@ -8,11 +8,14 @@ export const MAX_PRODUCT_CODES = 50;
 export interface ProductCodeInput {
   code: string;
   supplier?: string | null;
+  // Nombre de uno de los colores del producto.
+  color?: string | null;
 }
 
 export interface ProductCodeDto {
   code: string;
   supplier: string | null;
+  color: string | null;
 }
 
 const codeTaken = (message: string) => new AppError(409, message, undefined, "PRODUCT_CODE_TAKEN");
@@ -22,7 +25,7 @@ const codeTaken = (message: string) => new AppError(409, message, undefined, "PR
 // con otras mayúsculas: se rechaza en vez de descartarlo en silencio.
 export const normalizeCodes = (codes: ProductCodeInput[]): ProductCodeDto[] => {
   const normalized = codes
-    .map((entry) => ({ code: entry.code.trim(), supplier: entry.supplier?.trim() || null }))
+    .map((entry) => ({ code: entry.code.trim(), supplier: entry.supplier?.trim() || null, color: entry.color?.trim() || null }))
     .filter((entry) => entry.code !== "");
 
   const seen = new Set<string>();
@@ -103,8 +106,49 @@ export async function assertSkuNotUsedAsCode({
   throw codeTaken(`El SKU "${sku}" ya es un código de proveedor de ${describeProduct(owner)}`);
 }
 
+// Nombres de los colores que tiene hoy el producto (ya guardados).
+const loadColorNames = async (productId: number, transaction: Transaction): Promise<string[]> => {
+  const rows = await DataBase.instance.product_color.findAll({
+    where: { product_id: productId },
+    attributes: ["name"],
+    transaction,
+  });
+  return rows.map((row) => row.name);
+};
+
+// Un código solo se vincula a un color que el producto tiene. Devuelve los
+// códigos con el nombre del color tal como está guardado (sin importar
+// mayúsculas). `colorNames` debe reflejar los colores ya actualizados.
+const linkCodesToColors = (codes: ProductCodeDto[], colorNames: string[]): ProductCodeDto[] => {
+  const byKey = new Map(colorNames.map((name) => [name.toUpperCase(), name]));
+  return codes.map((entry) => {
+    if (!entry.color) return entry;
+    const color = byKey.get(entry.color.toUpperCase());
+    if (!color) {
+      throw new AppError(400, `El código "${entry.code}" apunta al color "${entry.color}", que el producto no tiene`, undefined, "CODE_COLOR_NOT_FOUND");
+    }
+    return { ...entry, color };
+  });
+};
+
+// Si cambian los colores y no llega la lista de códigos, los códigos que
+// apuntaban a un color que ya no existe quedan sin color (el código sigue).
+export async function detachRemovedColors(productId: number, transaction: Transaction): Promise<void> {
+  const colorNames = await loadColorNames(productId, transaction);
+  await DataBase.instance.product_code.update(
+    { color: null },
+    {
+      where: {
+        product_id: productId,
+        color: colorNames.length > 0 ? { [Op.notIn]: colorNames } : { [Op.ne]: null },
+      },
+      transaction,
+    }
+  );
+}
+
 // Reemplaza la lista completa de códigos del producto (es su detalle). Va
-// dentro de la transacción del llamador.
+// dentro de la transacción del llamador y DESPUÉS de guardar los colores.
 export async function replaceProductCodes({
   productId,
   companyId,
@@ -118,7 +162,7 @@ export async function replaceProductCodes({
   actorId: number | null;
   transaction: Transaction;
 }): Promise<void> {
-  const normalized = normalizeCodes(codes);
+  const normalized = linkCodesToColors(normalizeCodes(codes), await loadColorNames(productId, transaction));
   await assertCodesAvailable({ companyId, productId, codes: normalized.map((entry) => entry.code), transaction });
 
   await DataBase.instance.product_code.destroy({ where: { product_id: productId }, transaction });
@@ -133,6 +177,7 @@ export async function replaceProductCodes({
         product_id: productId,
         code: entry.code,
         supplier: entry.supplier,
+        color: entry.color,
         position: index,
         created_by: actorId,
         created_at: now,
@@ -156,7 +201,7 @@ export async function loadCodesByProduct(productIds: number[]): Promise<Map<numb
 
   const rows = await DataBase.instance.product_code.findAll({
     where: { product_id: { [Op.in]: productIds } },
-    attributes: ["product_id", "code", "supplier"],
+    attributes: ["product_id", "code", "supplier", "color"],
     order: [
       ["product_id", "ASC"],
       ["position", "ASC"],
@@ -165,7 +210,7 @@ export async function loadCodesByProduct(productIds: number[]): Promise<Map<numb
   for (const row of rows) {
     const productId = Number(row.product_id);
     const list = byProduct.get(productId) ?? [];
-    list.push({ code: row.code, supplier: row.supplier });
+    list.push({ code: row.code, supplier: row.supplier, color: row.color });
     byProduct.set(productId, list);
   }
   return byProduct;

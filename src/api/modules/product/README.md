@@ -18,7 +18,9 @@ CSV), `dateFrom`/`dateTo` (fecha de creación, hora de Lima), `code`, `categoryI
 `subcategoryId`, `color` (el nombre del color contiene el texto). Cada fila trae
 `category`, `subcategory` (`{id, name}`), `colors` (`[{name, hex}]`), `codes`
 (`[{code, supplier}]`) e
-`images_enabled` (la empresa del producto muestra fotos). Para integraciones
+`images_enabled` (la empresa del producto muestra fotos) y `company_name`. Solo el
+Super Administrador ve la columna Empresa y filtra por empresa (`companyId`, que
+el backend ignora para los demás usuarios). Para integraciones
 ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 
 ## Vistas de frontend vinculadas
@@ -62,6 +64,12 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
   SKU sigue siendo uno solo y es la llave de la subida masiva. La búsqueda
   general (`searchTerm`) encuentra por nombre, SKU **o código**; el filtro
   `code` busca solo en los códigos.
+- **Código por color** (`product_code.color`, opcional): un código puede
+  vincularse con uno de los colores del producto (ej. E1000-02 = Negro). Va en
+  el código porque un color puede tener varios códigos, uno por proveedor. Se
+  guarda el nombre del color; uno que el producto no tiene →
+  `400 CODE_COLOR_NOT_FOUND`. Si cambian los colores y no llega la lista de
+  códigos, los que apuntaban a un color quitado quedan sin color.
 - **Los códigos no se repiten** (pedido explícito del usuario), dentro de la
   empresa y sin distinguir mayúsculas:
   - ni dentro del mismo producto, aunque cambie el proveedor
@@ -77,8 +85,10 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
   la empresa tiene `product_images_enabled` (la habilita el Super
   Administrador en Empresas; si no, `403 PRODUCT_IMAGES_DISABLED`). Quitarla
   siempre se puede. Al reemplazarla o quitarla, la anterior se borra en la
-  misma transacción. En la pantalla, un producto con foto muestra una miniatura
-  y el clic abre la foto en grande.
+  misma transacción. En la pantalla, un producto con foto muestra una miniatura.
+- **Ficha del producto:** el clic en el nombre de cualquier producto, tenga foto
+  o no, abre su ficha con foto, SKU, estado, categoría, descripción, precios,
+  colores y códigos con su color y proveedor (`ProductDetailDialog`).
 - Crear/editar (con colores) va en **una transacción**; la lógica es la misma
   que usa la subida masiva (`services/shared/save_product.ts`).
 - `orderBy` del listado acepta `created_at`, `name`, `sku`, `price_unit`,
