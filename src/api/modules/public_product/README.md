@@ -92,14 +92,14 @@ con `code` `INVALID_CATEGORY`, `INVALID_SUBCATEGORY`, `PRICE_REQUIRED`,
 `PRODUCT_CODE_TAKEN` o `INTERNAL_ERROR`.
 
 ### Categorías de la empresa
-`GET /api/public/product-categories?page=1&limit=50&search=taza`
-- Solo las categorías **de la empresa de la key** (pedido explícito del
-  usuario: "solo las de la empresa y no globales"), activas, ordenadas por
-  nombre. Cada una trae sus `subcategories` activas de la empresa (anidadas,
+`GET /api/public/product-categories?page=1&limit=50&search=taza&include_global=true`
+- Por defecto, solo las categorías **de la empresa de la key** (pedido explícito
+  del usuario: "solo las de la empresa y no globales"), activas, ordenadas por
+  nombre. Con `include_global=true` agrega también las globales (marcadas con
+  `is_global: true`), nunca las de otra empresa. Cada una trae sus `subcategories` activas de la empresa (anidadas,
   sin paginar). `search`: nombre de la categoría.
-- Respuesta `{ data: [{ id, name, code, subcategories: [{ id, name, code }] }], meta }`.
-- Las categorías globales igual sirven en la subida masiva; este endpoint no
-  las lista.
+- Respuesta `{ data: [{ id, name, code, is_global, subcategories: [{ id, name, code }] }], meta }`.
+- Las categorías globales sirven en la subida masiva aunque no se pidan acá.
 
 ### 3. Catálogo
 `GET /api/public/products?page=1&limit=20&search=taza&sku=&code=&category_id=&subcategory_id=&color=azul&orderBy=name&orderDir=asc`

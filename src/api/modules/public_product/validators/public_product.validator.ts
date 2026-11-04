@@ -59,4 +59,5 @@ export const listPublicProductsValidator = [
 
 export const listPublicCategoriesValidator = [
   query("search").optional({ values: "falsy" }).isString().isLength({ max: 100 }),
+  query("include_global").optional({ values: "falsy" }).isIn(["true", "false"]).withMessage("include_global debe ser true o false"),
 ];

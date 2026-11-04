@@ -147,7 +147,29 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(ids).not.toContain(categoryId);
     const own = res.body.data.data.find((category: { id: number }) => category.id === mainOnlyCategoryId);
     expect(own.subcategories).toEqual([{ id: ownSubId, name: `Sub principal jest ${sku}`, code: expect.any(String) }]);
+    expect(own.is_global).toBe(false);
     expect(res.body.data.meta).toMatchObject({ page: 1, limit: 50 });
+
+    // Con include_global=true llegan también las globales, marcadas, con sus
+    // subcategorías; nunca las de otra empresa.
+    const otherCategoryId = await createVariable({
+      category: "product_category",
+      title: "Categoría",
+      prefix_id: `OC${Date.now()}`,
+      name: `De otra empresa jest ${sku}`,
+      company_id: otherCompanyId,
+    });
+    const withGlobal = await request(BASE_URL)
+      .get(`/api/public/product-categories?include_global=true&search=${encodeURIComponent(`jest ${sku}`)}&limit=50`)
+      .set("X-Api-Key", plainKey);
+    expect(withGlobal.status).toBe(200);
+    const byId = new Map(withGlobal.body.data.data.map((row: { id: number }) => [row.id, row]));
+    expect(byId.get(mainOnlyCategoryId)).toMatchObject({ is_global: false });
+    expect(byId.get(categoryId)).toMatchObject({ is_global: true, subcategories: [{ id: subcategoryId }] });
+    expect(byId.has(otherCategoryId)).toBe(false);
+
+    const invalid = await request(BASE_URL).get("/api/public/product-categories?include_global=quizas").set("X-Api-Key", plainKey);
+    expect(invalid.status).toBe(400);
 
     const bySearch = await request(BASE_URL).get("/api/public/product-categories?search=no-existe-xyz").set("X-Api-Key", plainKey);
     expect(bySearch.body.data.meta.total).toBe(0);
