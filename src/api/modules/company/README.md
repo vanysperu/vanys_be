@@ -47,3 +47,8 @@
   editar empresa). Apagado: no se suben ni se muestran fotos de productos (las
   ya guardadas se conservan). `/access/me` lo expone como
   `productImagesEnabled`. Ver `product/README.md`.
+- `invoice_storage_system` (BOOLEAN, default `true`) e `invoice_storage_drive`
+  (BOOLEAN, default `false`): dónde se guardan los archivos de las facturas de
+  la empresa (sistema, Google Drive o ambos). Solo los cambia el Super
+  Administrador. Ver [`invoice`](../invoice/README.md) y
+  [`google_drive`](../google_drive/README.md).

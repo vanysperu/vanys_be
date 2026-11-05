@@ -20,9 +20,11 @@ import { VariableGeneralAttributes } from "../../../variable_general/models/vari
 // mientras se arma a partir de varios `.toJSON()` de modelos de Sequelize.
 interface QuotationPdfItem {
   id: number;
-  product?: { name: string } | null;
+  product?: { name: string; sku?: string | null } | null;
   technique?: { name: string } | null;
   color?: string | null;
+  // Código del proveedor/color elegido (quotation_item.product_code).
+  product_code?: string | null;
   quantity: number;
   unit_price: number;
   subtotal: number;
@@ -132,6 +134,9 @@ const styles = StyleSheet.create({
   th: { fontSize: 8.5, fontWeight: 700, color: "#5B6072" },
   td: { fontSize: 9 },
   colProduct: { flex: 2.2 },
+  // Código del producto (pedido explícito del usuario): el del color elegido o,
+  // si el item no tiene, el SKU del producto.
+  colCode: { flex: 1.2 },
   // Antes 1.6: "SERIGRAFIA GENERAL" no entraba en una sola línea y el
   // renderer la partía a mitad de palabra ("GEN-ERAL") — bug reportado por
   // QA. Con más ancho entra completo sin cortarse.
@@ -226,7 +231,9 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
     {},
     createElement(
       Page,
-      { size: "A4", style: styles.page },
+      // Horizontal (pedido explícito del usuario): la tabla de productos tiene
+      // más columnas y así no se aprieta. Los términos entran de a 3 por fila.
+      { size: "A4", orientation: "landscape", style: styles.page },
       // Encabezado: logo + datos de la empresa
       createElement(
         View,
@@ -344,6 +351,7 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             View,
             { style: styles.tableHeaderRow },
             createElement(Text, { style: [styles.th, styles.colProduct] }, "Producto"),
+            createElement(Text, { style: [styles.th, styles.colCode] }, "Código"),
             // Sin ningún producto personalizado, la columna "Técnica" no aparece
             // (pedido explícito del usuario: "no va a salir ni en los pdf").
             showTechnique ? createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica") : null,
@@ -370,12 +378,12 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
               createElement(
                 View,
                 { style: styles.tableRow, key: item.id },
-                // Solo el color: el código de proveedor es interno y el PDF va al cliente.
                 createElement(
                   Text,
                   { style: [styles.td, styles.colProduct] },
                   item.color ? `${item.product?.name ?? "—"} (${item.color})` : item.product?.name ?? "—"
                 ),
+                createElement(Text, { style: [styles.td, styles.colCode] }, item.product_code || item.product?.sku || "—"),
                 showTechnique
                   ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
                   : null,

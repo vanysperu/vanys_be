@@ -6,6 +6,7 @@ import {
   createCashMovementValidator,
   disableCashMovementValidator,
   listCashMovementCorrectionsValidator,
+  monthSummaryValidator,
   updateCashMovementValidator,
 } from "../validators/cash_movement.validator";
 import {
@@ -15,10 +16,13 @@ import {
   listCashMovementsController,
   updateCashMovementController,
 } from "../controllers/cash_movement.controller";
+import { monthSummaryController } from "../controllers/month_summary.controller";
 
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listCashMovementsController);
+// Resultado del mes, IGV estimado y neto después del IGV.
+router.get("/month-summary", verifyAccess, monthSummaryValidator, allValidator, monthSummaryController);
 router.post("/create", verifyAccess, createCashMovementValidator, allValidator, createCashMovementController);
 router.put("/disable/:id", verifyAccess, disableCashMovementValidator, allValidator, disableCashMovementController);
 // Corrección de un movimiento manual + su historial inmutable.

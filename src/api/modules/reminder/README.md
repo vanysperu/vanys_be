@@ -16,7 +16,9 @@
 
 Filtros de `list`: `box` (`received` = me llegan, `sent` = los creé yo),
 `status` (`active` por defecto = no cancelados; `upcoming`, `due`, `read`,
-`cancelled`), `dateFrom`/`dateTo` (fecha del aviso, hora de Lima).
+`cancelled`), `dateFrom`/`dateTo` (fecha del aviso, hora de Lima), `search`
+(texto en título o mensaje; `%` y `_` se buscan como texto). El frontend
+recarga la lista sola cada 10 minutos.
 
 ## Vistas de frontend vinculadas
 - reminder.list (`/recordatorios`)

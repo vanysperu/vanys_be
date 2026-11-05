@@ -69,6 +69,12 @@ import { ApiKeyCompanyFactory, ApiKeyCompanyStatic } from "../api/modules/api_ke
 import { ProductColorFactory, ProductColorStatic } from "../api/modules/product/model/product_color.model";
 import { ProductCodeFactory, ProductCodeStatic } from "../api/modules/product/model/product_code.model";
 import { AdvertisementFactory, AdvertisementStatic } from "../api/modules/advertisement/model/advertisement.model";
+import { InvoiceFactory, InvoiceStatic } from "../api/modules/invoice/model/invoice.model";
+import { InvoiceFileFactory, InvoiceFileStatic } from "../api/modules/invoice/model/invoice_file.model";
+import {
+  CompanyDriveConnectionFactory,
+  CompanyDriveConnectionStatic,
+} from "../api/modules/google_drive/model/company_drive_connection.model";
 import { CompanyAssetFactory, CompanyAssetStatic } from "../api/modules/uploads/model/company_asset.model";
 import { CashLedgerFactory, CashLedgerStatic } from "../api/modules/cash_closing/model/cash_ledger.model";
 import {
@@ -132,6 +138,10 @@ export class DataBase {
   public product_code: ProductCodeStatic;
   // Anuncios de la web (migración 20261106110000-create-advertisement.js).
   public advertisement: AdvertisementStatic;
+  // Facturas y Drive por empresa (migración 20261107100000-create-invoices.js).
+  public invoice: InvoiceStatic;
+  public invoice_file: InvoiceFileStatic;
+  public company_drive_connection: CompanyDriveConnectionStatic;
   public company_asset: CompanyAssetStatic;
   // Cierre mensual de caja (migración 20261102100000-create-cash-closing.js).
   public cash_ledger: CashLedgerStatic;
@@ -207,6 +217,9 @@ export class DataBase {
     this.product_color = ProductColorFactory(this.sequelize);
     this.product_code = ProductCodeFactory(this.sequelize);
     this.advertisement = AdvertisementFactory(this.sequelize);
+    this.invoice = InvoiceFactory(this.sequelize);
+    this.invoice_file = InvoiceFileFactory(this.sequelize);
+    this.company_drive_connection = CompanyDriveConnectionFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
     this.cash_ledger = CashLedgerFactory(this.sequelize);
     this.cash_ledger_opening = CashLedgerOpeningFactory(this.sequelize);

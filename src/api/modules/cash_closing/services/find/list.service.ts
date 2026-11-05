@@ -6,6 +6,7 @@ import { CashPeriodModel } from "../../model/cash_period.model";
 import { CashClosingListItem, CashPeriodTotals } from "../../types/cash_closing.types";
 import { CashPeriodMap, loadPeriodMap } from "../shared/period_state.service";
 import { closeRuleViolations, isProvisionalPeriod, loadUserNames } from "./period_rules.service";
+import { financesForPeriods } from "../shared/period_finance.service";
 
 const totalsOfRow = (row: CashPeriodModel): CashPeriodTotals => ({
   opening: Number(row.opening_total),
@@ -47,6 +48,8 @@ export function buildListItem(
     reopened_by_name: row?.reopened_by ? (userNames.get(Number(row.reopened_by)) ?? null) : null,
     reopened_at: row?.reopened_at ? utcToBusinessParts(row.reopened_at) : null,
     reopen_reason: row?.reopen_reason ?? null,
+    // Lo completan la lista y el detalle (financesForPeriods), en una tanda.
+    finance: null,
   };
 }
 
@@ -88,8 +91,10 @@ export async function listCashClosings({
   const rowByPeriod = new Map(rows.map((row) => [row.period, row]));
   const userNames = await loadUserNames(userIdsOfRows(rows), transaction);
 
+  const items = periods.map((period) => buildListItem(map, period, today, rowByPeriod.get(period), userNames));
+  const finances = await financesForPeriods(companyId, items);
   return {
-    data: periods.map((period) => buildListItem(map, period, today, rowByPeriod.get(period), userNames)),
+    data: items.map((item) => ({ ...item, finance: finances.get(item.period) ?? null })),
     meta: buildPaginationMeta(total, page, limit),
   };
 }

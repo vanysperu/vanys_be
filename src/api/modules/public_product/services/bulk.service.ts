@@ -37,6 +37,9 @@ async function resolveTargetCompanies(request: BulkProductsRequest, apiKey: ApiK
 }
 
 // Lista blanca de lo que la web puede escribir de un producto.
+// requires_customization NO está (pedido explícito del usuario): aunque la web
+// lo mande, un producto nuevo se crea con "Requiere personalización" apagado
+// y uno existente conserva lo que tenga. Se enciende solo desde el sistema.
 const toWriteInput = (item: BulkProductItem): ProductWriteInput => ({
   sku: item.sku.trim(),
   name: item.name,
@@ -45,7 +48,6 @@ const toWriteInput = (item: BulkProductItem): ProductWriteInput => ({
   price_hundred: item.price_hundred,
   price_half_thousand: item.price_half_thousand,
   price_thousand: item.price_thousand,
-  requires_customization: item.requires_customization,
   category_id: item.category_id,
   subcategory_id: item.subcategory_id,
   colors: item.colors,

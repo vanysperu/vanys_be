@@ -1,3 +1,4 @@
+import { PeriodFinance } from "../../cash_movement/services/shared/period_finance";
 import { MoneyCorrectionKind, MoneyCorrectionSource } from "../../money_correction/types/money_correction.types";
 
 // Tipos del cierre mensual de caja (fase 2). Montos hacia el cliente: soles
@@ -170,6 +171,9 @@ export interface CashClosingListItem {
   reopened_by_name: string | null;
   reopened_at: DateTimeParts | null;
   reopen_reason: string | null;
+  // Resultado del mes, IGV estimado y neto después del IGV (ver
+  // cash_movement/services/shared/period_finance.ts). null solo si no se pudo calcular.
+  finance: PeriodFinance | null;
 }
 
 // GET /cash-closing/find/:period

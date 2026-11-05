@@ -185,7 +185,7 @@ const smokeTestPackage = async () => {
   }
 };
 
-const renderEnvFile = ({ jwtSecret, cronSecret }) =>
+const renderEnvFile = ({ jwtSecret, cronSecret, driveTokenKey }) =>
   [
     "# =====================================================================",
     "# Variables de entorno de Vanys en producción",
@@ -216,6 +216,15 @@ const renderEnvFile = ({ jwtSecret, cronSecret }) =>
     "# Solo si el frontend se publica en OTRO dominio que la API. Con la",
     "# instalación recomendada (todo en la misma app) déjalo vacío.",
     "CORS_ORIGINS=",
+    "",
+    "# Google Drive para las facturas (opcional; ver google_drive/README.md).",
+    "# Cliente OAuth de Google Cloud y la dirección de vuelta registrada allá.",
+    "# Sin estas variables, las facturas se guardan solo en el sistema.",
+    "GOOGLE_DRIVE_CLIENT_ID=",
+    "GOOGLE_DRIVE_CLIENT_SECRET=",
+    "GOOGLE_DRIVE_REDIRECT_URI=https://<dominio>/api/google-drive/callback",
+    "# Cifra los permisos de Drive guardados. Si cambia, hay que reconectar los Drives.",
+    `GOOGLE_DRIVE_TOKEN_KEY=${driveTokenKey}`,
     "",
   ].join("\n");
 
@@ -289,6 +298,7 @@ async function main() {
     renderEnvFile({
       jwtSecret: crypto.randomBytes(48).toString("hex"),
       cronSecret: crypto.randomBytes(32).toString("hex"),
+      driveTokenKey: crypto.randomBytes(32).toString("base64"),
     })
   );
   fs.writeFileSync(path.join(OUTPUT_DIR, "CREDENCIALES-INICIALES.txt"), renderCredentials({ adminEmail, adminPassword }));

@@ -10,6 +10,7 @@
 | GET    | /quotation/board                 | tablero: cada columna con sus primeras cotizaciones y totales reales | cotizacion (`cotizacion.board.endpoint`) |
 | GET    | /quotation/find/:id              | detail                     | cotizacion      |
 | GET    | /quotation/:id/pdf               | PDF                        | cotizacion      |
+| GET    | /quotation/:id/profit            | ganancia (`cotizacion.profit.view.button`) | cotizacion |
 | POST   | /quotation/create                | create                     | cotizacion      |
 | PUT    | /quotation/update/:id            | update                     | cotizacion      |
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
@@ -144,6 +145,9 @@ existente y se aplica solo la diferencia.
   PDF omite la columna "Técnica" si ningún item lleva una. Ver
   [`product`](../product/README.md).
 - El PDF solo lista las cuentas de pago **activas** de la empresa.
+- El PDF sale en **A4 horizontal** y lleva la columna **"Código"** (pedido
+  explícito del usuario): el código del color elegido (`product_code` del
+  item) o, si el item no tiene, el SKU del producto; si no hay ninguno, "—".
 - Columnas del PDF por producto: con IGV, `P. unit. · Subtotal · IGV · Total`
   (el IGV de cada línea sale del reparto de arriba sobre el IGV real
   cobrado, `total - subtotal`, nunca del % configurado hoy); sin IGV, una
@@ -178,6 +182,14 @@ existente y se aplica solo la diferencia.
   (`POST /quotation/*/payments`). En el frontend, al pasar de Pendiente a
   Aceptada (botón o arrastre en el Kanban) aparece el modal "¿El cliente pagó
   adelanto?" con la mitad del total sugerida.
+- **Factura al cerrar** (pedido explícito del usuario): `PUT /quotation/status/:id`
+  acepta `invoice_issued` (boolean, opcional). Con `status = "finished"` e
+  `invoice_issued: true` registra en la misma transacción una factura
+  `issued` (módulo [`invoice`](../invoice/README.md)) que queda en "Faltan
+  subir" hasta que se suba su archivo. La respuesta es
+  `{ updated, invoice_id }` (`invoice_id` null si no se registró factura).
+  En el frontend, pasar a Finalizada (botón o arrastre) abre el modal
+  "¿Emitimos factura?" con la opción de tomar la foto o subir el archivo.
 - Un pago que no es en efectivo exige `payment_account_id` (cuenta de la
   empresa a la que entró el dinero) cuando la empresa tiene cuentas activas
   (`resolvePaymentAccountForQuotation`); la cuenta se valida contra la
@@ -252,3 +264,14 @@ cotización vieja recién pasada a Pendiente quedaba al fondo o fuera.
   imprime en el PDF — `client_id` sigue siendo el cliente real vinculado.
 - `includes_delivery` / `includes_design` son informativos;
   `includes_igv` sí afecta el cálculo del total.
+
+## Ganancia de la cotización (`GET /quotation/:id/profit`)
+Pedido explícito del usuario: ver cuánto se le sacó a cada cotización (solo en el sistema,
+nunca en el PDF). Pestaña "Ganancia" del detalle, solo para roles con el botón
+`cotizacion.profit.view.button` (seeder `20261107130000`: los administradores que pueden
+corregir pagos; un Gestor recibe 403).
+- `net_profit` = pagos recibidos − IGV de esos pagos − gastos − compras + IGV recuperable de
+  las compras con factura. Pagos y gastos anulados no cuentan.
+- Una compra cuenta como costo aunque la haya pagado un trabajador (el costo existe).
+- `projected_profit` = subtotal − gastos − compras + IGV recuperable (cuando se cobre todo).
+- Cálculo en `services/find/profit.service.ts`; tipos en `types/profit.types.ts`.

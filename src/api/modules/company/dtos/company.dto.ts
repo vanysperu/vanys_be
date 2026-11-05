@@ -22,5 +22,7 @@ export interface UpdateCompanyDto {
   logo_url?: string | null;
   theme_color?: string;
   product_images_enabled?: boolean;
+  invoice_storage_system?: boolean;
+  invoice_storage_drive?: boolean;
   legal_terms_caption?: string | null;
 }

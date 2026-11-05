@@ -7,6 +7,7 @@
 | Método | Ruta                       | Acción       | Requiere módulo |
 |--------|----------------------------|--------------|-----------------|
 | GET    | /cash-movement/list        | list (pag)   | cash_movement   |
+| GET    | /cash-movement/month-summary?period=YYYY-MM | resultado del mes + IGV estimado + neto (`cash_movement.monthSummary.endpoint`) | cash_movement |
 | POST   | /cash-movement/create      | create       | cash_movement   |
 | PUT    | /cash-movement/disable/:id | disable      | cash_movement   |
 | PUT    | /cash-movement/update/:id  | update (corregir) | cash_movement |
@@ -202,3 +203,18 @@ llama a SU endpoint. Botón por fuente: manual `cash_movement.update.button`,
 - `occurred_at` es `DATEONLY` (la fecha que declara el usuario, no el
   `created_at` del registro).
 - `amount` es `DECIMAL(10,2)`; el tope de los validators es 99 999 999.99.
+
+## Resultado del mes e IGV (`services/shared/period_finance.ts`)
+Pedido explícito del usuario: ver la ganancia que va del mes, lo que quedó neto en cada
+cierre y cuánto IGV hay que pagarle a SUNAT. `getPeriodFinances(scope, periods)` lo calcula
+para varios meses en una sola tanda de consultas agrupadas:
+- `income` / `expenses` / `adjustments`: los mismos números que Caja y Estadísticas
+  (reutiliza `getTrendService` por mes). `result = income − expenses + adjustments`.
+- `igv_sales`: IGV contenido en los cobros del mes de cotizaciones con IGV (cada pago lleva
+  la proporción `(total − subtotal) / total` de su cotización).
+- `igv_purchases`: IGV de las compras registradas "con factura" (módulo invoice) en el mes:
+  `monto × tasa / (1 + tasa)` con la tasa vigente de la empresa (Variables Generales).
+- `igv_balance = igv_sales − igv_purchases` (negativo = saldo a favor), `igv_payable =
+  max(balance, 0)` y `net_after_igv = result − igv_payable`.
+- Es una **estimación con criterio de caja** para saber cuánto apartar; el monto oficial lo
+  determina el contador con los comprobantes (la pantalla lo dice).

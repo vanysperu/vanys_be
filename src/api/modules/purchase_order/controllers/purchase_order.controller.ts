@@ -173,7 +173,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, has_invoice } = req.body;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -194,6 +194,7 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       fundingSource: funding_source,
       paidByUserId,
       paymentAccountId: payment_account_id,
+      hasInvoice: has_invoice === true,
       createdBy: user.userId,
     });
   } catch (err: unknown) {

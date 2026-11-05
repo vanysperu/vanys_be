@@ -7,6 +7,7 @@ import Server from "./server/index.server";
 import { DataBase } from "./database";
 import { runPendingMigrations, shouldAutoMigrate } from "./database/autoMigrate";
 import { expireOverdueQuotations } from "./api/modules/quotation/services/jobs/expireQuotations.job";
+import { retryPendingDriveCopies } from "./api/modules/invoice/services/shared/drive_copy";
 import { formatInstantDateTimeEsPe } from "./utils/dateUtils";
 
 assertProductionEnv();
@@ -33,6 +34,19 @@ const runExpireQuotationsJob = () => {
 
 let expireJobTimer: NodeJS.Timeout | null = null;
 
+// Copias de facturas a Google Drive que quedaron pendientes o fallaron (sin
+// conexión, sin espacio...): se reintentan cada 10 minutos, de a pocas y con
+// un tope de intentos por factura (ver invoice/services/shared/drive_copy.ts).
+const DRIVE_RETRY_INTERVAL_MS = 10 * 60 * 1000;
+const runDriveRetryJob = () => {
+  retryPendingDriveCopies()
+    .then((count) => {
+      if (count > 0) console.log(`[jobs] ${count} factura(s) copiada(s) a Google Drive`);
+    })
+    .catch((error) => console.error("[jobs] Error al copiar facturas a Drive:", error));
+};
+let driveRetryTimer: NodeJS.Timeout | null = null;
+
 // La base se actualiza ANTES de abrir el puerto: el código nuevo espera las
 // tablas/columnas nuevas. Si la actualización falla, la app no arranca (el
 // error queda en los logs del hosting) en vez de atender con una base a
@@ -47,6 +61,7 @@ const startServer = async () => {
 
     runExpireQuotationsJob();
     expireJobTimer = setInterval(runExpireQuotationsJob, EXPIRE_QUOTATIONS_INTERVAL_MS);
+    driveRetryTimer = setInterval(runDriveRetryJob, DRIVE_RETRY_INTERVAL_MS);
   });
 };
 
@@ -69,6 +84,7 @@ const shutdown = async (signal: string) => {
   console.log(`[${signal}] Cerrando el servidor...`);
 
   if (expireJobTimer) clearInterval(expireJobTimer);
+  if (driveRetryTimer) clearInterval(driveRetryTimer);
   const forceExit = setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS);
   forceExit.unref();
 

@@ -416,6 +416,34 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(res.body.data.summary.failed).toBe(2);
   });
 
+  // Pedido explícito del usuario: la web subía todo con "Requiere
+  // personalización" encendido. La subida masiva lo ignora: crea apagado y
+  // nunca pisa lo que se configuró en el sistema.
+  it("ignora requires_customization: crea apagado y no pisa lo configurado en el sistema", async () => {
+    const flagSku = `${sku}-RC`;
+    const created = await publicPost("/products/bulk", {
+      products: [{ sku: flagSku, name: "Con flag", price_unit: 5, requires_customization: true }],
+    });
+    expect(created.status).toBe(200);
+    expect(created.body.data.results[0]).toMatchObject({ status: "ok" });
+    const flagOf = async () => {
+      const rows = await queryRows<{ flag: number }>(
+        "SELECT requires_customization AS flag FROM product WHERE company_id = ? AND sku = ?",
+        [mainCompanyId, flagSku]
+      );
+      return Number(rows[0]?.flag);
+    };
+    expect(await flagOf()).toBe(0);
+
+    // Encendido desde el sistema: un nuevo envío con false no lo apaga.
+    await queryRows("UPDATE product SET requires_customization = true WHERE company_id = ? AND sku = ?", [mainCompanyId, flagSku]);
+    const updated = await publicPost("/products/bulk", {
+      products: [{ sku: flagSku, name: "Con flag", requires_customization: false }],
+    });
+    expect(updated.body.data.results[0]).toMatchObject({ status: "ok" });
+    expect(await flagOf()).toBe(1);
+  });
+
   it("un código se puede vincular a un color del producto", async () => {
     const colorSku = `${sku}-COL`;
     const codeBlack = `NEG-${sku}`;

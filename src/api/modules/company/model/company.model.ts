@@ -39,6 +39,10 @@ export interface CompanyAttributes {
   // Fotos de productos habilitadas para esta empresa (lo decide el Super
   // Administrador). Apagado: no se suben ni se muestran fotos de productos.
   product_images_enabled?: boolean;
+  // Dónde guarda sus facturas (lo decide el Super Administrador): en el
+  // sistema, en su Google Drive o en ambos.
+  invoice_storage_system?: boolean;
+  invoice_storage_drive?: boolean;
 
   is_deleted?: boolean;
   created_at: Date;
@@ -178,6 +182,16 @@ export function CompanyFactory(sequelize: Sequelize): CompanyStatic {
         comment: "Código de la paleta de marca (select cerrado, no hex libre)",
       },
       product_images_enabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      invoice_storage_system: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
+      invoice_storage_drive: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,

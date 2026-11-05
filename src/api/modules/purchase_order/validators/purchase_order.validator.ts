@@ -62,6 +62,8 @@ export const createPurchaseOrderItemPurchaseValidator = [
       throw new Error("Una compra pagada con plata del trabajador no sale de una cuenta de la empresa");
     }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
+  // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
+  body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
   body("funding_source")
     .isIn(["company", "employee"])
     .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),

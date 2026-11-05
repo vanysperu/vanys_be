@@ -36,7 +36,9 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 - Hasta 4 precios por unidad según el volumen (unidad, ciento, medio millar,
   millar); se exige al menos uno.
 - **"Requiere personalización"** (`requires_customization`, pedido explícito
-  del usuario: "muchos productos no requieren personalizado"):
+  del usuario: "muchos productos no requieren personalizado"). Apagado por
+  defecto; la migración `20261107110000` lo apagó en todos los productos (se
+  habían subido encendidos) y la carga masiva de la web no lo toca:
   - Apagado → el producto se cotiza **sin técnica**: no hay selector de
     técnica en la cotización, el precio es solo el del producto y el PDF no
     muestra la columna "Técnica" si ningún item lleva una.

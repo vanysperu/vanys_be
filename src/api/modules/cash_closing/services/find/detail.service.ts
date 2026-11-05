@@ -6,6 +6,7 @@ import { CASH_ACCOUNT_KEY, CashPeriodAccountBalance, CashPeriodDetail } from "..
 import { CashPeriodMap, loadPeriodMap } from "../shared/period_state.service";
 import { computePeriodBalances, loadStoredBalances, totalsOf } from "../shared/balances.service";
 import { buildListItem, userIdsOfRows } from "./list.service";
+import { financesForPeriods } from "../shared/period_finance.service";
 import {
   CASH_CLOSING_CODES,
   closeRuleViolations,
@@ -97,12 +98,15 @@ export async function getCashPeriodDetail(
     : [];
   const warnings = isPreview ? closeWarnings(map, period, today, balances) : [];
   const { start, end } = periodBounds(period);
+  // Vista previa: totales en vivo (los guardados de un reabierto son del
+  // último cierre); cerrado: los guardados.
+  const totals = isPreview ? totalsOf(balances) : item.totals;
+  const finances = await financesForPeriods(companyId, [{ period, totals }]);
 
   return {
     ...item,
-    // Vista previa: totales en vivo (los guardados de un reabierto son del
-    // último cierre); cerrado: los guardados.
-    totals: isPreview ? totalsOf(balances) : item.totals,
+    totals,
+    finance: finances.get(period) ?? null,
     period_start: start,
     period_end: end,
     is_preview: isPreview,

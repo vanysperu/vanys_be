@@ -9,6 +9,7 @@ import { getTopClientsService } from "./topClients.service";
 import { getTopProductsService } from "./topProducts.service";
 import { getTopTechniquesService } from "./topTechniques.service";
 import { getTrendService } from "./trend.service";
+import { getCashByCategoryService } from "./cashByCategory.service";
 
 // Todo el tablero en UNA sola respuesta (un viaje al servidor, que en
 // Hostinger puede estar "dormido"): cada bloque es una consulta agregada en
@@ -20,7 +21,7 @@ export async function getStatisticsOverviewService(
 ): Promise<StatisticsOverview> {
   const period = resolvePeriod(dateFrom, dateTo);
 
-  const [current, previous, trend, statusBreakdown, topClients, topProducts, topTechniques, aging, accounts, sellers] =
+  const [current, previous, trend, statusBreakdown, topClients, topProducts, topTechniques, aging, accounts, sellers, byCategory] =
     await Promise.all([
       getKpisService(scope, period.date_from, period.date_to),
       getKpisService(scope, period.previous_from, period.previous_to),
@@ -32,6 +33,7 @@ export async function getStatisticsOverviewService(
       getReceivablesAgingService(scope),
       getPaymentsByAccountService(scope, period),
       getSellersService(scope, period),
+      getCashByCategoryService(scope, period),
     ]);
 
   return {
@@ -45,5 +47,6 @@ export async function getStatisticsOverviewService(
     receivables_aging: aging,
     payments_by_account: accounts,
     sellers,
+    cash_by_category: byCategory,
   };
 }

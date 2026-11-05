@@ -100,3 +100,12 @@ export const listCashMovementCorrectionsValidator = [
     .withMessage("La fuente del movimiento no es válida"),
   ...paginationValidator,
 ];
+
+// Resumen del mes (?period=YYYY-MM, opcional: por defecto el mes en curso).
+export const monthSummaryValidator = [
+  query("period")
+    .optional({ values: "falsy" })
+    .matches(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .withMessage("El mes debe tener el formato YYYY-MM"),
+  query("companyId").optional({ values: "falsy" }).isInt({ gt: 0 }).withMessage("Empresa inválida"),
+];

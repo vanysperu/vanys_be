@@ -175,6 +175,8 @@ export const getQuotationValidator = [paramQuotationIdValidator];
 export const changeStatusValidator = [
   paramQuotationIdValidator,
   body("status").isIn(QUOTATION_STATUSES).withMessage("Estado inválido"),
+  // Al pasar a Finalizada: ¿emitimos factura? (el archivo se sube aparte).
+  body("invoice_issued").optional().isBoolean().withMessage("invoice_issued debe ser verdadero o falso").toBoolean(),
   // Adelanto opcional al aceptar (mismas reglas que un pago normal).
   body("advance_payment").optional({ values: "null" }).isObject().withMessage("El adelanto no es válido"),
   moneyAmountRule("advance_payment.amount", "El monto del adelanto debe ser mayor a 0", {

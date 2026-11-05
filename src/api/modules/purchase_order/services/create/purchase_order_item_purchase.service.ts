@@ -10,6 +10,7 @@ import { buildPurchaseExpenseDescription, notesToSuffix } from "../shared/purcha
 import { QuotationItemAttributes } from "../../../quotation/model/quotation_item.model";
 import { ProductAttributes } from "../../../product/model/product.model";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
+import { registerInvoice } from "../../../invoice/services/shared/register_invoice";
 import { assertQuotationIsActive } from "../../../quotation/services/shared/active_quotation";
 
 // Igual que en purchase_order.service.ts: el `include` anidado
@@ -52,6 +53,10 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // Cuenta de la empresa desde la que se pagó (vacío = efectivo). Solo aplica
   // a "company": con plata del trabajador, la empresa no paga nada todavía.
   paymentAccountId?: unknown;
+  // ¿La compra llevaba factura? (pedido explícito del usuario). Si es así,
+  // queda registrada la factura; su archivo se sube aparte (o queda en
+  // "Faltan subir").
+  hasInvoice?: boolean;
   createdBy?: number;
 }
 
@@ -70,6 +75,7 @@ const createPurchaseOrderItemPurchase = async ({
   fundingSource = "company",
   paidByUserId,
   paymentAccountId,
+  hasInvoice = false,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -215,6 +221,26 @@ const createPurchaseOrderItemPurchase = async ({
       );
     }
 
+    // La factura de la compra, en la misma transacción: si la compra falla,
+    // no queda una factura suelta.
+    let invoiceId: number | null = null;
+    if (hasInvoice) {
+      const quotation = await DataBase.instance.quotation.findByPk(purchaseOrder.quotation_id, {
+        attributes: ["business_unit_id"],
+        transaction,
+      });
+      invoiceId = await registerInvoice({
+        companyId: Number(purchaseOrder.company_id),
+        businessUnitId: quotation?.business_unit_id ?? null,
+        type: "purchase",
+        quotationId: Number(purchaseOrder.quotation_id),
+        purchaseId: Number(purchase.id),
+        description: `${productName} × ${quantity}`,
+        actorId: createdBy ?? null,
+        transaction,
+      });
+    }
+
     // Cantidad vigente comprada (compras previas + esta) vs. lo pedido — solo
     // queda "purchased" cuando ya no falta nada (también si se compró de más,
     // confirmado). Mismo cálculo que corregir/anular una compra.
@@ -223,7 +249,7 @@ const createPurchaseOrderItemPurchase = async ({
 
     await transaction.commit();
 
-    return purchase;
+    return { ...purchase.get({ plain: true }), invoice_id: invoiceId };
   } catch (error) {
     await transaction.rollback();
     throw error;

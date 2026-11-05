@@ -45,6 +45,7 @@ export const listRemindersValidator = [
     .withMessage("Estado inválido"),
   query("dateFrom").optional({ values: "falsy" }).matches(isoDate).withMessage("Fecha inválida (YYYY-MM-DD)"),
   query("dateTo").optional({ values: "falsy" }).matches(isoDate).withMessage("Fecha inválida (YYYY-MM-DD)"),
+  query("search").optional({ values: "falsy" }).isString().isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
 ];
 
 export const recipientsValidator = [

@@ -64,6 +64,12 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   queda anotado como "compra adicional: X por encima de lo pedido". La
   validación toma un lock (`SELECT ... FOR UPDATE`) sobre el item y la orden,
   para que dos compras simultáneas del mismo item no se pisen.
+- **Factura de la compra** (pedido explícito del usuario): registrar una compra
+  acepta `has_invoice` (boolean, opcional). Con `true` se registra en la misma
+  transacción una factura `purchase` (módulo [`invoice`](../invoice/README.md))
+  y la respuesta trae su `invoice_id`; el archivo se sube aparte
+  (`POST /invoice/:id/file`). En el frontend la pregunta "¿La compra tiene
+  factura?" es obligatoria.
 - Filtros de `list`: `status`, `assignedTo`, `clientName`, `assigneeName`,
   `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
 - Un item que **ya tiene compras registradas no se puede marcar

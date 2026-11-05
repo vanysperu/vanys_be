@@ -146,9 +146,11 @@ export const updateQuotationController = asyncHandler(async (req: Request, res: 
 export const changeQuotationStatusController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { id } = req.params;
-  const { status, advance_payment: advancePayment } = req.body as {
+  const { status, advance_payment: advancePayment, invoice_issued: invoiceIssued } = req.body as {
     status: QuotationStatus;
     advance_payment?: CreateQuotationPaymentInput | null;
+    // Al pasar a Finalizada: ¿emitimos factura?
+    invoice_issued?: boolean;
   };
 
   if (!(await assertQuotationBelongsToCaller(Number(id), user))) {
@@ -169,6 +171,7 @@ export const changeQuotationStatusController = asyncHandler(async (req: Request,
       nextStatus: status,
       updatedBy: user.userId,
       advancePayment: advancePayment ?? undefined,
+      invoiceIssued: invoiceIssued === true,
     });
     const message = advancePayment ? "Cotización aceptada y adelanto registrado" : "Estado actualizado correctamente";
     ok(res, 200, result, message);

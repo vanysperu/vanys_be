@@ -11,6 +11,8 @@ export interface ReminderListFilter {
   // Fecha de aviso (YYYY-MM-DD, hora de Lima).
   dateFrom?: string;
   dateTo?: string;
+  // Texto libre: busca en el título y el mensaje.
+  search?: string;
   page: number;
   limit: number;
 }
@@ -37,12 +39,15 @@ export async function listRemindersService(filter: ReminderListFilter): Promise<
   // remind_at es UTC: se pasa a hora de Lima antes de comparar el día.
   if (filter.dateFrom) conditions.push("DATE(CONVERT_TZ(rm.remind_at, '+00:00', '-05:00')) >= :dateFrom");
   if (filter.dateTo) conditions.push("DATE(CONVERT_TZ(rm.remind_at, '+00:00', '-05:00')) <= :dateTo");
+  if (filter.search) conditions.push("(rm.title LIKE :search OR rm.message LIKE :search)");
   const whereClause = conditions.join(" AND ");
 
   const replacements = {
     actorId: filter.actorId,
     dateFrom: filter.dateFrom ?? null,
     dateTo: filter.dateTo ?? null,
+    // Los comodines que escriba el usuario (% y _) se buscan como texto.
+    search: filter.search ? `%${filter.search.replace(/[\\%_]/g, (char) => `\\${char}`)}%` : null,
   };
 
   const [countRow] = (await DataBase.instance.sequelize.query(

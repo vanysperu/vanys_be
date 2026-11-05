@@ -119,6 +119,20 @@ export interface SellerItem {
   collected: number;
 }
 
+// Una categoría de ingreso o egreso de caja en el periodo.
+export interface CategoryAmount {
+  key: string;
+  label: string;
+  amount: number;
+}
+
+// Ingresos y egresos por categoría (mayor a menor). Cada lado suma lo mismo
+// que los KPIs collected + other_income y expenses.
+export interface CashByCategory {
+  income: CategoryAmount[];
+  expenses: CategoryAmount[];
+}
+
 export interface StatisticsOverview {
   period: StatisticsPeriod;
   kpis: { current: KpiValues; previous: KpiValues };
@@ -131,4 +145,5 @@ export interface StatisticsOverview {
   receivables_aging: AgingItem[];
   payments_by_account: PaymentsByAccountItem[];
   sellers: SellerItem[];
+  cash_by_category: CashByCategory;
 }

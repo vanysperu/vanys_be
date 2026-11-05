@@ -38,7 +38,6 @@ empresa de la key. Respuesta `201`:
       "name": "Taza mágica 11 oz",
       "description": "Cambia de color con el calor",
       "price_unit": 18, "price_hundred": 14.5, "price_half_thousand": null, "price_thousand": null,
-      "requires_customization": true,
       "category_id": 120,
       "subcategory_id": 121,
       "colors": [{ "name": "Negro", "hex": "#111111" }, { "name": "Azul" }],
@@ -68,6 +67,10 @@ empresa de la key. Respuesta `201`:
   (`product_category` / `product_subcategory`). Solo la subcategoría alcanza:
   se toma su categoría. Tienen que estar activas y ser **globales o de la
   empresa destino**.
+- `requires_customization` **se ignora** (pedido explícito del usuario): si
+  llega, no da error, pero un producto nuevo siempre se crea con "Requiere
+  personalización" apagado y uno existente conserva lo que tenga. Se enciende
+  solo desde el sistema (editar producto).
 - **Réplica** (`replicate: true` + `company_ids`): el producto también se crea
   o actualiza en esas empresas, pero **solo si el Super Administrador se las
   habilitó a esa key** (Configuración → API keys → "Puede replicar productos

@@ -41,6 +41,11 @@ import { router as PublicWebRoutes } from "../api/modules/web_quote_request/rout
 import { router as PublicProductRoutes } from "../api/modules/public_product/routes/public_product.routes";
 import { router as PublicAdvertisementRoutes } from "../api/modules/advertisement/routes/public_advertisement.routes";
 import { router as AdvertisementRoutes } from "../api/modules/advertisement/routes/advertisement.routes";
+import { router as InvoiceRoutes } from "../api/modules/invoice/routes/invoice.routes";
+import {
+  publicRouter as GoogleDrivePublicRoutes,
+  router as GoogleDriveRoutes,
+} from "../api/modules/google_drive/routes/google_drive.routes";
 import { router as ApiKeyRoutes } from "../api/modules/api_key/routes/api_key.routes";
 import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
@@ -118,6 +123,9 @@ export default class Server {
     this._router.use("/public", PublicWebRoutes);
     this._router.use("/public", PublicProductRoutes);
     this._router.use("/public", PublicAdvertisementRoutes);
+    // Vuelta de Google al conectar el Drive de una empresa (sin sesión, la
+    // protege el `state` firmado). Ver google_drive/README.md.
+    this._router.use("/google-drive", GoogleDrivePublicRoutes);
 
     // Chequeo de salud para el panel del hosting / monitoreo externo: además
     // de "el proceso responde", confirma que la base de datos contesta.
@@ -163,6 +171,8 @@ export default class Server {
     this._router.use("/reminder", ReminderRoutes);
     this._router.use("/api-key", ApiKeyRoutes);
     this._router.use("/advertisement", AdvertisementRoutes);
+    this._router.use("/invoice", InvoiceRoutes);
+    this._router.use("/google-drive", GoogleDriveRoutes);
     this._router.use("/statistics", StatisticsRoutes);
     this._router.use("/uploads", UploadsRoutes);
 

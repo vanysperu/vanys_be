@@ -88,3 +88,11 @@ dos o ninguno; por defecto los últimos 30 días; máximo 3 años),
 - Frontend: gráficas con Recharts (vía el `Chart` de shadcn/ui) y colores de
   una paleta validada para daltonismo y contraste (tokens `--viz-*` en
   `grulla_fe/src/index.css`).
+
+- **Ingresos y egresos por categoría** (`cash_by_category`, pedido explícito del usuario):
+  mismas fuentes y filtros que los KPIs de caja, así cada lado suma lo mismo que
+  `collected + other_income` y `expenses` (cubierto por prueba). Ingresos: pagos de clientes,
+  cada tipo de ingreso manual y "Valores de meses cerrados"; egresos: compras, gastos,
+  reposiciones a trabajadores, cada tipo de egreso manual y "Valores de meses cerrados".
+  El nombre de un tipo manual sale del catálogo `cash_movement_type` (el de la empresa pisa
+  al global).

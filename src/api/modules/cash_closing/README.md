@@ -115,3 +115,10 @@ close/reopen → `CashPeriodDetail`).
   cerrado, los guardados.
 - Una cuenta usada en `cash_ledger_opening`, `cash_period_balance` o
   `cash_adjustment_entry` no se elimina (409 `PAYMENT_ACCOUNT_IN_USE`).
+
+## Neto de cada mes
+La lista (`/cash-closing/list`) y el detalle (`/cash-closing/find/:period`) traen `finance`:
+resultado del mes, IGV estimado y neto después del IGV (ver
+`cash_movement/README.md` → "Resultado del mes e IGV"). En un mes cerrado, ingresos,
+egresos y ajustes salen de sus totales guardados; el IGV se recalcula (el cierre no lo guarda).
+Se calcula para toda la página en una tanda (`services/shared/period_finance.service.ts`).

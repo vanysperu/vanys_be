@@ -8,6 +8,7 @@ import {
   QuotationModel,
   QuotationStatus,
 } from "../../model/quotation.model";
+import { registerInvoice } from "../../../invoice/services/shared/register_invoice";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getIgvRate } from "../shared/tax_config";
 import { CreateQuotationPaymentInput, insertQuotationPayment } from "../create/quotation_payment.service";
@@ -205,6 +206,7 @@ const changeQuotationStatus = async ({
   nextStatus,
   updatedBy,
   advancePayment,
+  invoiceIssued = false,
 }: {
   quotationId: number;
   nextStatus: QuotationStatus;
@@ -213,6 +215,8 @@ const changeQuotationStatus = async ({
   // estado: si el pago falla (sobre-pago, cuenta inválida), la cotización
   // no queda aceptada a medias.
   advancePayment?: CreateQuotationPaymentInput;
+  // Al cerrar (Finalizada): ¿emitimos factura? (pedido explícito del usuario).
+  invoiceIssued?: boolean;
 }) => {
   if (advancePayment && nextStatus !== "accepted") {
     throw new AdvanceOnlyOnAcceptError("El adelanto solo se puede registrar al aceptar la cotización");
@@ -282,7 +286,24 @@ const changeQuotationStatus = async ({
       });
     }
 
-    return result;
+    // Al cerrar la cotización: si se emitió factura, queda registrada (su
+    // archivo se sube aparte o queda en "Faltan subir"). Misma transacción.
+    let invoiceId: number | null = null;
+    if (nextStatus === "finished" && invoiceIssued) {
+      const client = await DataBase.instance.client.findByPk(current.client_id, { attributes: ["name"], transaction });
+      invoiceId = await registerInvoice({
+        companyId: Number(current.company_id),
+        businessUnitId: current.business_unit_id ?? null,
+        type: "issued",
+        quotationId,
+        purchaseId: null,
+        description: client?.name ?? `Cotización ${quotationId}`,
+        actorId: updatedBy ?? null,
+        transaction,
+      });
+    }
+
+    return { updated: result[0], invoice_id: invoiceId };
   });
 };
 

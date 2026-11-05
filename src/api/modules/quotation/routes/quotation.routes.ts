@@ -34,6 +34,7 @@ import {
 } from "../controllers/quotation.controller";
 import { completeQuotationController } from "../controllers/complete.controller";
 import { quotationBoardController } from "../controllers/board.controller";
+import { getQuotationProfitController } from "../controllers/profit.controller";
 
 export const router: Router = Router();
 
@@ -53,6 +54,8 @@ router.get(
 );
 router.get("/find/:id", verifyAccess, getQuotationValidator, allValidator, getQuotationController);
 router.get("/:id/pdf", verifyAccess, getQuotationValidator, allValidator, downloadQuotationPdfController);
+// Ganancia (pagos, IGV, gastos, compras y neto). Solo en el sistema, no en el PDF.
+router.get("/:id/profit", verifyAccess, getQuotationValidator, allValidator, getQuotationProfitController);
 router.post("/create", verifyAccess, createQuotationValidator, allValidator, createQuotationController);
 router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, updateQuotationController);
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);

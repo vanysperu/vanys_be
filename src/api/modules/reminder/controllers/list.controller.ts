@@ -10,7 +10,7 @@ const STATUSES: ReminderStatusFilter[] = ["active", "upcoming", "due", "read", "
 
 export const listRemindersController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { box, status, dateFrom, dateTo } = req.query;
+  const { box, status, dateFrom, dateTo, search } = req.query;
 
   const resp = await listRemindersService({
     // El usuario siempre sale del token: nadie puede listar los de otro.
@@ -19,6 +19,7 @@ export const listRemindersController = asyncHandler(async (req: Request, res: Re
     status: STATUSES.find((value) => value === status) ?? "active",
     dateFrom: (dateFrom as string) || undefined,
     dateTo: (dateTo as string) || undefined,
+    search: typeof search === "string" && search.trim() ? search.trim() : undefined,
     page: Number(req.query.page) || 1,
     limit: Math.min(Number(req.query.limit) || 20, 100),
   });

@@ -43,6 +43,7 @@ export const bulkProductsValidator = [
   priceRule("price_hundred", "por ciento"),
   priceRule("price_half_thousand", "por medio millar"),
   priceRule("price_thousand", "por millar"),
+  // Se acepta para no romper a la web, pero la subida masiva lo ignora (ver bulk.service.ts).
   body("products.*.requires_customization").optional().isBoolean().withMessage("requires_customization debe ser true o false"),
   ...productCatalogRules("products.*."),
 ];

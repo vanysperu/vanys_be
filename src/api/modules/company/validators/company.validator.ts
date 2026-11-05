@@ -101,6 +101,17 @@ const productImagesEnabledValidator = body("product_images_enabled")
   .withMessage("product_images_enabled debe ser verdadero o falso")
   .toBoolean();
 
-export const updateCompanyValidator = [paramCompanyIdValidator, themeColorValidator, productImagesEnabledValidator];
+// Dónde guarda facturas la empresa (solo Super Administrador: la ruta exige
+// requireSystemRole).
+const invoiceStorageValidators = ["invoice_storage_system", "invoice_storage_drive"].map((field) =>
+  body(field).optional().isBoolean().withMessage(`${field} debe ser verdadero o falso`).toBoolean()
+);
+
+export const updateCompanyValidator = [
+  paramCompanyIdValidator,
+  themeColorValidator,
+  productImagesEnabledValidator,
+  ...invoiceStorageValidators,
+];
 
 export const disableCompanyValidator = [paramCompanyIdValidator];
