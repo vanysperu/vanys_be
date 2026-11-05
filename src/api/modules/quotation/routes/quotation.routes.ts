@@ -6,6 +6,7 @@ import {
   changeItemStageValidator,
   changeStatusValidator,
   completeQuotationValidator,
+  quotationBoardValidator,
   createQuotationExpenseValidator,
   createQuotationPaymentValidator,
   correctQuotationExpenseValidator,
@@ -32,10 +33,12 @@ import {
   updateQuotationController,
 } from "../controllers/quotation.controller";
 import { completeQuotationController } from "../controllers/complete.controller";
+import { quotationBoardController } from "../controllers/board.controller";
 
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listQuotationsController);
+router.get("/board", verifyAccess, quotationBoardValidator, allValidator, quotationBoardController);
 // Gastos manuales: corregir / anular-restaurar / historial. Rutas de 3
 // segmentos que empiezan con "expense", así no las tapa ninguna "/:id/...".
 router.get("/expense/find/:id", verifyAccess, quotationExpenseIdValidator, allValidator, findQuotationExpenseController);

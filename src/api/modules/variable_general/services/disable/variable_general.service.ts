@@ -3,6 +3,7 @@ import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { loadManageableVariable } from "../shared/variable_scope.service";
 import { assertUniqueProductCategoryName } from "../shared/product_category.service";
+import { assertUniqueAdvertisementZoneCode } from "../shared/advertisement_zone.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant,
 // igual que en update/find -- ver comentario en update.service.ts.
@@ -35,6 +36,12 @@ export async function disableOrEnableVariableGeneralById({
       category: current.category,
       name: current.name,
       ref1: current.ref1,
+      companyId: current.company_id === null ? null : Number(current.company_id),
+    });
+    await assertUniqueAdvertisementZoneCode({
+      id,
+      category: current.category,
+      code: current.prefix_id,
       companyId: current.company_id === null ? null : Number(current.company_id),
     });
   }

@@ -89,6 +89,11 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   empresa (limitado a su propia tienda si tiene una asignada).
 
 ## Campos especiales
+- `items[].quotationItem`: trae `color`, `product_code` y `product` con `colors`,
+  `images_enabled` e `image_path`. `image_path` llega en `null` si la empresa no
+  tiene fotos habilitadas (lo decide el backend). El clic en el producto abre su
+  color, código y cantidad en cada lista de órdenes (Inicio, Compras y cotización);
+  con fotos habilitadas, también su foto.
 - `purchase_order_item_purchase.funding_source`/`paid_by_user_id` se
   agregaron en la migración
   `20261011100100-add-funding-source-to-purchase-order-item-purchase.js`

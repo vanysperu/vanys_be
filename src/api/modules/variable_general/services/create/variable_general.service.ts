@@ -2,6 +2,7 @@ import { DataBase } from "../../../../../database";
 import { VariableGeneralPartialAttributes } from "../../models/variable_general.model";
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { assertProductSubcategoryParent, assertUniqueProductCategoryName } from "../shared/product_category.service";
+import { assertUniqueAdvertisementZoneCode } from "../shared/advertisement_zone.service";
 
 export async function createVariableGeneral(payload: VariableGeneralPartialAttributes) {
   // ref2 guarda el QR de una cuenta de pago: tiene que ser una imagen vigente
@@ -11,6 +12,13 @@ export async function createVariableGeneral(payload: VariableGeneralPartialAttri
   await assertProductSubcategoryParent({
     category: payload.category,
     ref1: payload.ref1,
+    companyId: payload.company_id ?? null,
+  });
+  // Zonas de anuncios: el código es lo que manda la web, no se repite.
+  await assertUniqueAdvertisementZoneCode({
+    id: null,
+    category: payload.category,
+    code: payload.prefix_id,
     companyId: payload.company_id ?? null,
   });
   // Categorías/subcategorías de producto: sin nombres repetidos.

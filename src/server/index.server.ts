@@ -39,6 +39,8 @@ import { router as ReceivableRoutes } from "../api/modules/receivable/routes/rec
 import { router as ReminderRoutes } from "../api/modules/reminder/routes/reminder.routes";
 import { router as PublicWebRoutes } from "../api/modules/web_quote_request/routes/web_quote_request.routes";
 import { router as PublicProductRoutes } from "../api/modules/public_product/routes/public_product.routes";
+import { router as PublicAdvertisementRoutes } from "../api/modules/advertisement/routes/public_advertisement.routes";
+import { router as AdvertisementRoutes } from "../api/modules/advertisement/routes/advertisement.routes";
 import { router as ApiKeyRoutes } from "../api/modules/api_key/routes/api_key.routes";
 import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
@@ -115,6 +117,7 @@ export default class Server {
     // web_quote_request/README.md.
     this._router.use("/public", PublicWebRoutes);
     this._router.use("/public", PublicProductRoutes);
+    this._router.use("/public", PublicAdvertisementRoutes);
 
     // Chequeo de salud para el panel del hosting / monitoreo externo: además
     // de "el proceso responde", confirma que la base de datos contesta.
@@ -159,6 +162,7 @@ export default class Server {
     this._router.use("/receivable", ReceivableRoutes);
     this._router.use("/reminder", ReminderRoutes);
     this._router.use("/api-key", ApiKeyRoutes);
+    this._router.use("/advertisement", AdvertisementRoutes);
     this._router.use("/statistics", StatisticsRoutes);
     this._router.use("/uploads", UploadsRoutes);
 

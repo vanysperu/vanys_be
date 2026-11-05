@@ -35,8 +35,9 @@ export const expireOverdueQuotations = async (): Promise<number> => {
       // El WHERE vuelve a exigir "pending": entre el findAll de arriba y
       // este UPDATE un usuario pudo haber aprobado/rechazado la cotización,
       // y antes el job la pisaba a "Vencida" igual (solo filtraba por id).
+      const now = nowUtc();
       const [affected] = await DataBase.instance.quotation.update(
-        { status: "expired", updated_at: nowUtc() },
+        { status: "expired", status_changed_at: now, updated_at: now },
         { where: { id, status: "pending", total_paid: 0 }, transaction }
       );
       if (affected === 0) return false;

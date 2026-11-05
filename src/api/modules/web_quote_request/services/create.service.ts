@@ -2,30 +2,15 @@ import { DataBase } from "../../../../database";
 import { nowUtc } from "../../../../utils/dateUtils";
 import { roundMoney } from "../../../../utils/numbers";
 import { ApiKeyContext } from "../../api_key/types/api_key.types";
+import { computeQuotationTotal } from "../../quotation/model/quotation.model";
 import { getOrderedProductionStages } from "../../quotation/services/shared/production_stages";
+import { getIgvRate } from "../../quotation/services/shared/tax_config";
 import { logQuotationEvent } from "../../quotation/services/timeline/quotation_event.service";
-import {
-  WebQuoteAddedItem,
-  WebQuoteItemInput,
-  WebQuoteMissingItem,
-  WebQuoteRequestInput,
-  WebQuoteRequestResult,
-} from "../types/web_quote_request.types";
+import { WebQuoteAddedItem, WebQuoteRequestInput, WebQuoteRequestResult } from "../types/web_quote_request.types";
 import { suggestDraftPricing } from "./shared/draft_pricing";
 import { describeMissingItems, notifyMissingProducts } from "./shared/notify_missing_products";
-import { findProductsBySku, skuKey } from "./shared/products_by_sku";
 import { resolveWebClient } from "./shared/resolve_client";
-
-// Un mismo SKU repetido en el carrito se suma en un solo item.
-const mergeItemsBySku = (items: WebQuoteItemInput[]): WebQuoteItemInput[] => {
-  const merged = new Map<string, WebQuoteItemInput>();
-  for (const item of items) {
-    const key = skuKey(item.sku);
-    const previous = merged.get(key);
-    merged.set(key, { sku: item.sku.trim(), quantity: (previous?.quantity ?? 0) + item.quantity });
-  }
-  return [...merged.values()];
-};
+import { loadWebCatalog, resolveWebItems } from "./shared/resolve_items";
 
 // Crea una cotización "Pendiente de cotizar" con lo que eligió el cliente en
 // la web. Empresa y tienda salen de la API key (nunca del body). Todo en una
@@ -36,7 +21,6 @@ export async function createWebQuoteRequestService(
   apiKey: ApiKeyContext
 ): Promise<WebQuoteRequestResult> {
   const { companyId, businessUnitId } = apiKey;
-  const requestedItems = mergeItemsBySku(input.items);
 
   return DataBase.instance.sequelize.transaction(async (transaction) => {
     const { client, created, warnings } = await resolveWebClient({
@@ -46,20 +30,14 @@ export async function createWebQuoteRequestService(
       transaction,
     });
 
-    const productsBySku = await findProductsBySku(
-      requestedItems.map((item) => item.sku),
-      companyId,
-      transaction
-    );
+    const catalog = await loadWebCatalog(input.items, companyId, transaction);
+    const { resolved, missingItems, variantIssues } = resolveWebItems(input.items, catalog);
+    const found = resolved.map((item) => ({ item, product: item.product, pricing: suggestDraftPricing(item.product, item.quantity) }));
 
-    const found = requestedItems.flatMap((item) => {
-      const product = productsBySku.get(skuKey(item.sku));
-      return product ? [{ item, product, pricing: suggestDraftPricing(product, item.quantity) }] : [];
-    });
-    const missingItems: WebQuoteMissingItem[] = requestedItems.filter((item) => !productsBySku.has(skuKey(item.sku)));
-
-    // Borrador sin IGV: el equipo lo define al completarla.
+    // IGV activo por defecto (pedido explícito del usuario): el equipo puede
+    // quitarlo al completarla.
     const subtotal = roundMoney(found.reduce((sum, entry) => sum + entry.pricing.subtotal, 0));
+    const total = computeQuotationTotal(subtotal, true, await getIgvRate(companyId));
     const now = nowUtc();
 
     const quotation = await DataBase.instance.quotation.create(
@@ -69,12 +47,13 @@ export async function createWebQuoteRequestService(
         business_unit_id: businessUnitId,
         client_id: client.id,
         status: "quote_requested",
+        status_changed_at: now,
         subtotal,
-        total: subtotal,
+        total,
         total_paid: 0,
         includes_delivery: false,
         includes_design: false,
-        includes_igv: false,
+        includes_igv: true,
         notes: null,
         // Sin vigencia mientras no se le envíe al cliente: se calcula al
         // pasarla a Pendiente (ver changeQuotationStatus).
@@ -101,6 +80,8 @@ export async function createWebQuoteRequestService(
         product_id: product.id,
         technique_id: null,
         stage_id: firstStageId,
+        product_code: item.code,
+        color: item.color,
         quantity: item.quantity,
         pricing_mode: pricing.pricing_mode,
         unit_price: pricing.unit_price,
@@ -116,15 +97,20 @@ export async function createWebQuoteRequestService(
       quotationId: quotation.id,
       clientLabel: `${client.name}, cel. ${client.phone ?? input.client.phone}`,
       missingItems,
+      variantIssues,
       issuedBy: apiKey.issuedBy,
       transaction,
     });
 
     // El Historial deja constancia de los SKU faltantes y de si alguien
     // recibió el aviso (si no, queda a la vista que nadie fue notificado).
+    const pendingNotes = [
+      ...(missingItems.length > 0 ? [`No existen en el catálogo: ${describeMissingItems(missingItems)}.`] : []),
+      ...(variantIssues.length > 0 ? [`Revisar color: ${variantIssues.join("; ")}.`] : []),
+    ];
     const missingNote =
-      missingItems.length > 0
-        ? ` No existen en el catálogo: ${describeMissingItems(missingItems)}. ` +
+      pendingNotes.length > 0
+        ? ` ${pendingNotes.join(" ")} ` +
           (notifiedCount > 0 ? `Se avisó a ${notifiedCount} usuario(s).` : "No había ningún usuario a quien avisar.")
         : "";
     await logQuotationEvent({
@@ -136,7 +122,9 @@ export async function createWebQuoteRequestService(
     });
 
     const itemsAdded: WebQuoteAddedItem[] = found.map(({ item, product }) => ({
-      sku: item.sku,
+      sku: product.sku,
+      code: item.code,
+      color: item.color,
       product_id: product.id,
       product_name: product.name,
       quantity: item.quantity,
@@ -149,7 +137,7 @@ export async function createWebQuoteRequestService(
       client_created: created,
       items_added: itemsAdded,
       missing_items: missingItems,
-      warnings,
+      warnings: [...warnings, ...variantIssues],
     };
   });
 }

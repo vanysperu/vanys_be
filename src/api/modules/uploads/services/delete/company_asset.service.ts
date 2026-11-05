@@ -40,6 +40,14 @@ const findReferencedFileNames = async (companyId: number, transaction?: Transact
     attributes: ["image_path"],
     transaction,
   });
+  // Imágenes de anuncios (también las de los apagados: al prenderlos, su
+  // imagen tiene que seguir ahí). Un anuncio ELIMINADO ya no está acá, así
+  // que su imagen se borra.
+  const advertisements = await db.advertisement.findAll({
+    where: { company_id: companyId, image_path: { [Op.like]: ASSET_PATH_LIKE } },
+    attributes: ["image_path"],
+    transaction,
+  });
 
   return ownCompanyAssetFileNames(
     [
@@ -50,6 +58,7 @@ const findReferencedFileNames = async (companyId: number, transaction?: Transact
       ...stores.map((store) => store.logo_url),
       ...variables.map((variable) => variable.ref2),
       ...products.map((product) => product.image_path),
+      ...advertisements.map((advertisement) => advertisement.image_path),
     ],
     companyId
   );

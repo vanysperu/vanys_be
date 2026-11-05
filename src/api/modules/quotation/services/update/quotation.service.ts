@@ -254,7 +254,13 @@ const changeQuotationStatus = async ({
     const validUntil = sendsWebRequestToClient ? await computeDefaultValidUntil(now, current.company_id) : undefined;
 
     const result = await DataBase.instance.quotation.update(
-      { status: nextStatus, updated_by: updatedBy, updated_at: now, ...(validUntil ? { valid_until: validUntil } : {}) },
+      {
+        status: nextStatus,
+        status_changed_at: now,
+        updated_by: updatedBy,
+        updated_at: now,
+        ...(validUntil ? { valid_until: validUntil } : {}),
+      },
       { where: { id: quotationId }, transaction }
     );
 

@@ -29,6 +29,10 @@ export interface QuotationItemAttributes {
   product_id: number;
   technique_id: number | null;
   stage_id: number | null;
+  // Código de proveedor y color elegidos, como texto (una copia): la cotización
+  // no cambia si después se edita el catálogo del producto.
+  product_code: string | null;
+  color: string | null;
   quantity: number;
   pricing_mode: QuotationItemPricingMode;
   unit_price: number;
@@ -58,6 +62,8 @@ export function QuotationItemFactory(sequelize: Sequelize): QuotationItemStatic 
       product_id: { type: DataTypes.BIGINT, allowNull: false },
       technique_id: { type: DataTypes.BIGINT, allowNull: true },
       stage_id: { type: DataTypes.BIGINT, allowNull: true },
+      product_code: { type: DataTypes.STRING(60), allowNull: true },
+      color: { type: DataTypes.STRING(60), allowNull: true },
       quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
       pricing_mode: { type: DataTypes.ENUM(...QUOTATION_ITEM_PRICING_MODES), allowNull: false, defaultValue: "unit" },
       unit_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },

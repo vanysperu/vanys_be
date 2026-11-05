@@ -1,4 +1,4 @@
-import { body, param } from "express-validator";
+import { body, param, query } from "express-validator";
 import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
 import {
   correctionHistoryValidator,
@@ -21,6 +21,19 @@ const quotationItemsRules = [
     .optional({ values: "null" })
     .isInt({ gt: 0 })
     .withMessage("La técnica debe ser un id válido"),
+  // Variante del item: que el color sea del producto lo valida el service.
+  body("items.*.product_code")
+    .optional({ values: "null" })
+    .isString()
+    .trim()
+    .isLength({ max: 60 })
+    .withMessage("El código tiene máximo 60 caracteres"),
+  body("items.*.color")
+    .optional({ values: "null" })
+    .isString()
+    .trim()
+    .isLength({ max: 60 })
+    .withMessage("El color tiene máximo 60 caracteres"),
   // La cantidad es siempre obligatoria: cada modo de precio es una tarifa
   // por unidad, no el precio de un lote cerrado.
   body("items.*.quantity").isInt({ gt: 0 }).withMessage("La cantidad debe ser un número entero positivo"),
@@ -121,11 +134,26 @@ export const updateQuotationValidator = [
   body("includes_igv").optional().isBoolean().withMessage("Debe ser verdadero o falso"),
 ];
 
-// PUT /quotation/:id/items — completa una cotización "Pendiente de cotizar":
+// GET /quotation/board — columnas del tablero (todo opcional).
+const optionalId = (field: string, label: string) =>
+  query(field).optional({ values: "falsy" }).isInt({ gt: 0 }).withMessage(`${label} no es válido`);
+
+export const quotationBoardValidator = [
+  query("perStatus").optional({ values: "falsy" }).isInt({ min: 1, max: 50 }).withMessage("perStatus va de 1 a 50"),
+  optionalId("companyId", "La empresa"),
+  optionalId("businessUnitId", "La tienda"),
+  optionalId("clientId", "El cliente"),
+  query("dateFrom").optional({ values: "falsy" }).isISO8601().withMessage("dateFrom no es una fecha válida"),
+  query("dateTo").optional({ values: "falsy" }).isISO8601().withMessage("dateTo no es una fecha válida"),
+];
+
+// PUT /quotation/:id/items — edita una cotización en cualquier estado:
 // items con las mismas reglas que crear + los datos que se eligen al cotizar.
 export const completeQuotationValidator = [
   paramQuotationIdValidator,
   ...quotationItemsRules,
+  // Con id se actualiza ese item; sin id, es un producto nuevo.
+  body("items.*.id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El item no es válido"),
   body("notes").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("billing_name").optional({ values: "null" }).isString().isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
   body("billing_document_number")

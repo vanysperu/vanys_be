@@ -13,6 +13,7 @@ export const WEB_QUOTE_MAX_ITEMS = 50;
 const MAX_QUANTITY = 1_000_000;
 
 const isFilled = (value: unknown) => value !== undefined && value !== null && value !== "";
+const isIdentifier = (value: unknown) => typeof value === "string" && value.trim() !== "";
 
 // Tipo y número de documento van juntos (o ninguno), como en clientes.
 const assertDocumentTypeAndNumberTogether: CustomValidator = (value, { req }) => {
@@ -63,15 +64,34 @@ export const createWebQuoteRequestValidator = [
   body("items")
     .isArray({ min: 1, max: WEB_QUOTE_MAX_ITEMS })
     .withMessage(`El pedido debe tener entre 1 y ${WEB_QUOTE_MAX_ITEMS} productos`),
+  // Cada item se identifica por su código de proveedor o por su SKU.
+  body("items.*")
+    .custom((item: { sku?: unknown; code?: unknown }) => isIdentifier(item?.sku) || isIdentifier(item?.code))
+    .withMessage("Cada producto necesita su SKU o su código"),
   body("items.*.sku")
+    .optional({ values: "falsy" })
     .isString()
-    .withMessage("Cada producto necesita su SKU")
+    .withMessage("El SKU debe ser texto")
     .bail()
     .trim()
-    .notEmpty()
-    .withMessage("Cada producto necesita su SKU")
     .isLength({ max: 50 })
     .withMessage("El SKU tiene máximo 50 caracteres"),
+  body("items.*.code")
+    .optional({ values: "falsy" })
+    .isString()
+    .withMessage("El código debe ser texto")
+    .bail()
+    .trim()
+    .isLength({ max: 60 })
+    .withMessage("El código tiene máximo 60 caracteres"),
+  body("items.*.color")
+    .optional({ values: "falsy" })
+    .isString()
+    .withMessage("El color debe ser texto")
+    .bail()
+    .trim()
+    .isLength({ max: 60 })
+    .withMessage("El color tiene máximo 60 caracteres"),
   body("items.*.quantity")
     .isInt({ min: 1, max: MAX_QUANTITY })
     .withMessage(`La cantidad debe ser un número entero entre 1 y ${MAX_QUANTITY}`)

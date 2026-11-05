@@ -13,6 +13,7 @@ export async function findProductsBySku(
   companyId: number,
   transaction: Transaction
 ): Promise<Map<string, ProductModel>> {
+  if (skus.length === 0) return new Map();
   const products = await DataBase.instance.product.findAll({
     where: { company_id: companyId, is_deleted: false, sku: { [Op.in]: skus } },
     order: [["id", "ASC"]],

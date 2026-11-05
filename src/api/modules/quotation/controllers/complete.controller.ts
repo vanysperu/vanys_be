@@ -11,18 +11,18 @@ import {
   TenantMismatchError,
 } from "../services/create/quotation.service";
 import { assertQuotationWritable } from "../services/shared/quotation_scope";
-import { completeRequestedQuotation } from "../services/update/quotation_items.service";
+import { saveQuotationItems } from "../services/update/quotation_items.service";
 
-// PUT /quotation/:id/items — el equipo completa una cotización que llegó
-// desde la web ("Pendiente de cotizar"): técnica, modo de precio, cantidades
-// y productos que faltaban (ej. un SKU que la web mandó y no existía).
+// PUT /quotation/:id/items — el equipo edita una cotización en cualquier
+// estado: productos, técnica, modo de precio, cantidades y datos. También es
+// como se completa un pedido de la web ("Pendiente de cotizar").
 export const completeQuotationController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const quotationId = Number(req.params.id);
 
   // Mismo alcance de escritura que registrar dinero: un usuario ligado a una
   // tienda solo completa cotizaciones de su tienda.
-  await assertQuotationWritable(quotationId, user, "completar cotizaciones");
+  await assertQuotationWritable(quotationId, user, "editar cotizaciones");
 
   const {
     items,
@@ -36,7 +36,7 @@ export const completeQuotationController = asyncHandler(async (req: Request, res
   } = req.body;
 
   try {
-    const result = await completeRequestedQuotation({
+    const result = await saveQuotationItems({
       quotationId,
       input: {
         items,
@@ -50,7 +50,7 @@ export const completeQuotationController = asyncHandler(async (req: Request, res
       },
       updatedBy: user.userId,
     });
-    ok(res, 200, result, "Cotización completada correctamente");
+    ok(res, 200, result, "Cotización guardada correctamente");
   } catch (err: unknown) {
     if (err instanceof TenantMismatchError) throw new AppError(403, err.message);
     if (

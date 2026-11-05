@@ -3,6 +3,8 @@ import { DataBase } from "../../../../../database";
 import { PurchaseOrderAttributes, PurchaseOrderModel } from "../../model/purchase_order.model";
 import { PurchaseOrderItemAttributes } from "../../model/purchase_order_item.model";
 import { loadPurchasesByItemIds, PurchaseListItem } from "./purchase_order_item_purchase.service";
+import { loadColorsByProduct, ProductColorDto } from "../../../product/services/shared/colors";
+import { companiesWithProductImages } from "../../../product/services/shared/images";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
 
@@ -11,9 +13,35 @@ const ACTOR_ATTRIBUTES = ["id", "name", "paternal_lastname"];
 // Orden ya serializada, con cada item y sus compras (anuladas incluidas,
 // con is_deleted y corrections_count). El `include` de items no se refleja
 // en el tipo de toJSON() (limitación de Sequelize): se tipa acá.
-type PurchaseOrderItemJson = PurchaseOrderItemAttributes & Record<string, unknown>;
+interface ItemProductJson {
+  id: number;
+  name: string;
+  image_path?: string | null;
+}
+type PurchaseOrderItemJson = PurchaseOrderItemAttributes &
+  Record<string, unknown> & { quotationItem?: ({ product?: ItemProductJson | null } & Record<string, unknown>) | null };
 export type PurchaseOrderWithItems = PurchaseOrderAttributes &
   Record<string, unknown> & { items: (PurchaseOrderItemJson & { purchases: PurchaseListItem[] })[] };
+
+// Lo que necesita ver quien compra al hacer clic en el producto (pedido
+// explícito del usuario). La foto solo sale si la empresa tiene fotos
+// habilitadas: lo decide el backend, nunca la pantalla.
+const withProductSheet = (item: PurchaseOrderItemJson, imagesEnabled: boolean, colors: Map<number, ProductColorDto[]>) => {
+  const product = item.quotationItem?.product;
+  if (!product) return item;
+  return {
+    ...item,
+    quotationItem: {
+      ...item.quotationItem,
+      product: {
+        ...product,
+        image_path: imagesEnabled ? product.image_path ?? null : null,
+        images_enabled: imagesEnabled,
+        colors: colors.get(Number(product.id)) ?? [],
+      },
+    },
+  };
+};
 
 // Las compras de todos los items de las órdenes en UNA consulta (nunca una
 // por item) — reemplaza el include "purchases", que no traía el gasto, la
@@ -22,12 +50,21 @@ const withPurchases = async (orders: PurchaseOrderModel[]): Promise<PurchaseOrde
   const plainOrders = orders.map(
     (order) => order.toJSON() as unknown as PurchaseOrderAttributes & Record<string, unknown> & { items?: PurchaseOrderItemJson[] }
   );
-  const itemIds = plainOrders.flatMap((order) => (order.items ?? []).map((item) => Number(item.id)));
-  const purchasesByItem = await loadPurchasesByItemIds(itemIds);
+  const items = plainOrders.flatMap((order) => order.items ?? []);
+  const productIds = items.flatMap((item) => (item.quotationItem?.product ? [Number(item.quotationItem.product.id)] : []));
+  const companyIds = [...new Set(plainOrders.map((order) => Number(order.company_id)))];
+  const [purchasesByItem, withImages, colors] = await Promise.all([
+    loadPurchasesByItemIds(items.map((item) => Number(item.id))),
+    companiesWithProductImages(companyIds),
+    loadColorsByProduct([...new Set(productIds)]),
+  ]);
 
   return plainOrders.map((order) => ({
     ...order,
-    items: (order.items ?? []).map((item) => ({ ...item, purchases: purchasesByItem.get(Number(item.id)) ?? [] })),
+    items: (order.items ?? []).map((item) => ({
+      ...withProductSheet(item, withImages.has(Number(order.company_id)), colors),
+      purchases: purchasesByItem.get(Number(item.id)) ?? [],
+    })),
   }));
 };
 
@@ -129,7 +166,7 @@ const getPurchaseOrdersList = async ({
       {
         association: "items",
         include: [
-          { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name"] }] },
+          { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name", "image_path"] }] },
         ],
       },
     ],
@@ -154,7 +191,7 @@ const getPurchaseOrderById = async (id: number): Promise<PurchaseOrderWithItems 
       {
         association: "items",
         include: [
-          { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name"] }] },
+          { association: "quotationItem", include: [{ association: "product", attributes: ["id", "name", "image_path"] }] },
         ],
       },
     ],

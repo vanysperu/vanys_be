@@ -22,8 +22,8 @@ interface QuotationPdfItem {
   id: number;
   product?: { name: string } | null;
   technique?: { name: string } | null;
+  color?: string | null;
   quantity: number;
-  pricing_mode: string;
   unit_price: number;
   subtotal: number;
 }
@@ -89,19 +89,6 @@ Font.register({
 
 const money = (value: number) => `S/ ${Number(value).toFixed(2)}`;
 
-// Espejo de QUOTATION_ITEM_PRICING_MODE_LABEL (grulla_fe: quotation.types.ts)
-// — dice qué tarifa por volumen se aplicó al precio unitario (ej. 10
-// unidades a precio de ciento), que si no, no se explica solo con el número.
-// "custom" no tiene etiqueta a propósito: un precio negociado para esta
-// cotización es interno y el cliente no debe ver "Personalizado" (pedido
-// explícito del usuario); esa fila muestra "—".
-const PRICING_MODE_LABEL: Record<string, string> = {
-  unit: "Unidad",
-  hundred: "Ciento",
-  half_thousand: "Medio millar",
-  thousand: "Millar",
-};
-
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 9, fontFamily: "Roboto", color: "#1F2430" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
@@ -154,7 +141,6 @@ const styles = StyleSheet.create({
   // propia columna al lado, igual que en el detalle de cotización en
   // pantalla (QuotationDetailDialog.tsx).
   colQty: { flex: 0.7, textAlign: "right" },
-  colMode: { flex: 1.1, textAlign: "right" },
   colPrice: { flex: 1.1, textAlign: "right" },
   colSubtotal: { flex: 1.1, textAlign: "right" },
   colIgv: { flex: 1, textAlign: "right" },
@@ -230,9 +216,6 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
   // Si ningún item lleva técnica (productos sin personalización), la columna
   // "Técnica" se omite entera; si se mezclan, los que no llevan muestran "—".
   const showTechnique = data.items.some((item) => Boolean(item.technique));
-  // Mismo criterio para "Modo": si todos los items llevan precio
-  // personalizado (que no se le muestra al cliente), la columna sobra.
-  const showMode = data.items.some((item) => item.pricing_mode !== "custom");
   // Helper para no repetir `[styles.sectionTitle, { color: data.brandColor }]`
   // en cada uno de los ~8 títulos de sección del documento.
   const sectionTitle = (label: string) =>
@@ -365,7 +348,6 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             // (pedido explícito del usuario: "no va a salir ni en los pdf").
             showTechnique ? createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica") : null,
             createElement(Text, { style: [styles.th, styles.colQty] }, "Cant."),
-            showMode ? createElement(Text, { style: [styles.th, styles.colMode] }, "Modo") : null,
             createElement(Text, { style: [styles.th, styles.colPrice] }, "P. unit."),
             // Mismas columnas que el detalle en pantalla (pedido explícito
             // del usuario: que se vea claro cuánto se paga por cada producto
@@ -388,14 +370,16 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
               createElement(
                 View,
                 { style: styles.tableRow, key: item.id },
-                createElement(Text, { style: [styles.td, styles.colProduct] }, item.product?.name ?? "—"),
+                // Solo el color: el código de proveedor es interno y el PDF va al cliente.
+                createElement(
+                  Text,
+                  { style: [styles.td, styles.colProduct] },
+                  item.color ? `${item.product?.name ?? "—"} (${item.color})` : item.product?.name ?? "—"
+                ),
                 showTechnique
                   ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
                   : null,
                 createElement(Text, { style: [styles.td, styles.colQty] }, String(item.quantity)),
-                showMode
-                  ? createElement(Text, { style: [styles.td, styles.colMode] }, PRICING_MODE_LABEL[item.pricing_mode] ?? "—")
-                  : null,
                 createElement(Text, { style: [styles.td, styles.colPrice] }, money(item.unit_price)),
                 ...(data.includes_igv
                   ? [

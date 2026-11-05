@@ -5,6 +5,7 @@ import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getOrderedProductionStages } from "../shared/production_stages";
 import { computeQuotationTotal } from "../../model/quotation.model";
 import { QuotationItemPricingMode } from "../../model/quotation_item.model";
+import { loadProductVariants, resolveItemVariant, variantsOf } from "../shared/item_variant";
 import { ProductModel } from "../../../product/model/product.model";
 import { CustomizationTechniqueModel } from "../../../customization_technique/model/customization_technique.model";
 import { getIgvRate } from "../shared/tax_config";
@@ -35,6 +36,10 @@ export interface CreateQuotationItemInput {
   // Obligatoria solo si el producto requiere personalización
   // (product.requires_customization); prohibida si no la requiere.
   technique_id?: number | null;
+  // Variante elegida. Opcionales: el color se valida contra el producto y el
+  // código se resuelve según el color (ver resolveItemVariant).
+  product_code?: string | null;
+  color?: string | null;
   // Cantidad real de unidades pedidas — siempre obligatoria, en todos los
   // modos. El subtotal es precio_por_unidad × cantidad; pedir más que el
   // tamaño "típico" del modo (ej. 1100 en modo millar) sigue cobrando la
@@ -250,11 +255,12 @@ const priceQuotationItems = async ({
   const productIds = items.map((item) => item.product_id);
   const techniqueIds = items.map((item) => item.technique_id).filter((id): id is number => Boolean(id));
 
-  const [products, techniques] = await Promise.all([
+  const [products, techniques, variantsByProduct] = await Promise.all([
     DataBase.instance.product.findAll({ where: { id: productIds }, transaction }),
     techniqueIds.length > 0
       ? DataBase.instance.customization_technique.findAll({ where: { id: techniqueIds }, transaction })
       : Promise.resolve([]),
+    loadProductVariants(productIds),
   ]);
 
   const pricedItems = items.map((item) => {
@@ -279,7 +285,14 @@ const priceQuotationItems = async ({
     const unitPrice = roundMoney(resolveUnitPrice(basePrice, technique, item.pricing_mode, item.custom_technique_price));
     const subtotal = roundMoney(computeItemSubtotal(unitPrice, quantity));
 
-    return { ...item, quantity, unit_price: unitPrice, subtotal };
+    const variant = resolveItemVariant({
+      productName: product.name,
+      requestedCode: item.product_code,
+      requestedColor: item.color,
+      variants: variantsOf(variantsByProduct, Number(item.product_id)),
+    });
+
+    return { ...item, ...variant, quantity, unit_price: unitPrice, subtotal };
   });
 
   const subtotal = roundMoney(pricedItems.reduce((sum, item) => sum + item.subtotal, 0));
@@ -340,6 +353,7 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
         business_unit_id: input.business_unit_id ?? null,
         client_id: input.client_id,
         status: "pending",
+        status_changed_at: createdAt,
         subtotal,
         total,
         total_paid: 0,
@@ -367,6 +381,8 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
         product_id: item.product_id,
         technique_id: item.technique_id ?? null,
         stage_id: firstStage ? firstStage.id : null,
+        product_code: item.product_code ?? null,
+        color: item.color ?? null,
         quantity: item.quantity,
         pricing_mode: item.pricing_mode,
         unit_price: item.unit_price,

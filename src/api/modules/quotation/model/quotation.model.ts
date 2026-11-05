@@ -93,6 +93,9 @@ export interface QuotationAttributes {
   // imprime en el PDF para que el cliente sepa qué esperar.
   production_days: number | null;
   is_deleted: boolean;
+  // Cuándo llegó a su estado actual: el tablero muestra arriba lo último
+  // que cambió de estado (pedido explícito del usuario).
+  status_changed_at: Date;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -130,6 +133,7 @@ export function QuotationFactory(sequelize: Sequelize): QuotationStatic {
       billing_document_number: { type: DataTypes.STRING(20), allowNull: true },
       production_days: { type: DataTypes.INTEGER, allowNull: true },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      status_changed_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

@@ -7,12 +7,13 @@
 | Método | Ruta                             | Acción                     | Requiere módulo |
 |--------|----------------------------------|----------------------------|-----------------|
 | GET    | /quotation/list                  | list (pag)                 | cotizacion      |
+| GET    | /quotation/board                 | tablero: cada columna con sus primeras cotizaciones y totales reales | cotizacion (`cotizacion.board.endpoint`) |
 | GET    | /quotation/find/:id              | detail                     | cotizacion      |
 | GET    | /quotation/:id/pdf               | PDF                        | cotizacion      |
 | POST   | /quotation/create                | create                     | cotizacion      |
 | PUT    | /quotation/update/:id            | update                     | cotizacion      |
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
-| PUT    | /quotation/:id/items             | completar pedido de la web ("Pendiente de cotizar") | cotizacion (`cotizacion.complete.button`) |
+| PUT    | /quotation/:id/items             | editar la cotización (cualquier estado) | cotizacion (`cotizacion.complete.button`) |
 | PUT    | /quotation/item/:itemId/stage    | mover etapa de producción  | cotizacion      |
 | POST   | /quotation/:id/payments          | registrar pago             | cotizacion      |
 | POST   | /quotation/:id/expenses          | registrar gasto            | cotizacion      |
@@ -57,17 +58,27 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   hacía spread del body, así que se podía reasignar `company_id`,
   `client_id`, `status` o `total` por fuera de sus flujos.
 
+### Editar (`PUT /quotation/:id/items`)
+Toda cotización se puede editar, en cualquier estado (pedido explícito del
+usuario). Cambian productos, técnica, modo, cantidades, color, notas, IGV,
+delivery/diseño, días de producción y "a nombre de". Cliente, empresa, tienda y
+estado no cambian. Mismo alcance de escritura que pagos
+(`assertQuotationWritable`). No se borra y recrea: `items[].id` indica el item
+existente y se aplica solo la diferencia.
+- Un item existente conserva su etapa, sus compras y su **precio pactado**
+  mientras no cambien producto, técnica ni modo: el catálogo pudo cambiar.
+  Cambiar la cantidad no recotiza. Lo nuevo o cambiado usa las reglas de crear.
+- Un item con orden de compra no se puede quitar ni cambiar de producto →
+  409 `QUOTATION_ITEM_HAS_PURCHASE_ORDER` (la orden se borraría en cascada).
+- El total no puede quedar por debajo de lo cobrado → 400 `TOTAL_BELOW_PAID`.
+- Cada edición queda en el Historial con el total anterior y el nuevo.
+
 ### Estados
 - **`quote_requested` ("Pendiente de cotizar")**: pedido que llegó desde la
   web (`POST /api/public/quotation-request`, ver
   [`web_quote_request`](../web_quote_request/README.md)). Solo puede pasar a
   `pending` o `rejected`, y nunca se vuelve a él. Mientras esté así:
-  - `PUT /quotation/:id/items` reemplaza todos sus items con las mismas
-    reglas y cálculo que crear (`priceQuotationItems`), más notas, IGV,
-    delivery/diseño, días de producción y "a nombre de". Cliente, empresa y
-    tienda no cambian. En cualquier otro estado → 409
-    `QUOTATION_NOT_EDITABLE`. Mismo alcance de escritura que pagos
-    (`assertQuotationWritable`).
+  - Se completa con `PUT /quotation/:id/items` (ver "Editar" abajo).
   - Pasarla a `pending` exige que esté completa (al menos un producto,
     técnica donde el producto la requiere, precio > 0); si no → 409
     `QUOTATION_INCOMPLETE`. Al pasar, `valid_until` se calcula desde ese día.
@@ -204,7 +215,26 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
 - El job **no vence una cotización con pagos** (`total_paid > 0`): "Vencida"
   es final y el dinero quedaría colgado; queda Pendiente, a la vista.
 
+### Tablero (`GET /quotation/board`)
+Pedido explícito del usuario: "cuando paso una cotización del carrito a
+Pendiente no se lista". La pantalla pedía las 100 cotizaciones más nuevas de
+TODOS los estados y las repartía en columnas, ordenadas por creación: una
+cotización vieja recién pasada a Pendiente quedaba al fondo o fuera.
+- `quotation.status_changed_at` (migración 20261106100000): cuándo llegó a su
+  estado actual. Se actualiza al crear, en cada cambio de estado y al vencer.
+- Cada columna (la cadena principal: Pendiente de cotizar → Finalizada) trae
+  sus primeras `perStatus` (20 por defecto, máx. 50), de la que cambió de
+  estado más recientemente a la más antigua, más `total_count` y
+  `total_amount` de TODA la columna. Mismos filtros y alcance que el listado.
+- "Ver más" en una columna usa el listado:
+  `GET /quotation/list?status=pending&orderBy=status_changed_at&orderDir=desc&page=2`.
+- `orderBy` del listado solo acepta `created_at`, `status_changed_at`,
+  `updated_at`, `total` o `id` (antes una columna inexistente daba 500).
+
 ### Detalle (`GET /quotation/find/:id`)
+- Cada item trae `product_code` y `color` (lo elegido, como copia) y su `product`
+  trae `colors` y `codes` vigentes: el formulario de completar los necesita
+  aunque el producto no esté en su selector de 100.
 - Items, pagos, gastos e historial se leen en consultas separadas
   (`separate: true`): en un solo JOIN se multiplicaban entre sí, y Sequelize
   ignoraba su `order`. Items y pagos/gastos salen en el orden en que se
@@ -213,6 +243,11 @@ abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
   `Date` local. Antes salía **un día antes** de lo guardado.
 
 ## Campos especiales
+- `quotation_item.product_code` / `color`: variante elegida, opcional. Al crear o
+  completar, el color tiene que ser del producto
+  (`400 QUOTATION_ITEM_COLOR_NOT_FOUND`) y el código se ajusta al color elegido
+  (ver `services/shared/item_variant.ts`). Se ven en el detalle, en producción
+  y en compras. El PDF muestra solo el color: el código de proveedor es interno.
 - `billing_name` / `billing_document_number`: solo afectan lo que se
   imprime en el PDF — `client_id` sigue siendo el cliente real vinculado.
 - `includes_delivery` / `includes_design` son informativos;

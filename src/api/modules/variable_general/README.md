@@ -69,6 +69,13 @@
   - una subcategoría no se repite dentro de su categoría.
   - Se valida al crear, al editar y **al rehabilitar** (deshabilitar siempre se
     puede). `shared/product_category.service.ts` → `assertUniqueProductCategoryName`.
+- **Zonas de anuncios** (`category = "advertisement_zone"`): lugares de la web
+  donde salen los anuncios (ver `advertisement/README.md`). `prefix_id` es el
+  código que manda la web (`?zone=inicio`) y no se repite entre las zonas
+  activas que ve una empresa (las suyas y las globales) → `409
+  DUPLICATE_ADVERTISEMENT_ZONE`. Se valida al crear, editar y rehabilitar
+  (`shared/advertisement_zone.service.ts`). Deshabilitar una zona apaga sus
+  anuncios en la web.
 - El listado en modo "select" (`admin=false`) solo devuelve `{value, name}`
   para alimentar `<select>` de otros formularios (no pagina igual que la
   pantalla de administración).

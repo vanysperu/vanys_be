@@ -14,24 +14,36 @@ export const formatQuotationCode = (quotationId: number) => `COT-${String(quotat
 
 const truncate = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
 
+// Cómo se nombra lo que pidió la web: por SKU, por código o por ambos.
+const itemLabel = (item: WebQuoteMissingItem) => {
+  if (!item.sku) return `código ${item.code}`;
+  return item.code ? `SKU ${item.sku} (código ${item.code})` : `SKU ${item.sku}`;
+};
+
 // Versión en una línea, para el Historial de la cotización.
 export const describeMissingItems = (items: WebQuoteMissingItem[]) =>
-  items.map((item) => `SKU ${item.sku} × ${item.quantity}`).join(", ");
+  items.map((item) => `${itemLabel(item)} × ${item.quantity}`).join(", ");
 
 // El aviso se lee de un vistazo en la campana/toast (pedido explícito del
 // usuario: "es un poquito difícil verlo en la notificación"): antes era un
 // solo párrafo largo; ahora va por líneas — empresa, cliente y un SKU por
 // línea. El frontend respeta los saltos de línea (whitespace-pre-line).
-const buildMessage = (companyName: string, clientLabel: string, items: WebQuoteMissingItem[]) => {
-  const listed = items.slice(0, MAX_LISTED_SKUS).map((item) => `• ${item.sku} × ${item.quantity} u.`);
+const buildMessage = (companyName: string, clientLabel: string, items: WebQuoteMissingItem[], variantIssues: string[]) => {
+  const listed = items.slice(0, MAX_LISTED_SKUS).map((item) => `• ${itemLabel(item)} × ${item.quantity} u.`);
   const rest = items.length - listed.length;
+  const issues = variantIssues.slice(0, MAX_LISTED_SKUS).map((issue) => `• ${issue}`);
   const lines = [
     `Empresa: ${companyName}`,
     `Cliente: ${clientLabel}`,
-    "SKU que no existen en el catálogo:",
-    ...listed,
-    ...(rest > 0 ? [`… y ${rest} más (ver Historial de la cotización)`] : []),
-    "Créalos y agrégalos al completar la cotización.",
+    ...(items.length > 0
+      ? [
+          "No existen en el catálogo:",
+          ...listed,
+          ...(rest > 0 ? [`… y ${rest} más (ver Historial de la cotización)`] : []),
+          "Créalos y agrégalos al completar la cotización.",
+        ]
+      : []),
+    ...(issues.length > 0 ? ["Revisa el color al completar la cotización:", ...issues] : []),
   ];
   return truncate(lines.join("\n"), MESSAGE_MAX_LENGTH);
 };
@@ -72,6 +84,7 @@ export async function notifyMissingProducts({
   quotationId,
   clientLabel,
   missingItems,
+  variantIssues,
   issuedBy,
   transaction,
 }: {
@@ -79,10 +92,13 @@ export async function notifyMissingProducts({
   quotationId: number;
   clientLabel: string;
   missingItems: WebQuoteMissingItem[];
+  // Productos que sí entraron, pero con un código o color que no se pudo
+  // confirmar: el pedido no se pierde y el equipo los corrige.
+  variantIssues: string[];
   issuedBy: number;
   transaction: Transaction;
 }): Promise<number> {
-  if (missingItems.length === 0) return 0;
+  if (missingItems.length === 0 && variantIssues.length === 0) return 0;
 
   const recipients = await resolveRecipients(companyId, issuedBy);
   if (recipients.length === 0) return 0;
@@ -94,8 +110,12 @@ export async function notifyMissingProducts({
     attributes: ["business_name"],
     transaction,
   });
-  const title = `Pedido web ${formatQuotationCode(quotationId)}: ${missingItems.length} producto(s) no encontrado(s)`;
-  const message = buildMessage(company?.business_name ?? `Empresa #${companyId}`, clientLabel, missingItems);
+  const quotationCode = formatQuotationCode(quotationId);
+  const title =
+    missingItems.length > 0
+      ? `Pedido web ${quotationCode}: ${missingItems.length} producto(s) no encontrado(s)`
+      : `Pedido web ${quotationCode}: revisar color de ${variantIssues.length} producto(s)`;
+  const message = buildMessage(company?.business_name ?? `Empresa #${companyId}`, clientLabel, missingItems, variantIssues);
   const now = nowUtc();
 
   await DataBase.instance.reminder.bulkCreate(

@@ -10,8 +10,13 @@ export interface WebQuoteClientInput {
   address?: string | null;
 }
 
+// Cada item se identifica por `code` o por `sku`. El código de proveedor es
+// único en la empresa y ya dice producto y color; `color` sirve para productos
+// con un solo código para todos sus colores.
 export interface WebQuoteItemInput {
-  sku: string;
+  sku?: string | null;
+  code?: string | null;
+  color?: string | null;
   quantity: number;
 }
 
@@ -21,16 +26,19 @@ export interface WebQuoteRequestInput {
 }
 
 export interface WebQuoteAddedItem {
-  sku: string;
+  sku: string | null;
+  code: string | null;
+  color: string | null;
   product_id: number;
   product_name: string;
   quantity: number;
 }
 
-// SKU que la web mandó y no corresponde a ningún producto activo de la
-// empresa: no entra a la cotización y se avisa al equipo.
+// SKU o código que la web mandó y no corresponde a ningún producto activo de
+// la empresa: no entra a la cotización y se avisa al equipo.
 export interface WebQuoteMissingItem {
-  sku: string;
+  sku: string | null;
+  code: string | null;
   quantity: number;
 }
 

@@ -3,6 +3,8 @@ import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
+import { QuotationItemAttributes } from "../../model/quotation_item.model";
+import { loadProductVariants, variantsOf } from "../shared/item_variant";
 import { loadCorrectionCounts } from "../../../money_correction/services/shared/corrections_count";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange } from "../../../../../core/utils/listFilters";
@@ -25,6 +27,10 @@ export interface QuotationListSummary {
 const RECEIVABLE_CONDITION = () =>
   `status IN (${RECEIVABLE_STATUSES.map((status) => DataBase.instance.sequelize.escape(status)).join(", ")})` +
   ` AND total - total_paid >= ${RECEIVABLE_MIN_BALANCE}`;
+
+// Columnas por las que se puede ordenar el listado. `orderBy` llega del query:
+// una columna que no existe respondía 500.
+const SORTABLE_COLUMNS = new Set(["created_at", "status_changed_at", "updated_at", "total", "id"]);
 
 interface QuotationListOptions extends IListOptions<QuotationAttributes> {
   companyId?: number | null;
@@ -68,7 +74,11 @@ const getQuotationsList = async (
       ...createdByWhere,
       ...dateWhere,
     },
-    order: [[orderBy, orderDir]],
+    // El id desempata: con fechas iguales, una página no repite ni salta filas.
+    order: [
+      [SORTABLE_COLUMNS.has(orderBy) ? orderBy : "created_at", orderDir],
+      ["id", orderDir],
+    ],
     limit,
     offset: getOffset(page, limit),
     include: [{ association: "client", attributes: ["id", "name"] }],
@@ -181,7 +191,10 @@ export type QuotationExpenseListItem = QuotationExpenseAttributes & {
   corrections_count: number;
 };
 
-type QuotationDetailJson = QuotationAttributes & { expenses?: QuotationExpenseAttributes[] };
+type QuotationDetailJson = QuotationAttributes & {
+  expenses?: QuotationExpenseAttributes[];
+  items?: (QuotationItemAttributes & { product?: object | null })[];
+};
 
 /**
  * Detalle de la cotización para la pantalla (GET /quotation/find/:id): el de
@@ -199,7 +212,9 @@ const getQuotationDetailById = async (id: number) => {
   const expenses = plain.expenses ?? [];
   const expenseIds = expenses.map((expense) => Number(expense.id));
 
-  const [purchases, correctionCounts] = await Promise.all([
+  const items = plain.items ?? [];
+
+  const [purchases, correctionCounts, variantsByProduct] = await Promise.all([
     expenseIds.length === 0
       ? Promise.resolve([])
       : DataBase.instance.purchase_order_item_purchase.findAll({
@@ -207,6 +222,7 @@ const getQuotationDetailById = async (id: number) => {
           attributes: ["id", "quotation_expense_id"],
         }),
     loadCorrectionCounts("quotation_expense", expenseIds),
+    loadProductVariants(items.map((item) => Number(item.product_id))),
   ]);
   const purchaseIdByExpense = new Map(purchases.map((purchase) => [Number(purchase.quotation_expense_id), purchase.id]));
 
@@ -216,7 +232,13 @@ const getQuotationDetailById = async (id: number) => {
     corrections_count: correctionCounts.get(Number(expense.id)) ?? 0,
   }));
 
-  return { ...plain, expenses: enrichedExpenses };
+  // Colores y códigos del producto de cada item: el formulario de completar
+  // los necesita aunque el producto no esté en su selector (carga hasta 100).
+  const enrichedItems = items.map((item) =>
+    item.product ? { ...item, product: { ...item.product, ...variantsOf(variantsByProduct, Number(item.product_id)) } } : item
+  );
+
+  return { ...plain, items: enrichedItems, expenses: enrichedExpenses };
 };
 
 export { getQuotationsList, getQuotationById, getQuotationDetailById };

@@ -1,7 +1,7 @@
 # Módulo: web_quote_request (Pedidos de cotización desde la web)
 
 Pedido explícito del usuario: que desde la web de la empresa el cliente elija
-productos (por SKU) y cantidades, y que eso llegue al sistema como una
+productos (por código o SKU) y cantidades, y que eso llegue al sistema como una
 cotización **"Pendiente de cotizar"** (`quote_requested`). El equipo la
 completa (técnica, modo de precio, productos que falten) y la pasa a
 **Pendiente**; desde ahí sigue el flujo normal.
@@ -34,14 +34,20 @@ Content-Type: application/json
     "address": "Av. Siempre Viva 123" // opcional
   },
   "items": [
-    { "sku": "TAZA-01", "quantity": 120 },
-    { "sku": "LAP-AZ", "quantity": 50 }
+    { "code": "E6000-01", "quantity": 100 },            // el código dice producto y color
+    { "code": "E6000-05", "quantity": 200 },
+    { "code": "MT013", "color": "Azul", "quantity": 50 }, // un código para todos los colores
+    { "sku": "TAZA-01", "quantity": 120 }                 // sigue funcionando solo con SKU
   ]
 }
 ```
-- `items`: de 1 a 50; `sku` hasta 50 caracteres; `quantity` entero 1–1 000 000.
-- Un SKU repetido se suma en un solo item. El SKU se compara sin distinguir
-  mayúsculas.
+- `items`: de 1 a 50. Cada uno necesita `code` (hasta 60 caracteres) o `sku`
+  (hasta 50); `color` es opcional (hasta 60); `quantity` entero 1–1 000 000.
+- **El código basta**: es único en la empresa (índice
+  `uq_product_code_company_code`) y, si está vinculado a un color, ya dice
+  producto y color. SKU, código y color se comparan sin distinguir mayúsculas.
+- Las líneas se suman solo si son el mismo producto, código y color: 100 negros
+  y 200 azules son **dos items**.
 - **No se manda empresa ni tienda**: salen de la API key.
 
 ### Response `201`
@@ -54,8 +60,8 @@ Content-Type: application/json
     "status": "quote_requested",
     "client_id": 2909,
     "client_created": true,
-    "items_added": [{ "sku": "TAZA-01", "product_id": 99, "product_name": "Taza blanca", "quantity": 120 }],
-    "missing_items": [{ "sku": "LAP-AZ", "quantity": 50 }],
+    "items_added": [{ "sku": "LAP-0034", "code": "E6000-01", "color": "Negro", "product_id": 99, "product_name": "Lapicero", "quantity": 100 }],
+    "missing_items": [{ "sku": null, "code": "E9999", "quantity": 50 }],
     "warnings": []
   }
 }
@@ -73,7 +79,16 @@ Content-Type: application/json
   nombre queda como `Cliente web <celular>`. Si el email o documento ya los
   usa otro cliente de la empresa, el cliente nuevo se crea sin ese dato y se
   avisa en `warnings` (el pedido no se rechaza).
-- **SKU inexistente** (pedido explícito del usuario): no entra a la
+- **Color de cada item**: se guarda como texto en `quotation_item.product_code`
+  y `quotation_item.color` (una copia: la cotización no cambia si se edita el
+  catálogo). Lo que no se puede confirmar no frena el pedido (decisión del
+  usuario): el producto entra, y se avisa en `warnings`, Recordatorios e
+  Historial para que el equipo lo corrija al completar:
+  - código de otro producto, junto con un SKU válido: se respeta el SKU, sin
+    ese código;
+  - código vinculado a un color distinto del `color` pedido: manda el código;
+  - `color` que el producto no tiene: el item queda sin color.
+- **SKU o código inexistente** (pedido explícito del usuario): no entra a la
   cotización; se crea un aviso en **Recordatorios** (campana + toast) para
   cada usuario activo de la empresa con acceso a Recordatorios: qué SKU, a
   qué cotización y cuántas unidades. Si la empresa no tiene a nadie con ese
@@ -84,8 +99,8 @@ Content-Type: application/json
 - **Precio sugerido (borrador)**: cada item toma la tarifa de catálogo de
   mayor volumen que alcanza la cantidad (≥1000 millar, ≥500 medio millar,
   ≥100 ciento, si no unidad); si el producto no tiene esa tarifa, la
-  siguiente más chica que sí tenga. Sin técnica y sin IGV: los define el
-  equipo.
+  siguiente más chica que sí tenga. Sin técnica y con IGV activo por defecto
+  (decisión del usuario): el equipo lo revisa al completarla.
 - **Sin vigencia** mientras esté en "Pendiente de cotizar"
   (`valid_until = NULL`, el job de vencimiento no la toca). Se calcula al
   pasarla a Pendiente, contando desde ese día.

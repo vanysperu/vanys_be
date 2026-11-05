@@ -17,6 +17,7 @@ describe("Pedidos de cotización desde la web (API key)", () => {
   const plainKey = `vnk_${randomBytes(32).toString("base64url")}`;
   const sku = `WEB-${Date.now()}`;
   const missingSku = `NOEXISTE-${Date.now()}`;
+  const variantProduct = `WebColor${wordStamp()}`;
   // Celular único por corrida: el cliente se identifica por él.
   const phone = `9${String(Date.now()).slice(-8)}`;
 
@@ -67,7 +68,10 @@ describe("Pedidos de cotización desde la web (API key)", () => {
   afterAll(async () => {
     await queryRows("UPDATE api_key SET is_deleted = true WHERE id = ?", [apiKeyId]);
     // Los avisos de prueba no deben aparecer como toasts en la suite E2E.
-    await queryRows("UPDATE reminder SET is_deleted = true WHERE message LIKE ?", [`%${missingSku}%`]);
+    await queryRows("UPDATE reminder SET is_deleted = true WHERE message LIKE ? OR message LIKE ?", [
+      `%${missingSku}%`,
+      `%${variantProduct}%`,
+    ]);
   });
 
   it("rechaza sin API key, con una key falsa y sin celular", async () => {
@@ -99,7 +103,7 @@ describe("Pedidos de cotización desde la web (API key)", () => {
     // Mismo SKU (sin distinguir mayúsculas) se suma en un item.
     expect(res.body.data.items_added).toHaveLength(1);
     expect(res.body.data.items_added[0].quantity).toBe(150);
-    expect(res.body.data.missing_items).toEqual([{ sku: missingSku, quantity: 30 }]);
+    expect(res.body.data.missing_items).toEqual([{ sku: missingSku, code: null, quantity: 30 }]);
 
     const quotationId = res.body.data.quotation_id;
     const detail = (await authedRequest(token).get(`/quotation/find/${quotationId}`)).body.data;
@@ -122,7 +126,7 @@ describe("Pedidos de cotización desde la web (API key)", () => {
     expect(again.body.data.client_id).toBe(res.body.data.client_id);
   });
 
-  it("solo pasa a Pendiente una vez completada, y después ya no se edita", async () => {
+  it("solo pasa a Pendiente una vez completada, y se puede seguir editando", async () => {
     const created = await sendRequest({ client: { phone }, items: [{ sku, quantity: 10 }] });
     const quotationId = created.body.data.quotation_id;
     const api = authedRequest(token);
@@ -149,11 +153,130 @@ describe("Pedidos de cotización desde la web (API key)", () => {
     expect(detail.status).toBe("pending");
     expect(detail.valid_until).not.toBeNull();
 
-    const frozen = await api.put(`/quotation/${quotationId}/items`, {
+    const edited = await api.put(`/quotation/${quotationId}/items`, {
       items: [{ product_id: productId, technique_id: techniqueId, quantity: 1, pricing_mode: "unit" }],
     });
-    expect(frozen.status).toBe(409);
-    expect(frozen.body.code).toBe("QUOTATION_NOT_EDITABLE");
+    expect(edited.status).toBe(200);
+    expect(edited.body.data.total).toBe(2.5);
+  });
+
+  it("identifica producto y color por el código, y el equipo conserva o corrige el color", async () => {
+    const api = authedRequest(token);
+    const colorSku = `${sku}-COL`;
+    const singleCodeSku = `${sku}-UNO`;
+    const blackCode = `NEG-${sku}`;
+    const blueCode = `AZU-${sku}`;
+    const singleCode = `UNO-${sku}`;
+    const colors = [
+      { name: "Negro", hex: "#111111" },
+      { name: "Azul", hex: "#0000FF" },
+    ];
+    const created = await api.post("/product/create", {
+      company_id: companyId,
+      name: variantProduct,
+      sku: colorSku,
+      price_unit: 2,
+      colors,
+      codes: [
+        { code: blackCode, color: "Negro" },
+        { code: blueCode, color: "Azul" },
+      ],
+    });
+    expect(created.status).toBe(201);
+    await api.post("/product/create", {
+      company_id: companyId,
+      name: `${variantProduct}Uno`,
+      sku: singleCodeSku,
+      price_unit: 3,
+      colors,
+      codes: [{ code: singleCode }],
+    });
+
+    const res = await sendRequest({
+      client: { phone },
+      items: [
+        // Solo el código: dice producto y color. Sin importar mayúsculas.
+        { code: blackCode.toLowerCase(), quantity: 100 },
+        { code: blackCode, quantity: 50 },
+        { code: blueCode, quantity: 200 },
+        // Un solo código para todos los colores: el color llega aparte.
+        { code: singleCode, color: "azul", quantity: 10 },
+        // Sin código: basta el SKU y el color.
+        { sku: colorSku, color: "Azul", quantity: 5 },
+        // Código de otro producto: se respeta el SKU, sin ese código.
+        { sku: colorSku, code: singleCode, quantity: 7 },
+        // El color del código manda sobre el color pedido.
+        { code: blueCode, color: "Negro", quantity: 1 },
+        // Color que el producto no tiene.
+        { sku: singleCodeSku, color: "Rojo", quantity: 3 },
+        // Código inexistente: no entra y se avisa.
+        { code: `${missingSku}-C`, quantity: 9 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.missing_items).toEqual([{ sku: null, code: `${missingSku}-C`, quantity: 9 }]);
+    expect(res.body.data.items_added.map((item: { sku: string; code: string; color: string; quantity: number }) => [item.sku, item.code, item.color, item.quantity])).toEqual([
+      [colorSku, blackCode, "Negro", 150],
+      [colorSku, blueCode, "Azul", 201],
+      [singleCodeSku, singleCode, "Azul", 10],
+      [colorSku, null, "Azul", 5],
+      [colorSku, null, null, 7],
+      [singleCodeSku, null, null, 3],
+    ]);
+    const warnings = res.body.data.warnings.join(" | ");
+    expect(warnings).toContain(`el código ${singleCode} no corresponde`);
+    expect(warnings).toContain(`el código ${blueCode} de "${variantProduct}" es Azul, no Negro`);
+    expect(warnings).toContain("no tiene el color Rojo");
+
+    const quotationId = res.body.data.quotation_id;
+    const detail = (await api.get(`/quotation/find/${quotationId}`)).body.data;
+    expect(detail.items[0]).toMatchObject({ product_code: blackCode, color: "Negro", quantity: 150 });
+    // El detalle trae los colores del producto para el formulario de completar.
+    expect(detail.items[0].product.colors).toEqual(colors);
+    expect(detail.events.some((event: { description: string }) => event.description.includes("Revisar color:"))).toBe(true);
+
+    const [reminder] = await queryRows<{ message: string }>(
+      "SELECT message FROM reminder WHERE message LIKE ? ORDER BY id DESC LIMIT 1",
+      [`%${missingSku}-C%`]
+    );
+    expect(reminder?.message).toContain(`código ${missingSku}-C × 9 u.`);
+    expect(reminder?.message).toContain("Revisa el color al completar la cotización:");
+
+    // Completar borra y recrea los items: el color y el código no se pierden.
+    const blackItem = detail.items[0];
+    const singleItem = detail.items[2];
+    const base = { quantity: 10, pricing_mode: "unit" };
+    const completed = await api.put(`/quotation/${quotationId}/items`, {
+      items: [
+        { ...base, product_id: blackItem.product_id, product_code: blackCode, color: "Negro" },
+        // El equipo corrige el color: el código pasa a ser el de ese color.
+        { ...base, product_id: blackItem.product_id, product_code: blackCode, color: "Azul" },
+        // Un código sin color vinculado se conserva con el color elegido.
+        { ...base, product_id: singleItem.product_id, product_code: singleCode, color: "Negro" },
+        // Sin color elegido, el código aporta su color.
+        { ...base, product_id: blackItem.product_id, product_code: blueCode },
+      ],
+    });
+    expect(completed.status).toBe(200);
+    const items = (await api.get(`/quotation/find/${quotationId}`)).body.data.items;
+    expect(items.map((item: { product_code: string; color: string }) => [item.product_code, item.color])).toEqual([
+      [blackCode, "Negro"],
+      [blueCode, "Azul"],
+      [singleCode, "Negro"],
+      [blueCode, "Azul"],
+    ]);
+
+    const wrongColor = await api.put(`/quotation/${quotationId}/items`, {
+      items: [{ ...base, product_id: blackItem.product_id, color: "Rojo" }],
+    });
+    expect(wrongColor.status).toBe(400);
+    expect(wrongColor.body.code).toBe("QUOTATION_ITEM_COLOR_NOT_FOUND");
+  });
+
+  it("rechaza un item sin SKU ni código", async () => {
+    const res = await sendRequest({ client: { phone }, items: [{ quantity: 1 }] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("VALIDATION_ERROR");
   });
 
   it("una key revocada deja de funcionar", async () => {

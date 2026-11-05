@@ -6,6 +6,7 @@ import { loadManageableVariable } from "../shared/variable_scope.service";
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/company_asset.service";
 import { assertProductSubcategoryParent, assertUniqueProductCategoryName } from "../shared/product_category.service";
+import { assertUniqueAdvertisementZoneCode } from "../shared/advertisement_zone.service";
 
 // companyId=null (solo para llamadas is_system) omite el filtro de tenant.
 // Sin este WHERE, cualquier usuario autenticado podía editar por ID una
@@ -52,6 +53,12 @@ export async function updateVariableGeneralById(
       category: payload.category ?? current.category,
       name: payload.name ?? current.name,
       ref1: payload.ref1 !== undefined ? payload.ref1 : current.ref1,
+      companyId: current.company_id === null ? null : Number(current.company_id),
+    });
+    await assertUniqueAdvertisementZoneCode({
+      id,
+      category: payload.category ?? current.category,
+      code: payload.prefix_id ?? current.prefix_id,
       companyId: current.company_id === null ? null : Number(current.company_id),
     });
   }
