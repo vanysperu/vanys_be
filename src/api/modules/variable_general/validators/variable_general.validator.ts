@@ -141,8 +141,9 @@ export const updateVariableGeneralValidator = [
     .bail()
     .isLength({ max: 255 })
     .withMessage("Máximo 255 caracteres"),
+  // null = quitarlo (ej. el QR de una cuenta de pago).
   body("ref2")
-    .optional()
+    .optional({ values: "null" })
     .isString()
     .withMessage("El campo 'ref2' debe ser un texto válido.")
     .bail()

@@ -26,6 +26,10 @@
 - platform.company.disable.button
 - document_settings.update.button
 - document_settings.uploadAsset.button (subida del logo, ver `uploads/README.md`)
+- En la misma pantalla, las cuentas de pago se agregan, **editan** (tipo, nombre,
+  número y QR), deshabilitan y eliminan con los botones `variable_general.*`
+  (ver `variable_general/README.md`). Editar una cuenta no cambia su historial:
+  pagos y movimientos la referencian por id.
 
 ## Reglas de negocio propias del módulo
 - Una empresa inactiva se puede seguir editando.

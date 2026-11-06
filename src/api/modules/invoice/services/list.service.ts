@@ -5,12 +5,18 @@ import { utcToBusinessParts } from "../../../../utils/dateUtils";
 import { InvoiceDriveStatus, InvoiceType } from "../model/invoice.model";
 import { InvoiceDto, InvoiceListFilter, InvoiceListSummary } from "../types/invoice.types";
 import { quotationCode } from "./shared/drive_copy";
+import {
+  INVOICE_SEARCH_SQL,
+  invoiceDescription,
+  invoiceQuotationCodes,
+  invoiceSearchReplacements,
+  loadInvoicePurchases,
+} from "./shared/invoice_purchases";
 
 interface InvoiceRow {
   id: number;
   type: InvoiceType;
   quotation_id: number;
-  purchase_id: number | null;
   description: string;
   company_id: number;
   company_name: string | null;
@@ -32,11 +38,13 @@ const scopeConditions = (filter: InvoiceListFilter) => {
   if (filter.businessUnitId !== undefined) conditions.push("(i.business_unit_id IS NULL OR i.business_unit_id = :businessUnitId)");
   if (filter.type) conditions.push("i.type = :type");
   if (filter.drive) conditions.push("i.drive_status = :drive");
-  if (filter.search) conditions.push("(i.description LIKE :search OR CAST(i.quotation_id AS CHAR) = :searchId)");
+  if (filter.search) conditions.push(INVOICE_SEARCH_SQL);
   if (filter.dateFrom) conditions.push("DATE(CONVERT_TZ(i.created_at, '+00:00', '-05:00')) >= :dateFrom");
   if (filter.dateTo) conditions.push("DATE(CONVERT_TZ(i.created_at, '+00:00', '-05:00')) <= :dateTo");
   return conditions;
 };
+
+const toMoney = (value: number): number => Math.round(value * 100) / 100;
 
 const FILE_CONDITION = { pending: "i.file_name IS NULL", uploaded: "i.file_name IS NOT NULL" } as const;
 
@@ -50,14 +58,12 @@ export async function listInvoicesService(
 ): Promise<PaginatedResult<InvoiceDto> & { summary: InvoiceListSummary }> {
   const scope = scopeConditions(filter);
   const conditions = filter.file ? [...scope, FILE_CONDITION[filter.file]] : scope;
-  const searchDigits = (filter.search ?? "").replace(/\D/g, "").replace(/^0+/, "");
   const replacements = {
     companyId: filter.companyId,
     businessUnitId: filter.businessUnitId ?? null,
     type: filter.type ?? null,
     drive: filter.drive ?? null,
-    search: filter.search ? `%${filter.search}%` : null,
-    searchId: searchDigits || null,
+    ...invoiceSearchReplacements(filter.search),
     dateFrom: filter.dateFrom ?? null,
     dateTo: filter.dateTo ?? null,
   };
@@ -75,7 +81,7 @@ export async function listInvoicesService(
       { type: QueryTypes.SELECT, replacements }
     ) as Promise<{ pending_count: number | string | null; drive_failed_count: number | string | null }[]>,
     DataBase.instance.sequelize.query(
-      `SELECT i.id, i.type, i.quotation_id, i.purchase_id, i.description, i.company_id, c.business_name AS company_name,
+      `SELECT i.id, i.type, i.quotation_id, i.description, i.company_id, c.business_name AS company_name,
               i.file_name, i.mime_type, i.size_bytes, i.file_uploaded_at,
               TRIM(CONCAT(COALESCE(up.name, ''), ' ', COALESCE(up.paternal_lastname, ''))) AS uploader_name,
               i.stored_in_system, i.drive_status, i.drive_error, i.created_at,
@@ -94,28 +100,36 @@ export async function listInvoicesService(
     ) as Promise<InvoiceRow[]>,
   ]);
 
+  // Compras de todas las facturas de la página, en una sola consulta.
+  const purchasesByInvoice = await loadInvoicePurchases(rows.map((row) => Number(row.id)));
+
   return {
-    data: rows.map((row) => ({
-      id: Number(row.id),
-      type: row.type,
-      quotation_id: Number(row.quotation_id),
-      quotation_code: quotationCode(Number(row.quotation_id)),
-      purchase_id: row.purchase_id === null ? null : Number(row.purchase_id),
-      description: row.description,
-      company_id: Number(row.company_id),
-      company_name: row.company_name,
-      has_file: row.file_name !== null,
-      file_name: row.file_name,
-      mime_type: row.mime_type,
-      size_bytes: row.size_bytes === null ? null : Number(row.size_bytes),
-      file_uploaded_at: row.file_uploaded_at ? utcToBusinessParts(row.file_uploaded_at) : null,
-      file_uploaded_by_name: row.uploader_name || null,
-      stored_in_system: Boolean(row.stored_in_system),
-      drive_status: row.drive_status,
-      drive_error: row.drive_error,
-      created_at: utcToBusinessParts(row.created_at),
-      created_by_name: row.creator_name || null,
-    })),
+    data: rows.map((row) => {
+      const purchases = purchasesByInvoice.get(Number(row.id)) ?? [];
+      return {
+        id: Number(row.id),
+        type: row.type,
+        quotation_id: Number(row.quotation_id),
+        quotation_code: quotationCode(Number(row.quotation_id)),
+        quotation_codes: invoiceQuotationCodes(Number(row.quotation_id), purchases),
+        purchases,
+        purchases_total: toMoney(purchases.reduce((total, line) => total + line.amount, 0)),
+        description: invoiceDescription(row.description, purchases),
+        company_id: Number(row.company_id),
+        company_name: row.company_name,
+        has_file: row.file_name !== null,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        size_bytes: row.size_bytes === null ? null : Number(row.size_bytes),
+        file_uploaded_at: row.file_uploaded_at ? utcToBusinessParts(row.file_uploaded_at) : null,
+        file_uploaded_by_name: row.uploader_name || null,
+        stored_in_system: Boolean(row.stored_in_system),
+        drive_status: row.drive_status,
+        drive_error: row.drive_error,
+        created_at: utcToBusinessParts(row.created_at),
+        created_by_name: row.creator_name || null,
+      };
+    }),
     meta: buildPaginationMeta(Number(countRow?.total ?? 0), filter.page, filter.limit),
     summary: {
       pending_count: Number(summaryRow?.pending_count ?? 0),

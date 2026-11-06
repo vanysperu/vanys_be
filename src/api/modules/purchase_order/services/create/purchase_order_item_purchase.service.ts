@@ -1,3 +1,4 @@
+import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
 import { createQuotationExpense } from "../../../quotation/services/create/quotation_expense.service";
@@ -10,7 +11,7 @@ import { buildPurchaseExpenseDescription, notesToSuffix } from "../shared/purcha
 import { QuotationItemAttributes } from "../../../quotation/model/quotation_item.model";
 import { ProductAttributes } from "../../../product/model/product.model";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
-import { registerInvoice } from "../../../invoice/services/shared/register_invoice";
+import { linkPurchaseToInvoice, registerInvoice } from "../../../invoice/services/shared/register_invoice";
 import { assertQuotationIsActive } from "../../../quotation/services/shared/active_quotation";
 
 // Igual que en purchase_order.service.ts: el `include` anidado
@@ -57,7 +58,39 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // queda registrada la factura; su archivo se sube aparte (o queda en
   // "Faltan subir").
   hasInvoice?: boolean;
+  // Con hasInvoice: factura de compra YA registrada a la que se suma esta
+  // compra (una factura puede cubrir varios productos). Sin esto, se crea una nueva.
+  invoiceId?: number;
   createdBy?: number;
+}
+
+// Factura de una compra: la suma a una ya registrada (misma empresa y tienda)
+// o registra una nueva. Devuelve el id de la factura.
+async function invoiceForPurchase({
+  existingInvoiceId,
+  purchaseId,
+  companyId,
+  quotationId,
+  description,
+  actorId,
+  transaction,
+}: {
+  existingInvoiceId: number | undefined;
+  purchaseId: number;
+  companyId: number;
+  quotationId: number;
+  description: string;
+  actorId: number | null;
+  transaction: Transaction;
+}): Promise<number> {
+  const quotation = await DataBase.instance.quotation.findByPk(quotationId, { attributes: ["business_unit_id"], transaction });
+  const storeId = quotation?.business_unit_id;
+  const businessUnitId = storeId === null || storeId === undefined ? null : Number(storeId);
+  if (!existingInvoiceId) {
+    return registerInvoice({ companyId, businessUnitId, type: "purchase", quotationId, purchaseId, description, actorId, transaction });
+  }
+  await linkPurchaseToInvoice({ invoiceId: existingInvoiceId, purchaseId, companyId, businessUnitId, actorId, transaction });
+  return existingInvoiceId;
 }
 
 // Un producto de una orden puede conseguirse en varias compras distintas
@@ -76,6 +109,7 @@ const createPurchaseOrderItemPurchase = async ({
   paidByUserId,
   paymentAccountId,
   hasInvoice = false,
+  invoiceId: existingInvoiceId,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -222,24 +256,20 @@ const createPurchaseOrderItemPurchase = async ({
     }
 
     // La factura de la compra, en la misma transacción: si la compra falla,
-    // no queda una factura suelta.
-    let invoiceId: number | null = null;
-    if (hasInvoice) {
-      const quotation = await DataBase.instance.quotation.findByPk(purchaseOrder.quotation_id, {
-        attributes: ["business_unit_id"],
-        transaction,
-      });
-      invoiceId = await registerInvoice({
-        companyId: Number(purchaseOrder.company_id),
-        businessUnitId: quotation?.business_unit_id ?? null,
-        type: "purchase",
-        quotationId: Number(purchaseOrder.quotation_id),
-        purchaseId: Number(purchase.id),
-        description: `${productName} × ${quantity}`,
-        actorId: createdBy ?? null,
-        transaction,
-      });
-    }
+    // no queda una factura suelta. Con existingInvoiceId la compra se suma a
+    // una factura ya registrada (una factura puede cubrir varios productos);
+    // sin él, se registra una factura nueva.
+    const invoiceId = hasInvoice
+      ? await invoiceForPurchase({
+          existingInvoiceId,
+          purchaseId: Number(purchase.id),
+          companyId: Number(purchaseOrder.company_id),
+          quotationId: Number(purchaseOrder.quotation_id),
+          description: `${productName} × ${quantity}`,
+          actorId: createdBy ?? null,
+          transaction,
+        })
+      : null;
 
     // Cantidad vigente comprada (compras previas + esta) vs. lo pedido — solo
     // queda "purchased" cuando ya no falta nada (también si se compró de más,

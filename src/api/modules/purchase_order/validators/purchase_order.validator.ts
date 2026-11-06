@@ -64,6 +64,8 @@ export const createPurchaseOrderItemPurchaseValidator = [
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
   body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
+  // Factura de compra ya registrada a la que se suma esta compra (varias compras, una factura).
+  body("invoice_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La factura elegida no es válida").toInt(),
   body("funding_source")
     .isIn(["company", "employee"])
     .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),

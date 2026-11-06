@@ -31,8 +31,8 @@
   lo impide (llaves `RESTRICT`).
 - **QR de una cuenta de pago** (`ref2` = ruta de `company_asset`): al crear o
   cambiar `ref2`, la imagen tiene que ser de la misma empresa y existir
-  (`400` si no). Al cambiarlo o al eliminar la cuenta, la imagen anterior se
-  borra en la misma transacción. Deshabilitar no la borra. Ver
+  (`400` si no). Al cambiarlo, quitarlo (`ref2: null`) o eliminar la cuenta, la
+  imagen anterior se borra en la misma transacción. Deshabilitar no la borra. Ver
   `uploads/README.md`.
 - `company_id = NULL` significa variable **global**, visible para todas las
   empresas (ej. tipos de documento, etapas de producción por defecto, métodos

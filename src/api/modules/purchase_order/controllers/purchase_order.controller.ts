@@ -121,7 +121,7 @@ export const getPurchaseOrderController = asyncHandler(async (req: Request, res:
 // Solo el propio asignado (o un admin de la empresa) puede tocar los items
 // de la orden — nadie más puede cerrar/marcar/comprar algo que no le toca.
 // Lanza AppError si no tiene acceso; nunca responde nada por su cuenta.
-const assertCanTouchPurchaseOrderItem = async (itemId: number, user: IToken) => {
+export const assertCanTouchPurchaseOrderItem = async (itemId: number, user: IToken) => {
   const item = await DataBase.instance.purchase_order_item.findOne({ where: { id: itemId } });
   if (!item) {
     throw new AppError(404, "El item no existe");
@@ -173,7 +173,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, has_invoice } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, has_invoice, invoice_id } = req.body;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -195,6 +195,8 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       paidByUserId,
       paymentAccountId: payment_account_id,
       hasInvoice: has_invoice === true,
+      // Factura ya registrada a la que se suma esta compra (solo con has_invoice).
+      invoiceId: has_invoice === true && Number(invoice_id) > 0 ? Number(invoice_id) : undefined,
       createdBy: user.userId,
     });
   } catch (err: unknown) {

@@ -71,14 +71,15 @@ export async function getPeriodFinances(scope: StatisticsScope, periods: string[
        GROUP BY bucket`,
       replacements
     ),
-    // Compras con factura (módulo invoice): su gasto vivo, por fecha de compra.
+    // Compras con factura (módulo invoice; una factura puede cubrir varias):
+    // su gasto vivo, por fecha de compra.
     selectRows<PurchaseBucketRow>(
       `SELECT DATE_FORMAT(qe.spent_at, :fmt) AS bucket, q.company_id, COALESCE(SUM(qe.amount), 0) AS amount
-       FROM invoice i
-       INNER JOIN purchase_order_item_purchase pop ON pop.id = i.purchase_id
+       FROM invoice_purchase ip
+       INNER JOIN purchase_order_item_purchase pop ON pop.id = ip.purchase_id
        INNER JOIN quotation_expense qe ON qe.id = pop.quotation_expense_id
        INNER JOIN quotation q ON q.id = qe.quotation_id
-       WHERE i.type = 'purchase' AND ${EXPENSE_ACTIVE_SQL} AND ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to
+       WHERE ${EXPENSE_ACTIVE_SQL} AND ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to
        GROUP BY bucket, q.company_id`,
       replacements
     ),

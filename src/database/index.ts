@@ -71,6 +71,7 @@ import { ProductCodeFactory, ProductCodeStatic } from "../api/modules/product/mo
 import { AdvertisementFactory, AdvertisementStatic } from "../api/modules/advertisement/model/advertisement.model";
 import { InvoiceFactory, InvoiceStatic } from "../api/modules/invoice/model/invoice.model";
 import { InvoiceFileFactory, InvoiceFileStatic } from "../api/modules/invoice/model/invoice_file.model";
+import { InvoicePurchaseFactory, InvoicePurchaseStatic } from "../api/modules/invoice/model/invoice_purchase.model";
 import {
   CompanyDriveConnectionFactory,
   CompanyDriveConnectionStatic,
@@ -141,6 +142,8 @@ export class DataBase {
   // Facturas y Drive por empresa (migración 20261107100000-create-invoices.js).
   public invoice: InvoiceStatic;
   public invoice_file: InvoiceFileStatic;
+  // Compras que cubre cada factura de compra (20261108100000-invoice-purchases.js).
+  public invoice_purchase: InvoicePurchaseStatic;
   public company_drive_connection: CompanyDriveConnectionStatic;
   public company_asset: CompanyAssetStatic;
   // Cierre mensual de caja (migración 20261102100000-create-cash-closing.js).
@@ -219,6 +222,7 @@ export class DataBase {
     this.advertisement = AdvertisementFactory(this.sequelize);
     this.invoice = InvoiceFactory(this.sequelize);
     this.invoice_file = InvoiceFileFactory(this.sequelize);
+    this.invoice_purchase = InvoicePurchaseFactory(this.sequelize);
     this.company_drive_connection = CompanyDriveConnectionFactory(this.sequelize);
     this.company_asset = CompanyAssetFactory(this.sequelize);
     this.cash_ledger = CashLedgerFactory(this.sequelize);

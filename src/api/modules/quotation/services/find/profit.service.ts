@@ -39,7 +39,7 @@ export async function getQuotationProfitService(quotationId: number): Promise<Qu
               WHERE qe.quotation_id = q.id AND qe.is_deleted = false) AS purchases,
             (SELECT COALESCE(SUM(qe.amount), 0) FROM quotation_expense qe
               INNER JOIN purchase_order_item_purchase pop ON pop.quotation_expense_id = qe.id
-              INNER JOIN invoice i ON i.purchase_id = pop.id AND i.type = 'purchase'
+              INNER JOIN invoice_purchase ip ON ip.purchase_id = pop.id
               WHERE qe.quotation_id = q.id AND qe.is_deleted = false) AS purchases_with_invoice
      FROM quotation q
      WHERE q.id = :quotationId`,

@@ -2,6 +2,12 @@ import { param, query } from "express-validator";
 
 export const invoiceIdValidator = [param("id").isInt({ gt: 0 }).withMessage("La factura no es válida").toInt()];
 
+// Facturas a las que se puede sumar la compra de un item.
+export const purchaseCandidatesValidator = [
+  query("itemId").isInt({ gt: 0 }).withMessage("El item no es válido").toInt(),
+  query("search").optional({ values: "falsy" }).isString().isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
+];
+
 export const listInvoicesValidator = [
   query("companyId").optional({ values: "falsy" }).isInt({ gt: 0 }).withMessage("La empresa no es válida"),
   query("type").optional({ values: "falsy" }).isIn(["issued", "purchase"]).withMessage("El tipo no es válido"),

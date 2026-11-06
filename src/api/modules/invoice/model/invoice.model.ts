@@ -12,7 +12,6 @@ export interface InvoiceAttributes {
   business_unit_id: number | null;
   type: InvoiceType;
   quotation_id: number;
-  purchase_id: number | null;
   description: string;
   file_name: string | null;
   mime_type: string | null;
@@ -49,7 +48,6 @@ export function InvoiceFactory(sequelize: Sequelize): InvoiceStatic {
       business_unit_id: { type: DataTypes.BIGINT, allowNull: true },
       type: { type: DataTypes.ENUM("issued", "purchase"), allowNull: false },
       quotation_id: { type: DataTypes.BIGINT, allowNull: false },
-      purchase_id: { type: DataTypes.BIGINT, allowNull: true },
       description: { type: DataTypes.STRING(255), allowNull: false },
       file_name: { type: DataTypes.STRING(255), allowNull: true },
       mime_type: { type: DataTypes.STRING(100), allowNull: true },
