@@ -1,6 +1,6 @@
 {
   "name": "grulla_be",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "description": "",
   "main": "dist/index.js",
   "engines": {
