@@ -172,6 +172,9 @@ export const completeQuotationValidator = [
 
 export const getQuotationValidator = [paramQuotationIdValidator];
 
+// Resetear exige motivo: es irreversible y es el único rastro que queda.
+export const resetQuotationValidator = [paramQuotationIdValidator, correctionReasonRule()];
+
 export const changeStatusValidator = [
   paramQuotationIdValidator,
   body("status").isIn(QUOTATION_STATUSES).withMessage("Estado inválido"),

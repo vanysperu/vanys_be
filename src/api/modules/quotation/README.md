@@ -11,6 +11,8 @@
 | GET    | /quotation/find/:id              | detail                     | cotizacion      |
 | GET    | /quotation/:id/pdf               | PDF                        | cotizacion      |
 | GET    | /quotation/:id/profit            | ganancia (`cotizacion.profit.view.button`) | cotizacion |
+| GET    | /quotation/:id/reset-preview     | qué borraría el reset (solo Super Administrador) | cotizacion (`cotizacion.resetPreview.endpoint`) |
+| PUT    | /quotation/:id/reset             | resetear a Pendiente (solo Super Administrador) | cotizacion (`cotizacion.reset.button`) |
 | POST   | /quotation/create                | create                     | cotizacion      |
 | PUT    | /quotation/update/:id            | update                     | cotizacion      |
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
@@ -262,8 +264,35 @@ cotización vieja recién pasada a Pendiente quedaba al fondo o fuera.
   y en compras. El PDF muestra solo el color: el código de proveedor es interno.
 - `billing_name` / `billing_document_number`: solo afectan lo que se
   imprime en el PDF — `client_id` sigue siendo el cliente real vinculado.
+- `expenses[].purchase_funding_source`: quién puso la plata de la compra de ese
+  gasto (`null` = gasto manual). Con eso se anula la compra desde la pestaña Gastos.
 - `includes_delivery` / `includes_design` son informativos;
   `includes_igv` sí afecta el cálculo del total.
+
+## Resetear una cotización (`PUT /quotation/:id/reset`)
+Pedido explícito del usuario: que el super admin pueda devolverla a Pendiente con
+todo su dinero borrado físicamente. Exige `requireSystemRole` y motivo (5–500).
+Los dos recursos son exclusivos de plataforma (`core/rbac/systemOnlyModules.ts`):
+no se ofrecen ni llegan a un rol de empresa.
+
+- `GET /quotation/:id/reset-preview` usa el mismo plan que el reset
+  (`services/reset/reset_plan.ts`): devuelve lo que se borraría, `can_reset`,
+  `blocked_reason` y `blocked_periods`.
+- Una sola transacción borra, de hijos a padres: patas de ajuste, correcciones,
+  facturas emitidas, vínculos de facturas de compra, aplicaciones y reposiciones,
+  deudas, compras, items de orden, movimientos de Caja vinculados, órdenes,
+  gastos y pagos.
+- Lo compartido con otra cotización no se pierde: una reposición que también pagó
+  otras deudas baja su monto y una factura que cubre otras compras se conserva y
+  se reapunta a la primera que queda. Google Drive nunca se toca.
+- Queda la cotización con cliente, productos, precios e historial. Pasa a
+  `pending`, `total_paid` 0, items en la primera etapa y `valid_until` renovada
+  (si no, el job la vencería esa misma noche). Agrega el evento `quotation_reset`.
+- 409 `QUOTATION_RESET_CLOSED_PERIOD` (`errors.periods`): algo cae en un mes
+  cerrado, incluidas filas ya anuladas como ajuste. Hay que reabrir ese mes: un
+  mes cerrado nunca cambia por debajo.
+- 409 `QUOTATION_RESET_NOT_QUOTED`: pedido web todavía sin cotizar.
+- 409 `QUOTATION_RESET_NOTHING`: ya está en Pendiente y no tiene nada que borrar.
 
 ## Ganancia de la cotización (`GET /quotation/:id/profit`)
 Pedido explícito del usuario: ver cuánto se le sacó a cada cotización (solo en el sistema,

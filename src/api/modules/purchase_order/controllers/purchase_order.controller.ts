@@ -232,11 +232,12 @@ export const findPurchaseController = asyncHandler(async (req: Request, res: Res
 // PUT /purchase-order/purchase/update/:id — corrige una compra.
 export const correctPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, reason } = req.body;
+  const { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, has_invoice, invoice_id, reason } =
+    req.body;
 
   const result = await correctPurchase({
     purchaseId: Number(req.params.id),
-    input: { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, reason },
+    input: { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, has_invoice, invoice_id, reason },
     scope: resolveWriteScope(user),
     updatedBy: user.userId,
   });

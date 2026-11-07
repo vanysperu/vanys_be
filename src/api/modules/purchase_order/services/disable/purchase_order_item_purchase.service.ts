@@ -9,6 +9,7 @@ import { nowUtc, toDateOnlyString } from "../../../../../utils/dateUtils";
 import { recalculateDebtsState } from "../../../employee_debt/services/shared/debt_state.service";
 import { createLogService } from "../../../logs/services/create/log.services";
 import { LogAction } from "../../../logs/model/log.model";
+import { findInvoiceIdOfPurchase, reconcileInvoiceAfterRemoval } from "../../../invoice/services/shared/purchase_invoice_link";
 import { logQuotationEvent, truncateForTimeline } from "../../../quotation/services/timeline/quotation_event.service";
 import { debtReimbursedError, liveDebtOf, lockPurchaseForWrite, purchaseAnnulledError } from "../shared/purchase_lock.service";
 import { recalculateItemStatus, recalculatePurchaseOrderStatus } from "../shared/purchase_order_status.service";
@@ -28,7 +29,10 @@ export interface AnnulPurchaseResult {
  *   - la compra y su gasto quedan is_deleted (dejan de sumar en Caja,
  *     Estadísticas, márgenes, "Gastado" y la cantidad comprada del item);
  *   - su deuda con el trabajador (si la hay) queda anulada;
- *   - el estado del item y de la orden se recalculan desde la fuente.
+ *   - el estado del item y de la orden se recalculan desde la fuente;
+ *   - su factura deja de contarla: si no cubría nada más y no tiene archivo,
+ *     se borra (si no, quedaría pidiendo un archivo en "Faltan subir"); con
+ *     archivo se conserva, porque esa factura sí existió.
  *
  * Si ya se le repuso algo al trabajador por esta compra, se bloquea (409
  * PURCHASE_DEBT_REIMBURSED): primero se anula esa reposición.
@@ -87,6 +91,11 @@ export async function annulPurchase({
     await recalculateItemStatus(item.id, transaction, updatedBy);
     await recalculatePurchaseOrderStatus(purchaseOrder.id, transaction, updatedBy);
 
+    const invoiceId = await findInvoiceIdOfPurchase(purchaseId, transaction);
+    const invoiceRemoved =
+      invoiceId !== null &&
+      (await reconcileInvoiceAfterRemoval({ invoiceId, keepIfHasFile: true, actorId: updatedBy, transaction }));
+
     const cash = await change.complete(async (kind) => {
       // Una anulación normal no deja historial de corrección.
       if (kind !== "adjustment" || reason === null) return null;
@@ -120,7 +129,7 @@ export async function annulPurchase({
         user_id: updatedBy,
         action: LogAction.DISABLE,
         module: "purchase_order",
-        description: `Anuló la compra #${purchaseId} (gasto #${expense.id}) de la orden #${purchaseOrder.id}: ${summary}${liveDebt ? `; deuda #${liveDebt.id} anulada` : ""}`,
+        description: `Anuló la compra #${purchaseId} (gasto #${expense.id}) de la orden #${purchaseOrder.id}: ${summary}${liveDebt ? `; deuda #${liveDebt.id} anulada` : ""}${invoiceRemoved ? `; factura #${invoiceId} sin archivo borrada` : ""}`,
         company_id: purchaseOrder.company_id,
       },
       transaction

@@ -142,6 +142,9 @@ export const correctPurchaseValidator = [
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
   moneyDateRule("spent_at", "La fecha de la compra no es válida", { onlyIf: presentIn("spent_at") }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
+  // ¿Llevaba factura? invoice_id = pasarla a esa factura ya registrada.
+  body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
+  body("invoice_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La factura elegida no es válida").toInt(),
   correctionReasonRule(),
 ];
 

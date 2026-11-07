@@ -23,6 +23,8 @@
 - Monto: se escribe en compra, gasto y deuda juntos. Con plata del trabajador y monto < lo ya repuesto → 409 `DEBT_BELOW_REIMBURSED`; igual → la deuda queda pagada. El estado de la deuda sale siempre de `recalculateDebtsState`.
 - Empresa → trabajador: cuenta en el body → 400 `PAYMENT_ACCOUNT_NOT_ALLOWED`; trabajador inactivo o de otra empresa → 400 `EMPLOYEE_NOT_AVAILABLE` (sin indicarlo, el que corrige, igual que al registrar). Se crea la deuda o se reactiva la anulada de esa compra (UNIQUE `purchase_order_item_purchase_id`). Trabajador → empresa o cambio de trabajador: solo sin nada repuesto (deuda anulada / reasignada); si no → 409 `PURCHASE_DEBT_REIMBURSED`. Explícito `paid_by_user_id` con plata de la empresa → 400 `PAID_BY_NOT_ALLOWED`.
 - Anular: con algo repuesto → 409 `PURCHASE_DEBT_REIMBURSED`; ya anulada → 409 `PURCHASE_ANNULLED` (también al corregir). Marca compra y gasto `is_deleted`, anula la deuda, recalcula item y orden. Sin restauración.
+- Factura al corregir (`has_invoice`, `invoice_id`; ausentes = no se toca): se puede crear una nueva, pasar la compra a otra factura registrada o quitarla, también sin cambiar nada más. Sacarla de una factura que solo la cubría a ella elimina esa factura, aunque tenga archivo (el diálogo lo advierte). Cambiar solo la factura en un mes cerrado no genera ajuste: no mueve dinero. El resultado trae `invoice_id` e `invoice_created`, y el historial guarda `invoice_status` (antes y después).
+- Factura al anular: si la compra era la última de su factura, una factura sin archivo se elimina y una con archivo se conserva.
 - Historial: `money_correction` con fuente `quotation_expense` y el id del GASTO (la fila de Caja); guarda `payment_account_name`, `paid_by_user_name` y, si la deuda cambió, `debt_amount`/`debt_status` antes/después. Evento `purchase_updated` / `purchase_disabled` en la cotización + log.
 - Cierre mensual de caja (fase 2), con el id del GASTO como fila de Caja: registrar una compra es siempre hoy (mes abierto). Corregir o anular una compra **pagada por la empresa** de un mes cerrado es un **ajuste** (en el lugar + patas `hold`/`posting` + `money_correction.kind = 'adjustment'`; requiere `cash_closing.adjust.button`, si no 403 `CASH_PERIOD_ADJUST_FORBIDDEN`). Pasar de trabajador a empresa (o al revés) en un mes cerrado también deja patas; cambiar el monto de una compra del trabajador o la cantidad, no (no mueven caja). `PUT /purchase-order/purchase/disable/:id` acepta `{ reason?: string }` (5–500), obligatorio solo si es ajuste (400 `ADJUSTMENT_REASON_REQUIRED`). Mover `spent_at` a un mes cerrado (o a otro día dentro de él) → 409 `CASH_PERIOD_CLOSED`, aunque la compra sea del trabajador. Respuestas con `kind` y `adjusted_period`.
 - Invariante (revisado por SQL en tests/purchase-expense-correction.test.ts): cada compra vigente con plata de un trabajador tiene exactamente una deuda vigente con amount = compra = gasto, user_id = paid_by_user_id, incurred_at = spent_at; una compra de la empresa o anulada no tiene deuda vigente.
@@ -41,7 +43,7 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
 - purchase_order.item.updateStatus.button
 - purchase_order.item.registerPurchase.button
 - purchase_order.purchase.update.button (lápiz por compra en el checklist, Gastos de la cotización y Caja)
-- purchase_order.purchase.disable.button (anular compra en el checklist)
+- purchase_order.purchase.disable.button (anular compra en el checklist, Gastos de la cotización y Caja)
 - purchase_order.purchase.corrections.button (abrir el badge "Corregido (n)")
 
 ## Reglas de negocio propias del módulo
@@ -101,6 +103,9 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   tiene fotos habilitadas (lo decide el backend). El clic en el producto abre su
   color, código y cantidad en cada lista de órdenes (Inicio, Compras y cotización);
   con fotos habilitadas, también su foto.
+- Cada compra trae `invoice_id`, `invoice_has_file` e `invoice_purchases_count`
+  (compras vigentes en esa factura): el diálogo de corregir los usa para ofrecer
+  dejarla, moverla o quitarla y para avisar si la factura se elimina.
 - `purchase_order_item_purchase.funding_source`/`paid_by_user_id` se
   agregaron en la migración
   `20261011100100-add-funding-source-to-purchase-order-item-purchase.js`

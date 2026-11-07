@@ -22,6 +22,13 @@ import { MoneyCorrectionKind, MoneyCorrectionValues } from "../../../money_corre
 import { logQuotationEvent, truncateForTimeline } from "../../../quotation/services/timeline/quotation_event.service";
 import { resolvePaymentAccountId } from "../../../variable_general/services/shared/payment_account.service";
 import { EmployeeDebtModel } from "../../../employee_debt/model/employee_debt.model";
+import {
+  applyPurchaseInvoiceChange,
+  findInvoiceIdOfPurchase,
+  invoiceStatusTexts,
+  PurchaseInvoiceChange,
+  resolvePurchaseInvoiceChange,
+} from "../../../invoice/services/shared/purchase_invoice_link";
 import { FundingSource } from "../../model/purchase_order_item_purchase.model";
 import { buildPurchaseExpenseDescription, purchaseNotesSuffix } from "../shared/purchase_expense_description";
 import {
@@ -71,6 +78,10 @@ export interface CorrectPurchaseInput {
   spent_at?: string;
   // true = ya se confirmó subir la cantidad por encima de lo que falta.
   allow_exceed?: boolean;
+  // ¿Llevaba factura? undefined = no se toca. Con true e invoice_id, la compra
+  // pasa a esa factura ya registrada; sin invoice_id, se crea una si no tenía.
+  has_invoice?: boolean;
+  invoice_id?: number | null;
   reason: string;
 }
 
@@ -79,6 +90,10 @@ export interface CorrectPurchaseResult {
   quotation_expense_id: number;
   correction_id: number;
   changed_fields: CorrectablePurchaseField[];
+  // Factura con la que quedó la compra, y si se acaba de crear (para subirle
+  // el archivo).
+  invoice_id: number | null;
+  invoice_created: boolean;
   // 'adjustment' = la compra tocaba caja de un mes cerrado (cierre de caja).
   kind: MoneyCorrectionKind;
   adjusted_period: string | null;
@@ -175,12 +190,13 @@ const debtSnapshotOf = (debt: EmployeeDebtModel | null): DebtSnapshot => ({
 });
 
 // Foto para el historial: lo que cambió + nombres del momento (cuenta,
-// trabajador) + la deuda antes/después si cambió.
+// trabajador) + la deuda antes/después si cambió + la factura si cambió.
 const buildValues = async (
   snapshot: PurchaseSnapshot,
   changed: CorrectablePurchaseField[],
   debt: DebtSnapshot,
   includeDebt: boolean,
+  invoiceStatus: string | null,
   transaction: Transaction
 ): Promise<MoneyCorrectionValues> => {
   const values: MoneyCorrectionValues = pickFields(snapshot, changed);
@@ -190,7 +206,8 @@ const buildValues = async (
   const withPaidBy = changed.includes("paid_by_user_id")
     ? { ...withAccount, paid_by_user_name: await userDisplayName(asNullableNumber(snapshot.paid_by_user_id), transaction) }
     : withAccount;
-  return includeDebt ? { ...withPaidBy, ...debt } : withPaidBy;
+  const withDebt = includeDebt ? { ...withPaidBy, ...debt } : withPaidBy;
+  return invoiceStatus === null ? withDebt : { ...withDebt, invoice_status: invoiceStatus };
 };
 
 // Subir la cantidad por encima de lo que falta exige confirmación explícita
@@ -318,6 +335,10 @@ const syncPurchaseDebt = async (
  * Todo en UNA transacción, con todo bloqueado en el orden item → orden →
  * compra → gasto → deuda; el historial se guarda con la fuente
  * "quotation_expense" y el id del gasto (la fila que muestra Caja).
+ *
+ * También se corrige si llevaba factura (pedido explícito del usuario). Eso no
+ * mueve dinero: cambiar SOLO la factura de una compra de un mes cerrado no
+ * deja ajuste, porque antes y después el efecto en caja es el mismo.
  */
 export async function correctPurchase({
   purchaseId,
@@ -338,7 +359,13 @@ export async function correctPurchase({
     const previous = snapshotOf(locked);
     const next = requestedSnapshot(previous, input, updatedBy);
     const changed = changedFieldsBetween(CORRECTABLE_PURCHASE_FIELDS, previous, next);
-    assertHasChanges(changed);
+    const currentInvoiceId = await findInvoiceIdOfPurchase(purchaseId, transaction);
+    const invoiceChange: PurchaseInvoiceChange = resolvePurchaseInvoiceChange(
+      { hasInvoice: input.has_invoice, invoiceId: input.invoice_id },
+      currentInvoiceId
+    );
+    // Cambiar solo la factura también es una corrección.
+    if (invoiceChange.kind === "none") assertHasChanges(changed);
 
     const extraQuantity = await resolveExtraQuantity(locked, previous, next, input.allow_exceed === true, transaction);
     if (changed.includes("payment_account_id") && next.payment_account_id !== null) {
@@ -406,6 +433,19 @@ export async function correctPurchase({
       await recalculatePurchaseOrderStatus(purchaseOrder.id, transaction, updatedBy);
     }
 
+    const invoiceId = await applyPurchaseInvoiceChange({
+      change: invoiceChange,
+      currentInvoiceId,
+      purchaseId,
+      companyId: Number(purchaseOrder.company_id),
+      businessUnitId: locked.businessUnitId === null ? null : Number(locked.businessUnitId),
+      quotationId: Number(purchaseOrder.quotation_id),
+      description: `${locked.productName} × ${next.quantity}`,
+      actorId: updatedBy,
+      transaction,
+    });
+    const invoiceTexts = invoiceChange.kind === "none" ? null : invoiceStatusTexts(invoiceChange, currentInvoiceId);
+
     let correctionId = 0;
     const cash = await change.complete(async (kind) => {
       const correction = await recordMoneyCorrection({
@@ -413,8 +453,8 @@ export async function correctPurchase({
         sourceId: expense.id,
         companyId: purchaseOrder.company_id,
         businessUnitId: locked.businessUnitId,
-        previous: await buildValues(previous, changed, debtBefore, debtChanged, transaction),
-        next: await buildValues(next, changed, debtAfter, debtChanged, transaction),
+        previous: await buildValues(previous, changed, debtBefore, debtChanged, invoiceTexts?.before ?? null, transaction),
+        next: await buildValues(next, changed, debtAfter, debtChanged, invoiceTexts?.after ?? null, transaction),
         reason: input.reason,
         actorId: updatedBy,
         kind,
@@ -423,7 +463,8 @@ export async function correctPurchase({
       correctionId = correction.id;
       return correction.id;
     });
-    const note = cashChangeNote(cash);
+    const invoiceNote = invoiceTexts ? `; factura: ${invoiceTexts.before} → ${invoiceTexts.after}` : "";
+    const note = `${cashChangeNote(cash)}${invoiceNote}`;
 
     const reason = input.reason.trim();
     const amountNote =
@@ -453,6 +494,8 @@ export async function correctPurchase({
       quotation_expense_id: expense.id,
       correction_id: correctionId,
       changed_fields: changed,
+      invoice_id: invoiceId,
+      invoice_created: invoiceChange.kind === "create",
       kind: cash.kind,
       adjusted_period: cash.adjustedPeriod,
     };

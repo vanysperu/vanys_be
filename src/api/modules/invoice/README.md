@@ -54,6 +54,11 @@ Administrador).
   cuenta facturas, no compras.
 - Una compra anulada sale del detalle de su factura y deja de contar en el IGV;
   la factura sigue, con sus demás compras.
+- **Factura sin compras** (`services/shared/purchase_invoice_link.ts`): si quedan
+  compras, la factura se reapunta a la primera que queda. Si no queda ninguna, al
+  anular se elimina solo si no tiene archivo; al corregir la compra (quitar o mover
+  la factura) y al resetear la cotización se elimina también con archivo. La copia
+  en Drive se conserva siempre.
 - **Archivo**: foto (el navegador la convierte a WEBP, legible y liviana) o PDF,
   máx. 5 MB; se valida la firma real del archivo. Nunca tiene URL pública: se
   ve solo con sesión.

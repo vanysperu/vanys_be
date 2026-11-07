@@ -20,7 +20,13 @@ export const SYSTEM_ONLY_MODULE_CODES = ["roles_access", "api_key"] as const;
 // ver todas las tiendas). Ver core/rbac/businessUnitScope.ts.
 export const SYSTEM_ONLY_EXCEPTION_CODES = ["roles_access.viewAllBusinessUnits.button"] as const;
 
+// Recursos exclusivos dentro de un módulo que sí es de empresa: resetear una
+// cotización borra físicamente su dinero (pedido explícito del usuario: solo el
+// super admin), así que ni siquiera se puede otorgar a un rol de empresa.
+export const SYSTEM_ONLY_RESOURCE_CODES = ["cotizacion.reset.button", "cotizacion.resetPreview.endpoint"] as const;
+
 const systemOnlyModules = new Set<string>(SYSTEM_ONLY_MODULE_CODES);
+const systemOnlyResources = new Set<string>(SYSTEM_ONLY_RESOURCE_CODES);
 const exceptionCodes = new Set<string>(SYSTEM_ONLY_EXCEPTION_CODES);
 
 export const isSystemOnlyModule = (moduleCode: string | null | undefined): boolean =>
@@ -28,4 +34,4 @@ export const isSystemOnlyModule = (moduleCode: string | null | undefined): boole
 
 // ¿Este recurso está vedado para roles/usuarios que no son de plataforma?
 export const isSystemOnlyResource = (moduleCode: string | null | undefined, resourceCode: string): boolean =>
-  isSystemOnlyModule(moduleCode) && !exceptionCodes.has(resourceCode);
+  systemOnlyResources.has(resourceCode) || (isSystemOnlyModule(moduleCode) && !exceptionCodes.has(resourceCode));

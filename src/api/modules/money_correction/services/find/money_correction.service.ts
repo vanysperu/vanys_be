@@ -54,6 +54,7 @@ export const MONEY_CORRECTION_VALUE_KEYS: Record<MoneyCorrectionSource, readonly
     "spent_at",
     ...COMMON_ACCOUNT_KEYS,
     "quantity",
+    "invoice_status",
     "funding_source",
     "paid_by_user_id",
     "paid_by_user_name",

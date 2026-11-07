@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifyAccess } from "../../../../middlewares/user-access";
+import { requireSystemRole } from "../../../../middlewares/require-system-role";
 import { allValidator } from "../../../../middlewares/error-validator";
 import { paginationValidator } from "../../../validators/pagination.validator";
 import {
@@ -12,6 +13,7 @@ import {
   correctQuotationExpenseValidator,
   createQuotationValidator,
   getQuotationValidator,
+  resetQuotationValidator,
   quotationExpenseCorrectionsValidator,
   quotationExpenseIdValidator,
   toggleQuotationExpenseValidator,
@@ -35,6 +37,8 @@ import {
 import { completeQuotationController } from "../controllers/complete.controller";
 import { quotationBoardController } from "../controllers/board.controller";
 import { getQuotationProfitController } from "../controllers/profit.controller";
+import { quotationResetPreviewController } from "../controllers/reset_preview.controller";
+import { resetQuotationController } from "../controllers/reset.controller";
 
 export const router: Router = Router();
 
@@ -56,6 +60,9 @@ router.get("/find/:id", verifyAccess, getQuotationValidator, allValidator, getQu
 router.get("/:id/pdf", verifyAccess, getQuotationValidator, allValidator, downloadQuotationPdfController);
 // Ganancia (pagos, IGV, gastos, compras y neto). Solo en el sistema, no en el PDF.
 router.get("/:id/profit", verifyAccess, getQuotationValidator, allValidator, getQuotationProfitController);
+// Resetear a Pendiente borrando lo que generó: solo Super Administrador.
+router.get("/:id/reset-preview", verifyAccess, requireSystemRole, getQuotationValidator, allValidator, quotationResetPreviewController);
+router.put("/:id/reset", verifyAccess, requireSystemRole, resetQuotationValidator, allValidator, resetQuotationController);
 router.post("/create", verifyAccess, createQuotationValidator, allValidator, createQuotationController);
 router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, updateQuotationController);
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);

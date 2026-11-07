@@ -60,7 +60,8 @@ quien lista; acciones → quien repone).
   `purchase_order/services/create/purchase_order_item_purchase.service.ts`),
   a nombre de quien puso el dinero. Una fila por compra
   (`purchase_order_item_purchase_id` es `UNIQUE`).
-- `manual`: la registra un administrador para un gasto fuera de una orden
+- `manual`: la registra un administrador, desde Deudas a personal o desde el
+  botón "Deuda a personal" de Caja, para un gasto fuera de una orden
   (pedido explícito del usuario: "si un empleado fue a pagar los servicios y
   los pagó de su plata"). Guarda descripción, categoría (catálogo
   `cash_movement_type`, sin las de ingreso), fecha en que se pagó

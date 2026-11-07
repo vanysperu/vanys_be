@@ -26,6 +26,11 @@ export interface PurchaseListItem {
   debt_paid_amount: number | null;
   debt_status: string | null;
   corrections_count: number;
+  // Factura de la compra (null = sin factura), si ya tiene archivo y cuántas
+  // compras vigentes cubre (para avisar antes de sacarla de ahí).
+  invoice_id: number | null;
+  invoice_has_file: boolean;
+  invoice_purchases_count: number;
   created_at: Date;
 }
 
@@ -60,6 +65,9 @@ interface RawPurchaseRow {
   debt_paid_amount: number | string | null;
   debt_status: string | null;
   corrections_count: number | string;
+  invoice_id: number | string | null;
+  invoice_has_file: number | string | null;
+  invoice_purchases_count: number | string;
   created_at: Date;
 }
 
@@ -84,13 +92,19 @@ const PURCHASE_COLUMNS_SQL = `
   pa.name AS payment_account_name, ed.id AS debt_id, ed.amount AS debt_amount,
   ed.paid_amount AS debt_paid_amount, ed.status AS debt_status,
   ${correctionsCountSql("quotation_expense", "pop.quotation_expense_id")} AS corrections_count,
+  ip.invoice_id, inv.file_name IS NOT NULL AS invoice_has_file,
+  (SELECT COUNT(*) FROM invoice_purchase sip
+    INNER JOIN purchase_order_item_purchase spop ON spop.id = sip.purchase_id
+    WHERE sip.invoice_id = ip.invoice_id AND spop.is_deleted = false) AS invoice_purchases_count,
   pop.created_at`;
 
 const PURCHASE_JOINS_SQL = `
   INNER JOIN quotation_expense qe ON qe.id = pop.quotation_expense_id
   LEFT JOIN \`user\` pu ON pu.id = pop.paid_by_user_id
   LEFT JOIN general_variable pa ON pa.id = qe.payment_account_id
-  LEFT JOIN employee_debt ed ON ed.purchase_order_item_purchase_id = pop.id AND ed.status <> 'cancelled'`;
+  LEFT JOIN employee_debt ed ON ed.purchase_order_item_purchase_id = pop.id AND ed.status <> 'cancelled'
+  LEFT JOIN invoice_purchase ip ON ip.purchase_id = pop.id
+  LEFT JOIN invoice inv ON inv.id = ip.invoice_id`;
 
 const mapListRow = (row: RawPurchaseRow): PurchaseListItem => ({
   id: Number(row.id),
@@ -110,6 +124,9 @@ const mapListRow = (row: RawPurchaseRow): PurchaseListItem => ({
   debt_paid_amount: toNullableNumber(row.debt_paid_amount),
   debt_status: row.debt_status,
   corrections_count: Number(row.corrections_count),
+  invoice_id: toNullableNumber(row.invoice_id),
+  invoice_has_file: Boolean(Number(row.invoice_has_file ?? 0)),
+  invoice_purchases_count: Number(row.invoice_purchases_count),
   created_at: row.created_at,
 });
 

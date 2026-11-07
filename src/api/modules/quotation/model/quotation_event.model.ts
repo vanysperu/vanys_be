@@ -17,6 +17,8 @@ export type QuotationEventAction =
   // Corrección / anulación (de una sola vía) de una compra de orden de compra.
   | "purchase_updated"
   | "purchase_disabled"
+  // Reset de la cotización por el Super Administrador.
+  | "quotation_reset"
   | "updated";
 
 export interface QuotationEventAttributes {

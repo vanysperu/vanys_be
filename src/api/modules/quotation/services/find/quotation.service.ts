@@ -4,6 +4,7 @@ import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
 import { QuotationItemAttributes } from "../../model/quotation_item.model";
+import { FundingSource } from "../../../purchase_order/model/purchase_order_item_purchase.model";
 import { loadProductVariants, variantsOf } from "../shared/item_variant";
 import { loadCorrectionCounts } from "../../../money_correction/services/shared/corrections_count";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
@@ -188,6 +189,8 @@ const getQuotationById = async (id: number) => {
 // esos se corrigen/anulan como compra) y cuántas correcciones tiene.
 export type QuotationExpenseListItem = QuotationExpenseAttributes & {
   purchase_id: number | null;
+  // Quién puso la plata de la compra (null = gasto que no es compra).
+  purchase_funding_source: FundingSource | null;
   corrections_count: number;
 };
 
@@ -219,16 +222,17 @@ const getQuotationDetailById = async (id: number) => {
       ? Promise.resolve([])
       : DataBase.instance.purchase_order_item_purchase.findAll({
           where: { quotation_expense_id: expenseIds },
-          attributes: ["id", "quotation_expense_id"],
+          attributes: ["id", "quotation_expense_id", "funding_source"],
         }),
     loadCorrectionCounts("quotation_expense", expenseIds),
     loadProductVariants(items.map((item) => Number(item.product_id))),
   ]);
-  const purchaseIdByExpense = new Map(purchases.map((purchase) => [Number(purchase.quotation_expense_id), purchase.id]));
+  const purchaseByExpense = new Map(purchases.map((purchase) => [Number(purchase.quotation_expense_id), purchase]));
 
   const enrichedExpenses: QuotationExpenseListItem[] = expenses.map((expense) => ({
     ...expense,
-    purchase_id: purchaseIdByExpense.get(Number(expense.id)) ?? null,
+    purchase_id: purchaseByExpense.get(Number(expense.id))?.id ?? null,
+    purchase_funding_source: purchaseByExpense.get(Number(expense.id))?.funding_source ?? null,
     corrections_count: correctionCounts.get(Number(expense.id)) ?? 0,
   }));
 
