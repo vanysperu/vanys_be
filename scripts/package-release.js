@@ -110,6 +110,10 @@ const writeProductionPackageJson = () => {
       build: "node -e \"console.log('El build ya viene incluido en el paquete (dist/ y public/).')\"",
     },
     dependencies: source.dependencies,
+    // Sin esto el lockfile de producción se vuelve a resolver sin los overrides
+    // y reaparecen versiones vulnerables: sequelize pide uuid ^8.3.2 y quedaba
+    // anidada la 8.3.2 (CVE-2026-41907) aunque desarrollo ya usara la 11.1.1.
+    overrides: source.overrides,
   };
   fs.writeFileSync(path.join(STAGE_DIR, "package.json"), `${JSON.stringify(productionPackage, null, 2)}\n`);
 };
