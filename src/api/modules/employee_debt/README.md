@@ -55,6 +55,10 @@ quien lista; acciones → quien repone).
 ## Reglas de negocio propias del módulo
 
 ### Origen de una deuda
+- `expense`: nace sola al registrar un gasto de cotización con plata de un
+  trabajador (pedido explícito del usuario), enlazada por `quotation_expense_id`
+  (`UNIQUE`). Qué se pagó y la tienda salen del gasto y su cotización. Se corrige y
+  se anula desde el gasto, nunca desde acá; se repone igual que cualquier otra.
 - `purchase`: nace sola al registrar una compra de orden con
   `funding_source: "employee"` (ver
   `purchase_order/services/create/purchase_order_item_purchase.service.ts`),
@@ -81,6 +85,8 @@ quien lista; acciones → quien repone).
   desde cuentas distintas son dos salidas distintas.
 
 ### Reponer (`pay`)
+- `operation_number` (opcional, máx. 50): al reponer y al corregir la reposición.
+  Va aquí, no en la compra: es cuando sale el dinero de la empresa. No es dinero: agregarlo o cambiarlo en un mes cerrado queda en el historial, sin ajuste.
 - Se reparte entre las deudas PENDIENTES del trabajador, la más antigua
   primero (FIFO). Cada parte queda en `employee_debt_payment_allocation`.
 - Todo en una transacción con las deudas bloqueadas (`FOR UPDATE`) y en

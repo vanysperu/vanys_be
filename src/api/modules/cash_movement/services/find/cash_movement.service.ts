@@ -85,6 +85,7 @@ export interface CashMovementListItem {
   // que no mueven caja, siempre null).
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   // Solo en gastos pagados con plata de un trabajador: quién puso el dinero
   // y cuánto se le repuso ya.
   paid_by_employee_name: string | null;
@@ -195,6 +196,7 @@ interface RawRow {
   reimbursed_at?: string | null;
   reimbursement_total?: string | null;
   corrections_count?: number | string | null;
+  operation_number?: string | null;
   purchase_id?: number | string | null;
   debt_origin?: "manual" | "purchase" | null;
   created_at: Date;
@@ -237,6 +239,7 @@ const toItem = (source: CashMovementSource, prefix: string, row: RawRow): CashMo
   moves_cash: Number(row.moves_cash) === 1,
   payment_account_id: row.payment_account_id,
   payment_account_name: row.payment_account_name,
+  operation_number: row.operation_number ?? null,
   paid_by_employee_name: row.paid_by_employee_name ?? null,
   reimbursement_status: row.reimbursement_status ?? null,
   reimbursed_amount: row.reimbursed_amount === null || row.reimbursed_amount === undefined ? null : Number(row.reimbursed_amount),
@@ -269,7 +272,7 @@ const getManualMovements = async (filter: CashFlowFilter): Promise<CashMovementL
     `
       SELECT cm.id, cm.direction, cm.category, cm.amount, cm.description, cm.occurred_at, cm.quotation_id,
              cm.purchase_order_id, cm.business_unit_id, cm.company_id, 1 AS moves_cash, cm.payment_account_id,
-             pa.name AS payment_account_name,
+             pa.name AS payment_account_name, cm.operation_number,
              ${correctionsCountSql("manual", "cm.id")} AS corrections_count,
              cm.created_at
       FROM cash_movement cm
@@ -301,7 +304,7 @@ const getQuotationPaymentMovements = async (filter: CashFlowFilter): Promise<Cas
     `
       SELECT qp.id, 'income' AS direction, qp.method AS category, qp.amount, qp.notes AS description,
              qp.paid_at AS occurred_at, qp.quotation_id, NULL AS purchase_order_id, q.business_unit_id, q.company_id,
-             1 AS moves_cash, qp.payment_account_id, pa.name AS payment_account_name,
+             1 AS moves_cash, qp.payment_account_id, pa.name AS payment_account_name, qp.operation_number,
              ${correctionsCountSql("quotation_payment", "qp.id")} AS corrections_count, qp.created_at
       FROM quotation_payment qp
       INNER JOIN quotation q ON q.id = qp.quotation_id
@@ -337,9 +340,12 @@ const getQuotationExpenseMovements = async (filter: CashFlowFilter): Promise<Cas
              CASE WHEN ${EXPENSE_PAID_BY_COMPANY_SQL} THEN 1 ELSE 0 END AS moves_cash,
              CASE WHEN ${EXPENSE_PAID_BY_COMPANY_SQL} THEN qe.payment_account_id ELSE NULL END AS payment_account_id,
              CASE WHEN ${EXPENSE_PAID_BY_COMPANY_SQL} THEN pa.name ELSE NULL END AS payment_account_name,
-             CASE WHEN fpop.funding_source = 'employee' THEN CONCAT(u.name, ' ', u.paternal_lastname) ELSE NULL END
+             CASE WHEN ${EXPENSE_PAID_BY_COMPANY_SQL} THEN qe.operation_number ELSE NULL END AS operation_number,
+             CASE WHEN ${EXPENSE_PAID_BY_COMPANY_SQL} THEN NULL ELSE CONCAT(u.name, ' ', u.paternal_lastname) END
                AS paid_by_employee_name,
-             ed.status AS reimbursement_status, ed.paid_amount AS reimbursed_amount, ed.paid_at AS reimbursed_at,
+             COALESCE(ed.status, xed.status) AS reimbursement_status,
+             COALESCE(ed.paid_amount, xed.paid_amount) AS reimbursed_amount,
+             COALESCE(ed.paid_at, xed.paid_at) AS reimbursed_at,
              fpop.id AS purchase_id,
              ${correctionsCountSql("quotation_expense", "qe.id")} AS corrections_count,
              qe.created_at
@@ -348,7 +354,8 @@ const getQuotationExpenseMovements = async (filter: CashFlowFilter): Promise<Cas
       ${EXPENSE_FUNDING_JOIN_SQL}
       LEFT JOIN purchase_order_item poi ON poi.id = fpop.purchase_order_item_id
       LEFT JOIN employee_debt ed ON ed.purchase_order_item_purchase_id = fpop.id
-      LEFT JOIN user u ON u.id = fpop.paid_by_user_id
+      LEFT JOIN employee_debt xed ON xed.quotation_expense_id = qe.id
+      LEFT JOIN user u ON u.id = COALESCE(fpop.paid_by_user_id, xed.user_id)
       LEFT JOIN general_variable pa ON pa.id = qe.payment_account_id
       WHERE ${EXPENSE_ACTIVE_SQL}
         AND (:companyId IS NULL OR q.company_id = :companyId)
@@ -418,6 +425,7 @@ const getReimbursementMovements = async (filter: CashFlowFilter): Promise<CashMo
              NULL AS business_unit_id, MAX(p.company_id) AS company_id, 1 AS moves_cash,
              MAX(p.payment_account_id) AS payment_account_id,
              MAX(pa.name) AS payment_account_name,
+             MAX(p.operation_number) AS operation_number,
              ${correctionsCountSql("employee_debt_payment", "p.id")} AS corrections_count,
              MAX(p.created_at) AS created_at
       FROM ${REIMBURSEMENT_ALLOCATIONS_FROM_SQL}
@@ -493,6 +501,7 @@ const toAdjustmentItem = (row: RawAdjustmentRow): CashMovementListItem => {
     moves_cash: true,
     payment_account_id: nullableNumber(row.payment_account_id),
     payment_account_name: row.payment_account_name,
+    operation_number: null,
     paid_by_employee_name: null,
     reimbursement_status: null,
     reimbursed_amount: null,

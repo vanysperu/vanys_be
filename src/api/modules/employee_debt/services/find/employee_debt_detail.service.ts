@@ -57,7 +57,7 @@ const getEmployeeDebtDetail = async (
   const from = `
     FROM employee_debt ed
     LEFT JOIN purchase_order_item_purchase pop ON pop.id = ed.purchase_order_item_purchase_id
-    LEFT JOIN quotation_expense qe ON qe.id = pop.quotation_expense_id
+    LEFT JOIN quotation_expense qe ON qe.id = COALESCE(ed.quotation_expense_id, pop.quotation_expense_id)
     LEFT JOIN purchase_order_item poi ON poi.id = pop.purchase_order_item_id
     LEFT JOIN purchase_order po ON po.id = poi.purchase_order_id
     LEFT JOIN user actor ON actor.id = ed.created_by
@@ -77,7 +77,7 @@ const getEmployeeDebtDetail = async (
 
   const rows = (await DataBase.instance.sequelize.query(
     `SELECT ed.id, ed.origin, COALESCE(ed.description, qe.description) AS description, ed.category, ed.incurred_at,
-            ed.amount, ed.paid_amount, ed.status, ed.paid_at, po.quotation_id, po.id AS purchase_order_id,
+            ed.amount, ed.paid_amount, ed.status, ed.paid_at, COALESCE(po.quotation_id, qe.quotation_id) AS quotation_id, po.id AS purchase_order_id,
             CONCAT(actor.name, ' ', actor.paternal_lastname) AS registered_by_name,
             ${correctionsCountSql("employee_debt", "ed.id")} AS corrections_count
      ${from}

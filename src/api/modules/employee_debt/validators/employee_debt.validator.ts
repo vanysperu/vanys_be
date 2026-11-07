@@ -4,6 +4,7 @@ import {
   correctionHistoryValidator,
   correctionIdParamRule,
   correctionReasonRule,
+  operationNumberRule,
 } from "../../money_correction/validators/money_correction.validator";
 import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
 
@@ -18,6 +19,7 @@ export const payEmployeeDebtValidator = [
   // Cuenta desde la que se le repone (vacío = efectivo); que sea de la
   // empresa lo valida el controller.
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
   // Monto a abonar ahora (pagos parciales, pedido de QA) — que no supere el
   // total pendiente lo valida el service, que es quien conoce ese total.
   moneyAmountRule("amount", "El monto a reponer debe ser mayor a 0"),
@@ -136,6 +138,7 @@ export const correctEmployeeDebtPaymentValidator = [
   moneyAmountRule("amount", "El monto a reponer debe ser mayor a 0", { onlyIf: presentIn("amount") }),
   moneyDateRule("paid_at", "Indica la fecha en que se le repuso", { onlyIf: presentIn("paid_at") }),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
   correctionReasonRule(),
 ];
 

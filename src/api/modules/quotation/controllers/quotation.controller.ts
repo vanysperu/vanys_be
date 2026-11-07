@@ -251,11 +251,11 @@ export const createQuotationExpenseController = asyncHandler(async (req: Request
     required: false,
   });
 
-  const { description, amount, category, spent_at } = req.body;
+  const { description, amount, category, spent_at, operation_number, funding_source, paid_by_user_id } = req.body;
   try {
     const expense = await createQuotationExpense({
       quotationId: Number(id),
-      input: { description, amount, category, spent_at, payment_account_id: paymentAccountId },
+      input: { description, amount, category, spent_at, payment_account_id: paymentAccountId, operation_number, funding_source, paid_by_user_id },
       createdBy: user.userId,
     });
     ok(res, 201, expense, "Gasto registrado correctamente");
@@ -278,11 +278,11 @@ export const findQuotationExpenseController = asyncHandler(async (req: Request, 
 // PUT /quotation/expense/update/:id — corrige un gasto manual.
 export const correctQuotationExpenseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { amount, description, category, spent_at, payment_account_id, reason } = req.body;
+  const { amount, description, category, spent_at, funding_source, paid_by_user_id, payment_account_id, operation_number, reason } = req.body;
 
   const result = await correctQuotationExpense({
     expenseId: Number(req.params.id),
-    input: { amount, description, category, spent_at, payment_account_id, reason },
+    input: { amount, description, category, spent_at, funding_source, paid_by_user_id, payment_account_id, operation_number, reason },
     scope: resolveWriteScope(user),
     updatedBy: user.userId,
   });

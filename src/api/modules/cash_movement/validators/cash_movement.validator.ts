@@ -1,6 +1,6 @@
 import { body, param, query } from "express-validator";
 import { paginationValidator } from "../../../validators/pagination.validator";
-import { correctionIdParamRule } from "../../money_correction/validators/money_correction.validator";
+import { correctionIdParamRule, operationNumberRule } from "../../money_correction/validators/money_correction.validator";
 import { MONEY_CORRECTION_SOURCES } from "../../money_correction/types/money_correction.types";
 import { moneyAmountRule, moneyDateRule } from "../../../../core/validators/money.validator";
 import { optionalAdjustmentReasonRule } from "./adjustment_reason.validator";
@@ -36,6 +36,7 @@ export const createCashMovementValidator = [
     .isInt({ gt: 0 })
     .withMessage("La orden de compra debe ser un id válido"),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
 ];
 
 // Solo la FORMA del id: la existencia y el alcance (empresa/tienda) los
@@ -73,6 +74,7 @@ export const updateCashMovementValidator = [
     .trim()
     .isLength({ min: 1, max: 50 })
     .withMessage("La categoría es obligatoria (máximo 50 caracteres)"),
+  operationNumberRule(),
   body("description").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres"),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
   body("quotation_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cotización debe ser un id válido"),

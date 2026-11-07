@@ -173,7 +173,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, has_invoice, invoice_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_id } = req.body;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -194,6 +194,7 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       fundingSource: funding_source,
       paidByUserId,
       paymentAccountId: payment_account_id,
+      operationNumber: operation_number,
       hasInvoice: has_invoice === true,
       // Factura ya registrada a la que se suma esta compra (solo con has_invoice).
       invoiceId: has_invoice === true && Number(invoice_id) > 0 ? Number(invoice_id) : undefined,
@@ -232,12 +233,12 @@ export const findPurchaseController = asyncHandler(async (req: Request, res: Res
 // PUT /purchase-order/purchase/update/:id — corrige una compra.
 export const correctPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, has_invoice, invoice_id, reason } =
+  const { amount, quantity, funding_source, paid_by_user_id, payment_account_id, operation_number, spent_at, allow_exceed, has_invoice, invoice_id, reason } =
     req.body;
 
   const result = await correctPurchase({
     purchaseId: Number(req.params.id),
-    input: { amount, quantity, funding_source, paid_by_user_id, payment_account_id, spent_at, allow_exceed, has_invoice, invoice_id, reason },
+    input: { amount, quantity, funding_source, paid_by_user_id, payment_account_id, operation_number, spent_at, allow_exceed, has_invoice, invoice_id, reason },
     scope: resolveWriteScope(user),
     updatedBy: user.userId,
   });

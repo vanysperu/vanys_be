@@ -140,15 +140,16 @@ export async function loadResetPlan(quotationId: number, transaction?: Transacti
 
   const expenses = await select<ExpenseRow>(
     `SELECT qe.id, qe.amount, DATE_FORMAT(qe.spent_at, '%Y-%m-%d') AS money_date, qe.is_deleted,
-            pop.id AS purchase_id, pop.funding_source
+            pop.id AS purchase_id, COALESCE(pop.funding_source, qe.funding_source) AS funding_source
      FROM quotation_expense qe
      LEFT JOIN purchase_order_item_purchase pop ON pop.quotation_expense_id = qe.id
      WHERE qe.quotation_id = :quotationId${forUpdate}`,
     { quotationId }
   );
   const debts = await select<DebtRow>(
-    `SELECT id, amount, status FROM employee_debt WHERE purchase_order_item_purchase_id IN (:purchaseIds)${forUpdate}`,
-    { purchaseIds: orNone(purchaseIds) }
+    `SELECT id, amount, status FROM employee_debt
+     WHERE purchase_order_item_purchase_id IN (:purchaseIds) OR quotation_expense_id IN (:expenseIds)${forUpdate}`,
+    { purchaseIds: orNone(purchaseIds), expenseIds: orNone(idsOf(expenses)) }
   );
   const debtIds = idsOf(debts);
   const payments = await select<MoneyRow>(

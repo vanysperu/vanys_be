@@ -20,6 +20,7 @@ export interface PurchaseListItem {
   spent_at: string;
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   // Deuda VIGENTE (no anulada) con el trabajador; null si no hay.
   debt_id: number | null;
   debt_amount: number | null;
@@ -60,6 +61,7 @@ interface RawPurchaseRow {
   spent_at: string;
   payment_account_id: number | string | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   debt_id: number | string | null;
   debt_amount: number | string | null;
   debt_paid_amount: number | string | null;
@@ -89,7 +91,7 @@ const PURCHASE_COLUMNS_SQL = `
   pop.id, pop.purchase_order_item_id, pop.quotation_expense_id, pop.quantity, pop.amount,
   pop.funding_source, pop.paid_by_user_id, CONCAT_WS(' ', pu.name, pu.paternal_lastname) AS paid_by_user_name,
   pop.is_deleted, DATE_FORMAT(qe.spent_at, '%Y-%m-%d') AS spent_at, qe.payment_account_id,
-  pa.name AS payment_account_name, ed.id AS debt_id, ed.amount AS debt_amount,
+  pa.name AS payment_account_name, qe.operation_number, ed.id AS debt_id, ed.amount AS debt_amount,
   ed.paid_amount AS debt_paid_amount, ed.status AS debt_status,
   ${correctionsCountSql("quotation_expense", "pop.quotation_expense_id")} AS corrections_count,
   ip.invoice_id, inv.file_name IS NOT NULL AS invoice_has_file,
@@ -119,6 +121,7 @@ const mapListRow = (row: RawPurchaseRow): PurchaseListItem => ({
   spent_at: row.spent_at,
   payment_account_id: toNullableNumber(row.payment_account_id),
   payment_account_name: row.payment_account_name,
+  operation_number: row.operation_number,
   debt_id: toNullableNumber(row.debt_id),
   debt_amount: toNullableNumber(row.debt_amount),
   debt_paid_amount: toNullableNumber(row.debt_paid_amount),

@@ -3,9 +3,8 @@ import { DataBase } from "../../../../../database";
 import { AppError } from "../../../../../core/errors/AppError";
 import { isOutOfWriteScope, WriteScope } from "../../../../../core/rbac/writeScope";
 
-// Tienda a la que corresponde una deuda: la de la cotización de su compra
-// (las deudas de compras guardan business_unit_id NULL) o, si es manual, la
-// suya. Es el MISMO criterio con el que Caja reparte una reposición por
+// Tienda a la que corresponde una deuda: la de la cotización de su compra o de
+// su gasto (esas deudas guardan business_unit_id NULL) o, si es manual, la suya. Es el MISMO criterio con el que Caja reparte una reposición por
 // tienda (REIMBURSEMENT_SCOPE_SQL en cash_movement/services/shared/cash_flow.sql.ts).
 export const DEBT_BUSINESS_UNIT_SQL = "COALESCE(dq.business_unit_id, ed.business_unit_id)";
 
@@ -13,7 +12,8 @@ export const DEBT_QUOTATION_JOINS_SQL = `
   LEFT JOIN purchase_order_item_purchase dpop ON dpop.id = ed.purchase_order_item_purchase_id
   LEFT JOIN purchase_order_item dpoi ON dpoi.id = dpop.purchase_order_item_id
   LEFT JOIN purchase_order dpo ON dpo.id = dpoi.purchase_order_id
-  LEFT JOIN quotation dq ON dq.id = dpo.quotation_id`;
+  LEFT JOIN quotation_expense dqe ON dqe.id = COALESCE(ed.quotation_expense_id, dpop.quotation_expense_id)
+  LEFT JOIN quotation dq ON dq.id = COALESCE(dpo.quotation_id, dqe.quotation_id)`;
 
 /**
  * Tienda efectiva de cada deuda (id → business_unit_id o null). Lectura

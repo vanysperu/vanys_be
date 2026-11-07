@@ -1,6 +1,19 @@
 import { body, param, ValidationChain } from "express-validator";
 import { paginationValidator } from "../../../validators/pagination.validator";
 
+// N.° de operación del dinero que sale de la empresa: opcional (pedido explícito
+// del usuario: "la opción de colocarlo"). A diferencia de un pago recibido, nunca
+// se exige. null = se quita.
+export const operationNumberRule = (): ValidationChain =>
+  body("operation_number")
+    .optional({ values: "null" })
+    .isString()
+    .withMessage("El número de operación no es válido")
+    .bail()
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage("Máximo 50 caracteres");
+
 // Motivo obligatorio de TODA corrección de dinero (5 a 500 caracteres, igual
 // que el CHECK de money_correction): una corrección sin explicación no se
 // puede auditar.

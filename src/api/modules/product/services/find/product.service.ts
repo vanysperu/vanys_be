@@ -5,6 +5,7 @@ import { ProductAttributes } from "../../model/product.model";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange, resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
 import { ProductDto, toProductDtos } from "../shared/product_mapper";
+import { productSearchConditions } from "../shared/product_search";
 
 interface ProductListOptions extends IListOptions<ProductAttributes> {
   companyId?: number | null;
@@ -58,17 +59,9 @@ const getProductsList = async (options: ProductListOptions): Promise<PaginatedRe
   const conditions: WhereOptions<ProductAttributes>[] = [];
   if (where) conditions.push(where);
   if (companyId !== null && companyId !== undefined) conditions.push({ company_id: companyId });
-  // La búsqueda general cubre nombre, SKU y los códigos de proveedores (un
-  // proveedor puede llamar al producto con su propio código).
-  if (searchTerm) {
-    conditions.push({
-      [Op.or]: [
-        { name: { [Op.like]: `%${searchTerm}%` } },
-        { sku: { [Op.like]: `%${searchTerm}%` } },
-        { id: { [Op.in]: productIdsWithCode(searchTerm) } },
-      ],
-    });
-  }
+  // La búsqueda general cubre nombre, SKU, códigos de proveedores y colores, y
+  // entiende plurales y varias palabras (ver product_search.ts).
+  if (searchTerm) conditions.push(...productSearchConditions(searchTerm));
   if (options.code) conditions.push({ id: { [Op.in]: productIdsWithCode(options.code) } });
   if (name) conditions.push({ name: { [Op.like]: `%${name}%` } });
   if (sku) conditions.push({ sku: { [Op.like]: `%${sku}%` } });

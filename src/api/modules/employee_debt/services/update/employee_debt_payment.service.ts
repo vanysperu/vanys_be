@@ -23,6 +23,7 @@ import {
   pickFields,
   toMoneyValue,
   toNullableId,
+  toNullableText,
 } from "../../../money_correction/services/shared/correction_diff";
 import { EmployeeDebtModel } from "../../model/employee_debt.model";
 import { EmployeeDebtPaymentAllocationModel } from "../../model/employee_debt_payment_allocation.model";
@@ -34,7 +35,7 @@ import { lockWorkerDebtsAndPayment } from "../shared/reimbursement_lock.service"
 
 // Campos de una reposición que se pueden corregir. El trabajador NO: una
 // reposición al trabajador equivocado se anula y se registra la correcta.
-export const CORRECTABLE_REIMBURSEMENT_FIELDS = ["amount", "paid_at", "payment_account_id"] as const;
+export const CORRECTABLE_REIMBURSEMENT_FIELDS = ["amount", "paid_at", "payment_account_id", "operation_number"] as const;
 
 export type CorrectableReimbursementField = (typeof CORRECTABLE_REIMBURSEMENT_FIELDS)[number];
 
@@ -45,6 +46,7 @@ export interface CorrectReimbursementInput {
   amount?: number | string;
   paid_at?: string;
   payment_account_id?: number | string | null;
+  operation_number?: string | null;
   reason: string;
 }
 
@@ -62,26 +64,34 @@ export interface CorrectReimbursementResult {
 
 const NOT_FOUND_MESSAGE = "La reposición no existe";
 
-const snapshotOf = (payment: { amount: number; paid_at: string; payment_account_id: number | null }): ReimbursementSnapshot => ({
+const snapshotOf = (payment: {
+  amount: number;
+  paid_at: string;
+  payment_account_id: number | null;
+  operation_number: string | null;
+}): ReimbursementSnapshot => ({
   amount: toMoneyValue(payment.amount),
   paid_at: toDateOnlyString(payment.paid_at),
   payment_account_id: toNullableId(payment.payment_account_id),
+  operation_number: toNullableText(payment.operation_number),
 });
 
 const requestedOf = (input: CorrectReimbursementInput): Partial<ReimbursementSnapshot> => ({
   amount: input.amount === undefined ? undefined : toMoneyValue(input.amount),
   paid_at: input.paid_at,
   payment_account_id: input.payment_account_id === undefined ? undefined : toNullableId(input.payment_account_id),
+  operation_number: input.operation_number === undefined ? undefined : toNullableText(input.operation_number),
 });
 
 // Columnas a actualizar, ya con el tipo de la tabla (solo lo que cambió).
 const paymentChangesOf = (
   next: ReimbursementSnapshot,
   changed: readonly CorrectableReimbursementField[]
-): Partial<Pick<EmployeeDebtPaymentAttributes, "amount" | "paid_at" | "payment_account_id">> => ({
+): Partial<Pick<EmployeeDebtPaymentAttributes, "amount" | "paid_at" | "payment_account_id" | "operation_number">> => ({
   ...(changed.includes("amount") ? { amount: Number(next.amount) } : {}),
   ...(changed.includes("paid_at") ? { paid_at: String(next.paid_at) } : {}),
   ...(changed.includes("payment_account_id") ? { payment_account_id: toNullableId(next.payment_account_id) } : {}),
+  ...(changed.includes("operation_number") ? { operation_number: toNullableText(String(next.operation_number ?? "")) } : {}),
 });
 
 // Orden de antigüedad de una deuda (el mismo de reponer: FIFO).

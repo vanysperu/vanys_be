@@ -127,11 +127,15 @@ export const userDisplayName = async (userId: number | null, transaction: Transa
 // Ya se le repuso algo al trabajador por esta compra: no se puede quitarle la
 // deuda (pasar a plata de la empresa, cambiar de trabajador, anular) sin
 // deshacer primero esa reposición.
-export const debtReimbursedError = async (debt: EmployeeDebtModel, transaction: Transaction): Promise<AppError> => {
+export const debtReimbursedError = async (
+  debt: EmployeeDebtModel,
+  transaction: Transaction,
+  subject = "esta compra"
+): Promise<AppError> => {
   const name = (await userDisplayName(debt.user_id, transaction)) ?? "el trabajador";
   return new AppError(
     409,
-    `Ya se le repuso ${formatSoles(debt.paid_amount)} de esta compra a ${name}. Anula primero esa reposición.`,
+    `Ya se le repuso ${formatSoles(debt.paid_amount)} de ${subject} a ${name}. Anula primero esa reposición.`,
     { paid_amount: Number(debt.paid_amount) },
     "PURCHASE_DEBT_REIMBURSED"
   );

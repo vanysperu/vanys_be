@@ -4,6 +4,7 @@ import {
   correctionHistoryValidator,
   correctionIdParamRule,
   correctionReasonRule,
+  operationNumberRule,
 } from "../../money_correction/validators/money_correction.validator";
 import { DataBase } from "../../../../database";
 import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
@@ -61,6 +62,11 @@ export const createPurchaseOrderItemPurchaseValidator = [
       if (req.body.funding_source !== "employee") return true;
       throw new Error("Una compra pagada con plata del trabajador no sale de una cuenta de la empresa");
     }),
+  // Plata de un trabajador: el número va en la reposición, cuando sale el dinero.
+  operationNumberRule().custom((value: unknown, { req }) => {
+    if (!value || req.body.funding_source !== "employee") return true;
+    throw new Error("Una compra pagada con plata del trabajador no lleva número de operación: va en su reposición");
+  }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
   body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
@@ -140,6 +146,7 @@ export const correctPurchaseValidator = [
     .withMessage("El origen de los fondos debe ser 'company' o 'employee'"),
   body("paid_by_user_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El trabajador debe ser un id válido"),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
   moneyDateRule("spent_at", "La fecha de la compra no es válida", { onlyIf: presentIn("spent_at") }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   // ¿Llevaba factura? invoice_id = pasarla a esa factura ya registrada.

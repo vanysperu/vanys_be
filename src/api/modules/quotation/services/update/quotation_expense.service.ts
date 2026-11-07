@@ -22,10 +22,25 @@ import { resolvePaymentAccountId } from "../../../variable_general/services/shar
 import { QuotationExpenseModel } from "../../model/quotation_expense.model";
 import { logQuotationEvent, truncateForTimeline } from "../timeline/quotation_event.service";
 import { cashChangeNote } from "../../../cash_movement/services/update/cash_change_note";
+import { EmployeeDebtModel } from "../../../employee_debt/model/employee_debt.model";
+import { recalculateDebtsState } from "../../../employee_debt/services/shared/debt_state.service";
+import { assertEmployeeAvailable } from "../../../employee_debt/services/shared/funded_debt";
+import { FundingSource } from "../../../purchase_order/model/purchase_order_item_purchase.model";
+import { liveDebtOf, userDisplayName } from "../../../purchase_order/services/shared/purchase_lock.service";
+import { assertExpenseDebtAllowsChange, lockExpenseDebt, syncExpenseDebt } from "../shared/expense_debt";
 
 // Campos corregibles de un gasto MANUAL. La cotización no (el gasto sería de
 // otra cotización: se anula y se registra en la correcta).
-export const CORRECTABLE_EXPENSE_FIELDS = ["amount", "description", "category", "spent_at", "payment_account_id"] as const;
+export const CORRECTABLE_EXPENSE_FIELDS = [
+  "amount",
+  "description",
+  "category",
+  "spent_at",
+  "funding_source",
+  "paid_by_user_id",
+  "payment_account_id",
+  "operation_number",
+] as const;
 
 export type CorrectableExpenseField = (typeof CORRECTABLE_EXPENSE_FIELDS)[number];
 
@@ -36,7 +51,11 @@ type ExpenseSnapshot = {
   description: string;
   category: string | null;
   spent_at: string;
+  funding_source: FundingSource;
+  // Vive en su deuda, no en el gasto.
+  paid_by_user_id: number | null;
   payment_account_id: number | null;
+  operation_number: string | null;
 };
 
 // Igual que pickFields de correction_diff pero conservando el tipo de cada
@@ -50,7 +69,10 @@ export interface CorrectQuotationExpenseInput {
   description?: string;
   category?: string | null;
   spent_at?: string;
+  funding_source?: FundingSource;
+  paid_by_user_id?: number | string | null;
   payment_account_id?: number | string | null;
+  operation_number?: string | null;
   reason: string;
 }
 
@@ -64,12 +86,15 @@ export interface CorrectQuotationExpenseResult {
   adjusted_period: string | null;
 }
 
-const snapshotOf = (expense: QuotationExpenseModel): ExpenseSnapshot => ({
+const snapshotOf = (expense: QuotationExpenseModel, debt: EmployeeDebtModel | null): ExpenseSnapshot => ({
   amount: toMoneyValue(expense.amount),
   description: expense.description.trim(),
   category: toNullableText(expense.category),
   spent_at: toDateOnlyString(expense.spent_at),
+  funding_source: expense.funding_source,
+  paid_by_user_id: toNullableId(liveDebtOf(debt)?.user_id ?? null),
   payment_account_id: toNullableId(expense.payment_account_id),
+  operation_number: toNullableText(expense.operation_number),
 });
 
 const requestedOf = (input: CorrectQuotationExpenseInput): Partial<ExpenseSnapshot> => ({
@@ -77,8 +102,42 @@ const requestedOf = (input: CorrectQuotationExpenseInput): Partial<ExpenseSnapsh
   description: input.description === undefined ? undefined : input.description.trim(),
   category: input.category === undefined ? undefined : toNullableText(input.category),
   spent_at: input.spent_at,
+  funding_source: input.funding_source,
   payment_account_id: input.payment_account_id === undefined ? undefined : toNullableId(input.payment_account_id),
+  operation_number: input.operation_number === undefined ? undefined : toNullableText(input.operation_number),
 });
+
+/**
+ * Foto pedida, con las mismas reglas de quién puso la plata que una compra:
+ *   - plata de la empresa: sin trabajador.
+ *   - plata de un trabajador: sin cuenta ni n.° de operación (mandarlos → 400); el
+ *     trabajador es el pedido, el de antes o, si pasa desde "empresa" sin
+ *     indicarlo, quien corrige. El n.° de operación irá en su reposición.
+ */
+const requestedSnapshot = (previous: ExpenseSnapshot, input: CorrectQuotationExpenseInput, actorId: number): ExpenseSnapshot => {
+  const base = applyRequested(previous, requestedOf(input));
+  const requestedPaidBy = input.paid_by_user_id === undefined ? undefined : toNullableId(input.paid_by_user_id);
+
+  if (base.funding_source === "company") {
+    if (requestedPaidBy !== undefined && requestedPaidBy !== null) {
+      throw new AppError(400, "Un gasto pagado por la empresa no lleva trabajador que lo pagó", undefined, "PAID_BY_NOT_ALLOWED");
+    }
+    return { ...base, paid_by_user_id: null };
+  }
+
+  if (input.payment_account_id !== undefined && toNullableId(input.payment_account_id) !== null) {
+    throw new AppError(400, "Un gasto pagado con plata de un trabajador no sale de una cuenta de la empresa", undefined, "PAYMENT_ACCOUNT_NOT_ALLOWED");
+  }
+  if (input.operation_number !== undefined && toNullableText(input.operation_number) !== null) {
+    throw new AppError(400, "Un gasto pagado con plata de un trabajador no lleva número de operación: va en su reposición", undefined, "OPERATION_NUMBER_NOT_ALLOWED");
+  }
+  return {
+    ...base,
+    payment_account_id: null,
+    operation_number: null,
+    paid_by_user_id: requestedPaidBy ?? previous.paid_by_user_id ?? actorId,
+  };
+};
 
 const accountNameOf = async (accountId: number | null, transaction: Transaction): Promise<string | null> => {
   if (accountId === null) return null;
@@ -94,9 +153,12 @@ const buildValues = async (
   transaction: Transaction
 ): Promise<MoneyCorrectionValues> => {
   const values: MoneyCorrectionValues = pickFields(snapshot, changed);
-  if (!changed.includes("payment_account_id")) return values;
+  const withWorker = changed.includes("paid_by_user_id")
+    ? { ...values, paid_by_user_name: await userDisplayName(snapshot.paid_by_user_id, transaction) }
+    : values;
+  if (!changed.includes("payment_account_id")) return withWorker;
   const accountId = typeof snapshot.payment_account_id === "number" ? snapshot.payment_account_id : null;
-  return { ...values, payment_account_name: await accountNameOf(accountId, transaction) };
+  return { ...withWorker, payment_account_name: await accountNameOf(accountId, transaction) };
 };
 
 // Bloquea el gasto y valida que sea un gasto manual vigente dentro del
@@ -162,10 +224,17 @@ export async function correctQuotationExpense({
       throw new AppError(409, "Este gasto está anulado: restáuralo antes de corregirlo", undefined, "EXPENSE_ANNULLED");
     }
 
-    const previous = snapshotOf(expense);
-    const next = applyRequested(previous, requestedOf(input));
+    const debt = await lockExpenseDebt(expenseId, transaction);
+    const previous = snapshotOf(expense, debt);
+    const next = requestedSnapshot(previous, input, updatedBy);
     const changed = changedFieldsBetween(CORRECTABLE_EXPENSE_FIELDS, previous, next);
     assertHasChanges(changed);
+
+    const paidByEmployee = next.funding_source === "employee";
+    if (paidByEmployee && changed.includes("paid_by_user_id")) {
+      await assertEmployeeAvailable(next.paid_by_user_id, quotation.company_id, transaction);
+    }
+    await assertExpenseDebtAllowsChange(debt, previous, next, transaction);
 
     // Cuenta nueva: de la empresa de la cotización y activa. Conservar la
     // misma no se revalida (puede haberse deshabilitado después).
@@ -187,7 +256,7 @@ export async function correctQuotationExpense({
       sourceId: expenseId,
       oldDate: String(previous.spent_at),
       newDate: String(next.spent_at),
-      movesCashAfter: true,
+      movesCashAfter: !paidByEmployee,
       scope,
       actorId: updatedBy,
       transaction,
@@ -195,9 +264,24 @@ export async function correctQuotationExpense({
 
     // Nunca se tocan created_*; updated_* siempre.
     await DataBase.instance.quotation_expense.update(
-      { ...pickTyped(next, changed), updated_by: updatedBy, updated_at: nowUtc() },
+      {
+        ...pickTyped(next, changed.filter((field) => field !== "paid_by_user_id")),
+        updated_by: updatedBy,
+        updated_at: nowUtc(),
+      },
       { where: { id: expenseId }, transaction }
     );
+
+    // Monto, fecha y quién pagó se mueven junto con su deuda.
+    const debtId = await syncExpenseDebt({
+      expenseId,
+      companyId: quotation.company_id,
+      debt,
+      target: next,
+      actorId: updatedBy,
+      transaction,
+    });
+    if (debtId !== null) await recalculateDebtsState([debtId], transaction, updatedBy);
 
     let correctionId = 0;
     const cash = await change.complete(async (kind) => {

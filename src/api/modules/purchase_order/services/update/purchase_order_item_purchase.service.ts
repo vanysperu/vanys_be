@@ -7,6 +7,7 @@ import { WriteScope } from "../../../../../core/rbac/writeScope";
 import { formatSoles, toCents } from "../../../../../core/utils/money";
 import { nowUtc, toDateOnlyString } from "../../../../../utils/dateUtils";
 import { recalculateDebtsState } from "../../../employee_debt/services/shared/debt_state.service";
+import { assertEmployeeAvailable, debtBelowReimbursedError } from "../../../employee_debt/services/shared/funded_debt";
 import { createLogService } from "../../../logs/services/create/log.services";
 import { LogAction } from "../../../logs/model/log.model";
 import { recordMoneyCorrection } from "../../../money_correction/services/create/money_correction.service";
@@ -17,6 +18,7 @@ import {
   pickFields,
   toMoneyValue,
   toNullableId,
+  toNullableText,
 } from "../../../money_correction/services/shared/correction_diff";
 import { MoneyCorrectionKind, MoneyCorrectionValues } from "../../../money_correction/types/money_correction.types";
 import { logQuotationEvent, truncateForTimeline } from "../../../quotation/services/timeline/quotation_event.service";
@@ -53,6 +55,7 @@ export const CORRECTABLE_PURCHASE_FIELDS = [
   "funding_source",
   "paid_by_user_id",
   "payment_account_id",
+  "operation_number",
   "spent_at",
 ] as const;
 
@@ -65,6 +68,7 @@ type PurchaseSnapshot = {
   funding_source: FundingSource;
   paid_by_user_id: number | null;
   payment_account_id: number | null;
+  operation_number: string | null;
   spent_at: string;
 };
 
@@ -75,6 +79,7 @@ export interface CorrectPurchaseInput {
   funding_source?: FundingSource;
   paid_by_user_id?: number | string | null;
   payment_account_id?: number | string | null;
+  operation_number?: string | null;
   spent_at?: string;
   // true = ya se confirmó subir la cantidad por encima de lo que falta.
   allow_exceed?: boolean;
@@ -105,6 +110,7 @@ const snapshotOf = ({ purchase, expense }: LockedPurchase): PurchaseSnapshot => 
   funding_source: purchase.funding_source,
   paid_by_user_id: toNullableId(purchase.paid_by_user_id),
   payment_account_id: toNullableId(expense.payment_account_id),
+  operation_number: toNullableText(expense.operation_number),
   spent_at: toDateOnlyString(expense.spent_at),
 });
 
@@ -116,6 +122,8 @@ const snapshotOf = ({ purchase, expense }: LockedPurchase): PurchaseSnapshot => 
  *     quien corrige (mismo criterio que al registrar la compra).
  *   - plata de la empresa: sin trabajador; la cuenta es la pedida o la de
  *     antes (efectivo si antes era de un trabajador).
+ * El n.° de operación es solo de plata de la empresa: pasar a plata de un
+ * trabajador lo quita (el número irá en su reposición).
  */
 const requestedSnapshot = (previous: PurchaseSnapshot, input: CorrectPurchaseInput, actorId: number): PurchaseSnapshot => {
   const base = applyRequested(previous, {
@@ -126,8 +134,17 @@ const requestedSnapshot = (previous: PurchaseSnapshot, input: CorrectPurchaseInp
   });
   const requestedAccount = input.payment_account_id === undefined ? undefined : toNullableId(input.payment_account_id);
   const requestedPaidBy = input.paid_by_user_id === undefined ? undefined : toNullableId(input.paid_by_user_id);
+  const requestedOperation = input.operation_number === undefined ? undefined : toNullableText(input.operation_number);
 
   if (base.funding_source === "employee") {
+    if (requestedOperation !== undefined && requestedOperation !== null) {
+      throw new AppError(
+        400,
+        "Una compra pagada con plata del trabajador no lleva número de operación: va en su reposición",
+        undefined,
+        "OPERATION_NUMBER_NOT_ALLOWED"
+      );
+    }
     if (requestedAccount !== undefined && requestedAccount !== null) {
       throw new AppError(
         400,
@@ -137,7 +154,7 @@ const requestedSnapshot = (previous: PurchaseSnapshot, input: CorrectPurchaseInp
       );
     }
     const fallbackPaidBy = previous.funding_source === "employee" ? previous.paid_by_user_id : actorId;
-    return { ...base, payment_account_id: null, paid_by_user_id: requestedPaidBy ?? fallbackPaidBy };
+    return { ...base, payment_account_id: null, operation_number: null, paid_by_user_id: requestedPaidBy ?? fallbackPaidBy };
   }
 
   if (requestedPaidBy !== undefined && requestedPaidBy !== null) {
@@ -146,29 +163,9 @@ const requestedSnapshot = (previous: PurchaseSnapshot, input: CorrectPurchaseInp
   const fallbackAccount = previous.funding_source === "company" ? previous.payment_account_id : null;
   // `null` explícito = efectivo; solo `undefined` significa "no se mandó".
   const nextAccount = requestedAccount === undefined ? fallbackAccount : requestedAccount;
-  return { ...base, paid_by_user_id: null, payment_account_id: nextAccount };
+  const nextOperation = requestedOperation === undefined ? previous.operation_number : requestedOperation;
+  return { ...base, paid_by_user_id: null, payment_account_id: nextAccount, operation_number: nextOperation };
 };
-
-// Trabajador que puso la plata: activo y de la MISMA empresa de la orden.
-const assertEmployeeAvailable = async (userId: number | null, companyId: number, transaction: Transaction) => {
-  const employee =
-    userId === null ? null : await DataBase.instance.user.findOne({ where: { id: userId }, transaction });
-  if (employee && !employee.is_deleted && employee.status && employee.company_id === companyId) return;
-  throw new AppError(
-    400,
-    "El trabajador que puso el dinero no existe, está deshabilitado o no es de esta empresa",
-    undefined,
-    "EMPLOYEE_NOT_AVAILABLE"
-  );
-};
-
-const debtBelowReimbursedError = (debt: EmployeeDebtModel) =>
-  new AppError(
-    409,
-    `Ya se le repuso ${formatSoles(debt.paid_amount)} de esta compra; el monto no puede quedar por debajo. Corrige o anula primero la reposición.`,
-    { paid_amount: Number(debt.paid_amount) },
-    "DEBT_BELOW_REIMBURSED"
-  );
 
 const accountNameOf = async (accountId: number | null, transaction: Transaction): Promise<string | null> => {
   if (accountId === null) return null;
@@ -304,6 +301,7 @@ const syncPurchaseDebt = async (
       user_id: userId,
       origin: "purchase",
       purchase_order_item_purchase_id: locked.purchase.id,
+      quotation_expense_id: null,
       description: null,
       category: null,
       // La tienda de una deuda de compra la da la cotización de la orden.
@@ -416,7 +414,7 @@ export async function correctPurchase({
       ? buildPurchaseExpenseDescription(locked.productName, next.quantity, extraQuantity, purchaseNotesSuffix(expense.description, locked.productName))
       : expense.description;
     await DataBase.instance.quotation_expense.update(
-      { amount: next.amount, spent_at: next.spent_at, payment_account_id: next.payment_account_id, description, ...audit },
+      { amount: next.amount, spent_at: next.spent_at, payment_account_id: next.payment_account_id, operation_number: next.operation_number, description, ...audit },
       { where: { id: expense.id }, transaction }
     );
 

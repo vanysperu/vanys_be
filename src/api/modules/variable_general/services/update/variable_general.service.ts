@@ -76,6 +76,7 @@ export async function updateVariableGeneralById(
         description: payload.description,
         ref1: payload.ref1,
         ref2: payload.ref2,
+        show_in_quotation: payload.show_in_quotation,
       },
       { where, transaction }
     );

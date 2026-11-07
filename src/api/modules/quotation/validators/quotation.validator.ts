@@ -4,6 +4,7 @@ import {
   correctionHistoryValidator,
   correctionIdParamRule,
   correctionReasonRule,
+  operationNumberRule,
 } from "../../money_correction/validators/money_correction.validator";
 import { DataBase } from "../../../../database";
 import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
@@ -284,7 +285,10 @@ export const createQuotationExpenseValidator = [
   moneyDateRule("spent_at", "La fecha del gasto es obligatoria"),
   // Cuenta de la empresa desde la que se pagó (vacío = efectivo); que sea de
   // la empresa de la cotización y esté activa lo valida el controller.
+  body("funding_source").optional().isIn(["company", "employee"]).withMessage("El origen de los fondos debe ser 'company' o 'employee'"),
+  body("paid_by_user_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El trabajador debe ser un id válido"),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
 ];
 
 // ---- Corrección / anulación de gastos manuales ----
@@ -322,7 +326,10 @@ export const correctQuotationExpenseValidator = [
   // Texto libre (como al crear); null = sin categoría.
   body("category").optional({ values: "null" }).isString().isLength({ max: 50 }).withMessage("Máximo 50 caracteres"),
   // null = efectivo. Que sea de la empresa y esté activa lo valida el service.
+  body("funding_source").optional().isIn(["company", "employee"]).withMessage("El origen de los fondos debe ser 'company' o 'employee'"),
+  body("paid_by_user_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("El trabajador debe ser un id válido"),
   body("payment_account_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La cuenta seleccionada no es válida"),
+  operationNumberRule(),
   correctionReasonRule(),
 ];
 

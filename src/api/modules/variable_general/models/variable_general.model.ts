@@ -9,6 +9,9 @@ export interface VariableGeneralAttributes {
   description: string;
   ref1: string;
   ref2: string;
+  // Solo cuentas de pago: false = cuenta interna, no sale en el PDF de la
+  // cotización. Se sigue usando para registrar pagos, gastos y Caja.
+  show_in_quotation: boolean;
   // NULL = variable global, visible para todas las empresas (ver
   // buildWhere en services/find). Solo is_system puede crear/editar una fila
   // con company_id NULL.
@@ -27,7 +30,7 @@ export interface VariableGeneralPartialAttributes extends Partial<VariableGenera
 // (autoIncrement / defaultValue), por eso son opcionales al crear.
 type VariableGeneralCreationAttributes = Optional<
   VariableGeneralAttributes,
-  "id" | "is_deleted" | "created_at" | "updated_at"
+  "id" | "is_deleted" | "show_in_quotation" | "created_at" | "updated_at"
 >;
 
 export interface VariableGeneralModel
@@ -75,6 +78,11 @@ export function VariableGeneralFactory(sequelize: Sequelize): VariableGeneralSta
       ref2: {
         type: DataTypes.STRING(255),
         allowNull: true,
+      },
+      show_in_quotation: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
       },
       company_id: {
         type: DataTypes.INTEGER,

@@ -17,12 +17,13 @@ import { resolveWriteScope, WriteScope } from "../../../../core/rbac/writeScope"
 import { MoneyCorrectionSource, MONEY_CORRECTION_SOURCES } from "../../money_correction/types/money_correction.types";
 import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
+import { toNullableText } from "../../money_correction/services/shared/correction_diff";
 import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 import { toggleReasonOf } from "../validators/adjustment_reason.validator";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { direction, category, amount, description, occurred_at, quotation_id, purchase_order_id } = req.body;
+  const { direction, category, amount, description, occurred_at, quotation_id, purchase_order_id, operation_number } = req.body;
 
   // Mismo criterio que clientes/cotizaciones/usuarios (CLAUDE.md sección 10
   // + 11.1): un usuario de empresa crea SIEMPRE en la suya (y en su tienda
@@ -71,6 +72,7 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
       quotation_id: quotation_id ?? null,
       purchase_order_id: purchase_order_id ?? null,
       payment_account_id,
+      operation_number: toNullableText(operation_number),
     },
     createdBy: user.userId,
   });
@@ -128,12 +130,12 @@ export const disableCashMovementController = asyncHandler(async (req: Request, r
 // módulo). Lista blanca explícita de campos: nunca `req.body` entero.
 export const updateCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
-  const { amount, category, occurred_at, payment_account_id, description, quotation_id, purchase_order_id, reason } =
+  const { amount, category, occurred_at, payment_account_id, operation_number, description, quotation_id, purchase_order_id, reason } =
     req.body;
 
   const result = await correctCashMovementById({
     movementId: Number(req.params.id),
-    input: { amount, category, occurred_at, payment_account_id, description, quotation_id, purchase_order_id, reason },
+    input: { amount, category, occurred_at, payment_account_id, operation_number, description, quotation_id, purchase_order_id, reason },
     scope: resolveWriteScope(user),
     updatedBy: user.userId,
   });

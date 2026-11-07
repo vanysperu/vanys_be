@@ -28,6 +28,8 @@
 
 ### Corrección y anulación de gastos manuales
 Botones (pestaña "Gastos" del detalle y Caja): `cotizacion.expense.update.button` (lápiz), `cotizacion.expense.disable.button` (anular/restaurar), `cotizacion.expense.corrections.button` (abrir el badge "Corregido (n)"). Un gasto de compra abre el diálogo de la compra (`purchase_order.purchase.update.button`).
+- `funding_source` y `paid_by_user_id` (al registrar y corregir): con plata de un trabajador nace su deuda (origen `expense`) y el gasto no sale de Caja hasta reponerle; sigue contando como costo de la cotización. No lleva cuenta ni n.° de operación: `PAYMENT_ACCOUNT_NOT_ALLOWED` / `OPERATION_NUMBER_NOT_ALLOWED`, van en la reposición. Sin `paid_by_user_id`, el trabajador es quien registra. Monto, fecha y quién pagó se mueven con la deuda; anular la cancela y restaurar la reactiva. Con algo ya repuesto: no se anula ni se quita la deuda (`PURCHASE_DEBT_REIMBURSED`) ni se baja de lo repuesto (`DEBT_BELOW_REIMBURSED`). En el gasto de una compra este campo no se usa: manda la compra.
+- `operation_number` (opcional, máx. 50): n.° de operación del gasto, al registrarlo y al corregirlo. No es dinero: agregarlo o cambiarlo en un mes cerrado queda en el historial, sin ajuste.
 - Campos corregibles: `amount`, `description`, `category` (texto libre ≤ 50, `null` = sin categoría), `spent_at`, `payment_account_id` (`null` = efectivo). La cotización NO se corrige (400): se anula y se registra en la correcta. Motivo `reason` obligatorio (5–500). Sin cambios → 400 `NO_CHANGES`.
 - Se permite en cualquier estado de la cotización (corregir un error no registra dinero nuevo).
 - Gasto de una compra → 409 `EXPENSE_BELONGS_TO_PURCHASE` (se corrige/anula como compra, ver purchase_order). Gasto anulado → 409 `EXPENSE_ANNULLED` (restaurarlo antes).
@@ -146,7 +148,9 @@ existente y se aplica solo la diferencia.
   = false`), el item va sin técnica y su precio es solo el del producto; el
   PDF omite la columna "Técnica" si ningún item lleva una. Ver
   [`product`](../product/README.md).
-- El PDF solo lista las cuentas de pago **activas** de la empresa.
+- El PDF solo lista las cuentas de pago **activas** de la empresa y que no sean
+  internas (`show_in_quotation`, ver `variable_general/README.md`). Sin ninguna, no
+  imprime esa sección.
 - El PDF sale en **A4 horizontal** y lleva la columna **"Código"** (pedido
   explícito del usuario): el código del color elegido (`product_code` del
   item) o, si el item no tiene, el SKU del producto; si no hay ninguno, "—".

@@ -54,6 +54,8 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // Cuenta de la empresa desde la que se pagó (vacío = efectivo). Solo aplica
   // a "company": con plata del trabajador, la empresa no paga nada todavía.
   paymentAccountId?: unknown;
+  // N.° de operación (opcional), también solo de "company".
+  operationNumber?: string | null;
   // ¿La compra llevaba factura? (pedido explícito del usuario). Si es así,
   // queda registrada la factura; su archivo se sube aparte (o queda en
   // "Faltan subir").
@@ -108,6 +110,7 @@ const createPurchaseOrderItemPurchase = async ({
   fundingSource = "company",
   paidByUserId,
   paymentAccountId,
+  operationNumber,
   hasInvoice = false,
   invoiceId: existingInvoiceId,
   createdBy,
@@ -193,6 +196,7 @@ const createPurchaseOrderItemPurchase = async ({
         // registrada después de las 7 p. m. quedaba con fecha de mañana.
         spent_at: spentAt,
         payment_account_id: expenseAccountId,
+        operation_number: fundingSource === "company" ? operationNumber : null,
       },
       createdBy,
       // Plata del trabajador: no mueve la caja de la empresa (gancho de
@@ -236,6 +240,7 @@ const createPurchaseOrderItemPurchase = async ({
           user_id: paidByUserId!,
           origin: "purchase",
           purchase_order_item_purchase_id: purchase.id,
+          quotation_expense_id: null,
           description: null,
           category: null,
           // La tienda la da la cotización de la orden.

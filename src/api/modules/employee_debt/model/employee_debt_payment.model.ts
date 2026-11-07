@@ -14,6 +14,8 @@ export interface EmployeeDebtPaymentAttributes {
   amount: number;
   // Cuenta de la empresa desde la que salió el dinero; null = efectivo.
   payment_account_id: number | null;
+  // N.° de operación de la reposición (opcional).
+  operation_number: string | null;
   // Día calendario de Lima en que salió el dinero.
   paid_at: string;
   is_deleted: boolean;
@@ -38,6 +40,7 @@ export function EmployeeDebtPaymentFactory(sequelize: Sequelize): EmployeeDebtPa
       user_id: { type: DataTypes.BIGINT, allowNull: false },
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
+      operation_number: { type: DataTypes.STRING(50), allowNull: true },
       paid_at: { type: DataTypes.DATEONLY, allowNull: false },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },

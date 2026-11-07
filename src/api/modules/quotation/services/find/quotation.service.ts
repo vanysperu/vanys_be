@@ -1,10 +1,11 @@
-import { FindAndCountOptions, literal } from "sequelize";
+import { FindAndCountOptions, literal, QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
 import { QuotationItemAttributes } from "../../model/quotation_item.model";
 import { FundingSource } from "../../../purchase_order/model/purchase_order_item_purchase.model";
+import { EmployeeDebtStatus } from "../../../employee_debt/model/employee_debt.model";
 import { loadProductVariants, variantsOf } from "../shared/item_variant";
 import { loadCorrectionCounts } from "../../../money_correction/services/shared/corrections_count";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
@@ -191,6 +192,9 @@ export type QuotationExpenseListItem = QuotationExpenseAttributes & {
   purchase_id: number | null;
   // Quién puso la plata de la compra (null = gasto que no es compra).
   purchase_funding_source: FundingSource | null;
+  // Gasto manual con plata de un trabajador: a quién se le debe y cómo va.
+  paid_by_user_name: string | null;
+  debt_status: EmployeeDebtStatus | null;
   corrections_count: number;
 };
 
@@ -205,6 +209,19 @@ type QuotationDetailJson = QuotationAttributes & {
  * consultas por IN sobre los ids de los gastos (nunca una por gasto). El PDF
  * sigue usando getQuotationById (no necesita esto).
  */
+// Deudas vigentes de los gastos manuales, en UNA consulta.
+const loadExpenseDebts = async (expenseIds: number[]) => {
+  if (expenseIds.length === 0) return new Map<number, { user_name: string; status: EmployeeDebtStatus }>();
+  const rows = await DataBase.instance.sequelize.query<{ quotation_expense_id: number | string; status: EmployeeDebtStatus; user_name: string }>(
+    `SELECT ed.quotation_expense_id, ed.status, CONCAT_WS(' ', u.name, u.paternal_lastname) AS user_name
+     FROM employee_debt ed
+     INNER JOIN user u ON u.id = ed.user_id
+     WHERE ed.quotation_expense_id IN (:expenseIds) AND ed.status <> 'cancelled'`,
+    { type: QueryTypes.SELECT, replacements: { expenseIds } }
+  );
+  return new Map(rows.map((row) => [Number(row.quotation_expense_id), { user_name: row.user_name, status: row.status }]));
+};
+
 const getQuotationDetailById = async (id: number) => {
   const quotation = await getQuotationById(id);
   if (!quotation) return null;
@@ -217,7 +234,7 @@ const getQuotationDetailById = async (id: number) => {
 
   const items = plain.items ?? [];
 
-  const [purchases, correctionCounts, variantsByProduct] = await Promise.all([
+  const [purchases, correctionCounts, variantsByProduct, expenseDebts] = await Promise.all([
     expenseIds.length === 0
       ? Promise.resolve([])
       : DataBase.instance.purchase_order_item_purchase.findAll({
@@ -226,6 +243,7 @@ const getQuotationDetailById = async (id: number) => {
         }),
     loadCorrectionCounts("quotation_expense", expenseIds),
     loadProductVariants(items.map((item) => Number(item.product_id))),
+    loadExpenseDebts(expenseIds),
   ]);
   const purchaseByExpense = new Map(purchases.map((purchase) => [Number(purchase.quotation_expense_id), purchase]));
 
@@ -233,6 +251,8 @@ const getQuotationDetailById = async (id: number) => {
     ...expense,
     purchase_id: purchaseByExpense.get(Number(expense.id))?.id ?? null,
     purchase_funding_source: purchaseByExpense.get(Number(expense.id))?.funding_source ?? null,
+    paid_by_user_name: expenseDebts.get(Number(expense.id))?.user_name ?? null,
+    debt_status: expenseDebts.get(Number(expense.id))?.status ?? null,
     corrections_count: correctionCounts.get(Number(expense.id)) ?? 0,
   }));
 

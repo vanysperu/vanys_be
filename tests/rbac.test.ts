@@ -1,7 +1,7 @@
 import { authedRequest, login } from "./helpers/apiClient";
 import { createQuotationFixture } from "./helpers/fixtures";
 
-const QA_ADMIN = { email: "admin.qa@acme.test", password: "Test1234" };
+const QA_ADMIN = { email: process.env.QA_ADMIN_EMAIL ?? "admin.qa@acme.test", password: "Test1234" };
 const QA_GESTOR = { email: "gestor.qa@acme.test", password: "Test1234" };
 
 // Un Gestor puede crear/listar pagos (ya lo prueba payment.test.ts

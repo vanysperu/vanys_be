@@ -10,6 +10,8 @@ import { createLogService } from "../../../logs/services/create/log.services";
 import { LogAction } from "../../../logs/model/log.model";
 import { logQuotationEvent, truncateForTimeline } from "../timeline/quotation_event.service";
 import { lockManualExpense } from "../update/quotation_expense.service";
+import { assertExpenseDebtNotReimbursed, lockExpenseDebt } from "../shared/expense_debt";
+import { recalculateDebtsState } from "../../../employee_debt/services/shared/debt_state.service";
 
 export interface ToggleQuotationExpenseResult {
   id: number;
@@ -44,6 +46,9 @@ export async function toggleQuotationExpense({
   return DataBase.instance.sequelize.transaction(async (transaction) => {
     const { expense, quotation } = await lockManualExpense(expenseId, scope, transaction);
     const nextDeleted = !expense.is_deleted;
+    const paidByEmployee = expense.funding_source === "employee";
+    const debt = paidByEmployee ? await lockExpenseDebt(expenseId, transaction) : null;
+    if (nextDeleted) await assertExpenseDebtNotReimbursed(debt, transaction);
 
     // Cierre de caja (fase 2): anular/restaurar un gasto de un mes cerrado
     // es un ajuste (motivo obligatorio); el mes cerrado queda como se cerró.
@@ -54,7 +59,7 @@ export async function toggleQuotationExpense({
       sourceId: expenseId,
       oldDate: spentAt,
       newDate: spentAt,
-      movesCashAfter: !nextDeleted,
+      movesCashAfter: !nextDeleted && !paidByEmployee,
       scope,
       actorId: updatedBy,
       transaction,
@@ -64,6 +69,15 @@ export async function toggleQuotationExpense({
       { is_deleted: nextDeleted, updated_by: updatedBy, updated_at: nowUtc() },
       { where: { id: expenseId }, transaction }
     );
+
+    // La deuda sigue al gasto: anulado no se le debe nada; restaurado, sí.
+    if (debt) {
+      await DataBase.instance.employee_debt.update(
+        { status: nextDeleted ? "cancelled" : "pending", updated_by: updatedBy, updated_at: nowUtc() },
+        { where: { id: debt.id }, transaction }
+      );
+      await recalculateDebtsState([debt.id], transaction, updatedBy);
+    }
 
     const cash = await change.complete(async (kind) => {
       // Un anular/restaurar normal no deja historial de corrección.

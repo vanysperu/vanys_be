@@ -147,6 +147,8 @@ llama a SU endpoint. Botón por fuente: manual `cash_movement.update.button`,
   El endpoint solo conoce esa tabla; un pago se corrige en Pagos
   (`PUT /payment/update/:id`) y un gasto, deuda o reposición en su módulo.
   En la UI el lápiz solo aparece en filas manuales.
+- **`operation_number`** (opcional, máx. 50): al registrar y al corregir. El listado de Caja lo
+  devuelve en cada fila (`null` en una fila de plata de un trabajador). No es dinero: agregarlo o cambiarlo en un mes cerrado queda en el historial, sin ajuste.
 - **Campos corregibles**: `amount`, `category`, `occurred_at`,
   `payment_account_id`, `description`, `quotation_id`, `purchase_order_id`.
   Ausente en el body = se queda como está; `null` = se limpia. `reason`

@@ -40,7 +40,9 @@ const cancelManualEmployeeDebt = async ({
     if (inScope.length === 0) throw new EmployeeDebtNotFoundError("La deuda no existe");
     if (debt.origin !== "manual") {
       throw new EmployeeDebtNotCancellableError(
-        "Esta deuda viene de una compra de orden: se corrige desde su orden de compra, no se anula acá."
+        debt.origin === "expense"
+          ? "Esta deuda viene de un gasto de cotización: se anula desde el gasto, no acá."
+          : "Esta deuda viene de una compra de orden: se corrige desde su orden de compra, no se anula acá."
       );
     }
     if (debt.status === "cancelled") throw new EmployeeDebtNotCancellableError("Esta deuda ya está anulada");

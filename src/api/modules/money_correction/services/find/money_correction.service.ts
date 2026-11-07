@@ -30,6 +30,7 @@ export const MONEY_CORRECTION_VALUE_KEYS: Record<MoneyCorrectionSource, readonly
     "category",
     "occurred_at",
     ...COMMON_ACCOUNT_KEYS,
+    "operation_number",
     "description",
     "quotation_id",
     "purchase_order_id",
@@ -53,6 +54,7 @@ export const MONEY_CORRECTION_VALUE_KEYS: Record<MoneyCorrectionSource, readonly
     "category",
     "spent_at",
     ...COMMON_ACCOUNT_KEYS,
+    "operation_number",
     "quantity",
     "invoice_status",
     "funding_source",
@@ -73,7 +75,7 @@ export const MONEY_CORRECTION_VALUE_KEYS: Record<MoneyCorrectionSource, readonly
     "user_name",
     "debt_status",
   ],
-  employee_debt_payment: ["amount", "paid_at", ...COMMON_ACCOUNT_KEYS, "allocations", ANNULMENT_KEY],
+  employee_debt_payment: ["amount", "paid_at", ...COMMON_ACCOUNT_KEYS, "operation_number", "allocations", ANNULMENT_KEY],
 };
 
 // Única clave que admite un arreglo (las asignaciones de una reposición).

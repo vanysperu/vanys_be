@@ -6,8 +6,9 @@ export type EmployeeDebtStatus = "pending" | "paid" | "cancelled";
 
 // "purchase": nace sola al registrar una compra de orden pagada con plata
 // del trabajador. "manual": la registra un administrador para gastos fuera
-// de una orden (ej. el trabajador pagó la luz con su plata).
-export type EmployeeDebtOrigin = "purchase" | "manual";
+// de una orden (ej. el trabajador pagó la luz con su plata). "expense": nace
+// sola al registrar un gasto de cotización pagado con plata del trabajador.
+export type EmployeeDebtOrigin = "purchase" | "manual" | "expense";
 
 export interface EmployeeDebtAttributes {
   id: number;
@@ -16,6 +17,8 @@ export interface EmployeeDebtAttributes {
   origin: EmployeeDebtOrigin;
   // Solo en origin="purchase" (en las manuales es null).
   purchase_order_item_purchase_id: number | null;
+  // Solo en origin="expense".
+  quotation_expense_id: number | null;
   // Solo en origin="manual": qué se pagó y de qué tipo de gasto (catálogo
   // cash_movement_type, el mismo de Caja).
   description: string | null;
@@ -61,8 +64,9 @@ export function EmployeeDebtFactory(sequelize: Sequelize): EmployeeDebtStatic {
       id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
       company_id: { type: DataTypes.BIGINT, allowNull: false },
       user_id: { type: DataTypes.BIGINT, allowNull: false },
-      origin: { type: DataTypes.ENUM("purchase", "manual"), allowNull: false, defaultValue: "purchase" },
+      origin: { type: DataTypes.ENUM("purchase", "manual", "expense"), allowNull: false, defaultValue: "purchase" },
       purchase_order_item_purchase_id: { type: DataTypes.BIGINT, allowNull: true, unique: true },
+      quotation_expense_id: { type: DataTypes.BIGINT, allowNull: true, unique: true },
       description: { type: DataTypes.STRING(300), allowNull: true },
       category: { type: DataTypes.STRING(50), allowNull: true },
       business_unit_id: { type: DataTypes.BIGINT, allowNull: true },

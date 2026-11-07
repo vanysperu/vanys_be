@@ -29,6 +29,11 @@
   historial a "Efectivo" y Caja dejaba de cuadrar. Se **deshabilita**: deja
   de ofrecerse en los selectores y su historial se conserva. La base también
   lo impide (llaves `RESTRICT`).
+- **Cuentas internas** (`show_in_quotation = false`, pedido explícito del
+  usuario: "hay cuentas internas y externas"): no salen en el PDF de la
+  cotización, pero se siguen usando para registrar pagos, gastos y Caja. Por
+  defecto `true`. Se marca en Documentos de la empresa. Solo aplica a cuentas de
+  pago.
 - **QR de una cuenta de pago** (`ref2` = ruta de `company_asset`): al crear o
   cambiar `ref2`, la imagen tiene que ser de la misma empresa y existir
   (`400` si no). Al cambiarlo, quitarlo (`ref2: null`) o eliminar la cuenta, la

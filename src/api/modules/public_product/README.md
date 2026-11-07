@@ -121,7 +121,15 @@ con `code` `INVALID_CATEGORY`, `INVALID_SUBCATEGORY`, `PRICE_REQUIRED`,
   nunca sale (pedido explícito del usuario), ni buscándolo por SKU o código. Es
   una condición fija (`is_deleted = false`); ningún parámetro (ej. `status`) la
   cambia. `limit` máx. 100.
-- `search`: nombre, SKU o código de proveedor. `code`: solo códigos de proveedor. `color`: el nombre del color contiene el texto.
+- `search`: buscador flexible (`core/utils/searchTerms.ts`, pedido explícito del
+  usuario). Cada palabra tiene que aparecer, en cualquier orden, en el nombre, el
+  SKU, un código de proveedor o un color. Entiende plurales ("gorras" → Gorra,
+  "lapices" → Lápiz), ignora mayúsculas, acentos y palabras vacías ("de", "para"...)
+  y en colores acepta el otro género ("gorras negras" → color Negro). Lee hasta 6
+  palabras. No corrige errores de tipeo. Es el mismo buscador de la pantalla de
+  Productos y de la cotización.
+- `sku` y `code` buscan solo en ese campo, y `color` solo en los colores: contienen
+  el texto, literal.
 - `orderBy`: `name`, `sku`, `price_unit` o `created_at` (por defecto).
 - Respuesta `{ data, meta: { page, limit, total, totalPages } }`; cada producto
   trae `category`, `subcategory`, `colors`, `codes` e `image_url` (URL absoluta, o

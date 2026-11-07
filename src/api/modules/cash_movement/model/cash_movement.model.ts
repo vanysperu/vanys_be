@@ -22,6 +22,8 @@ export interface CashMovementAttributes {
   // Cuenta de la empresa (general_variable category="payment_account") desde
   // o hacia la que se movió el dinero; null = efectivo.
   payment_account_id: number | null;
+  // N.° de operación (opcional).
+  operation_number: string | null;
   is_deleted: boolean;
   created_by: number | null;
   created_at: Date;
@@ -54,6 +56,7 @@ export function CashMovementFactory(sequelize: Sequelize): CashMovementStatic {
       quotation_id: { type: DataTypes.BIGINT, allowNull: true },
       purchase_order_id: { type: DataTypes.BIGINT, allowNull: true },
       payment_account_id: { type: DataTypes.BIGINT, allowNull: true },
+      operation_number: { type: DataTypes.STRING(50), allowNull: true },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

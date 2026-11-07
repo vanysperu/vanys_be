@@ -39,6 +39,7 @@ export async function createVariableGeneral(payload: VariableGeneralPartialAttri
     description: payload.description ?? "",
     ref1: payload.ref1 ?? "",
     ref2: payload.ref2 ?? "",
+    show_in_quotation: payload.show_in_quotation ?? true,
     company_id: payload.company_id!,
   });
   return created;

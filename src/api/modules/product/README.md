@@ -64,7 +64,7 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
   Cada código lleva el nombre del proveedor opcional (texto libre: no hay
   entidad de proveedores). Hasta 50; guardar reemplaza la lista completa. El
   SKU sigue siendo uno solo y es la llave de la subida masiva. La búsqueda
-  general (`searchTerm`) encuentra por nombre, SKU **o código**; el filtro
+  general (`searchTerm`, ver `product_search.ts`) encuentra por nombre, SKU, **código** o color, con plurales y varias palabras; el filtro
   `code` busca solo en los códigos.
 - **Código por color** (`product_code.color`, opcional): un código puede
   vincularse con uno de los colores del producto (ej. E1000-02 = Negro). Va en

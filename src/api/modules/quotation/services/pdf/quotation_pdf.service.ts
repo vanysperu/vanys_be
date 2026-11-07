@@ -551,7 +551,8 @@ export const generateQuotationPdf = async (quotationId: number): Promise<Buffer>
   const paymentAccounts = await DataBase.instance.variable_general.findAll({
     // Solo cuentas activas: una cuenta deshabilitada ya no debe ofrecérsele
     // al cliente para pagar (antes salían todas, incluidas las dadas de baja).
-    where: { category: "payment_account", company_id: plain.company_id, is_deleted: false },
+    // Tampoco las internas: el cliente solo ve las que la empresa eligió.
+    where: { category: "payment_account", company_id: plain.company_id, is_deleted: false, show_in_quotation: true },
     order: [["id", "ASC"]],
   });
 

@@ -15,6 +15,7 @@ export type CreateCashMovementDto = Pick<
   | "quotation_id"
   | "purchase_order_id"
   | "payment_account_id"
+  | "operation_number"
 >;
 
 const createCashMovement = async ({
@@ -50,6 +51,7 @@ const createCashMovement = async ({
         quotation_id: movement.quotation_id,
         purchase_order_id: movement.purchase_order_id,
         payment_account_id: movement.payment_account_id,
+        operation_number: movement.operation_number,
         is_deleted: false,
         created_by: createdBy ?? null,
         created_at: nowUtc(),

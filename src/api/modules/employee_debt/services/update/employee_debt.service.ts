@@ -30,6 +30,7 @@ const registerEmployeeDebtPayment = async ({
   companyId,
   amount,
   paymentAccountId,
+  operationNumber,
   scope,
   createdBy,
 }: {
@@ -39,6 +40,7 @@ const registerEmployeeDebtPayment = async ({
   // Monto a reponer ahora; debe ser > 0 y no superar el total pendiente.
   amount: number;
   paymentAccountId: number | null;
+  operationNumber: string | null;
   scope: WriteScope;
   createdBy: number;
 }) => {
@@ -76,6 +78,7 @@ const registerEmployeeDebtPayment = async ({
         user_id: userId,
         amount: fromCents(amountCents),
         payment_account_id: paymentAccountId,
+        operation_number: operationNumber,
         paid_at: paidAt,
         is_deleted: false,
         created_by: createdBy,

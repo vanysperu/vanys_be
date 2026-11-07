@@ -14,6 +14,7 @@ export interface EmployeeDebtPaymentListItem {
   paid_at: string;
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   is_deleted: boolean;
   registered_by_name: string | null;
   // Instante UTC (ISO) en que se registró; si está anulada, updated_at es
@@ -41,6 +42,7 @@ interface RawPaymentRow {
   paid_at: string;
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   is_deleted: number;
   registered_by_name: string | null;
   created_at: Date;
@@ -63,7 +65,7 @@ const getEmployeeDebtPayments = async (
 
   const rows = (await DataBase.instance.sequelize.query(
     `SELECT p.id, p.company_id, p.user_id, CONCAT(u.name, ' ', u.paternal_lastname) AS employee_name,
-            p.amount, p.paid_at, p.payment_account_id, pa.name AS payment_account_name, p.is_deleted,
+            p.amount, p.paid_at, p.payment_account_id, pa.name AS payment_account_name, p.operation_number, p.is_deleted,
             CONCAT(actor.name, ' ', actor.paternal_lastname) AS registered_by_name, p.created_at, p.updated_at,
             ${correctionsCountSql("employee_debt_payment", "p.id")} AS corrections_count
      FROM employee_debt_payment p
@@ -88,6 +90,7 @@ const getEmployeeDebtPayments = async (
     paid_at: row.paid_at,
     payment_account_id: row.payment_account_id,
     payment_account_name: row.payment_account_name,
+    operation_number: row.operation_number,
     is_deleted: Boolean(row.is_deleted),
     registered_by_name: row.registered_by_name,
     corrections_count: Number(row.corrections_count ?? 0),

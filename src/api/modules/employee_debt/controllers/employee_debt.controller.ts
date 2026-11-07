@@ -25,6 +25,7 @@ import {
 } from "../services/disable/employee_debt.service";
 import { EmployeeDebtDetailStatusFilter, getEmployeeDebtDetail } from "../services/find/employee_debt_detail.service";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
+import { toNullableText } from "../../money_correction/services/shared/correction_diff";
 import { resolveWriteScope } from "../../../../core/rbac/writeScope";
 import { toggleReasonOf } from "../../cash_movement/validators/adjustment_reason.validator";
 import { assertExpenseCategory } from "../services/shared/expense_category.service";
@@ -99,6 +100,7 @@ export const payEmployeeDebtController = asyncHandler(async (req: Request, res: 
       companyId: employeeCompanyId,
       amount: Number(req.body.amount),
       paymentAccountId,
+      operationNumber: toNullableText(req.body?.operation_number),
       scope,
       createdBy: user.userId,
     });
@@ -258,6 +260,7 @@ export const correctEmployeeDebtPaymentController = asyncHandler(async (req: Req
       amount: req.body.amount,
       paid_at: req.body.paid_at,
       payment_account_id: req.body.payment_account_id,
+      operation_number: req.body.operation_number,
       reason: String(req.body.reason),
     },
     scope: resolveWriteScope(user),

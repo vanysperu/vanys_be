@@ -36,6 +36,7 @@ export interface EmployeeDebtPaymentRecord {
   paid_at: string;
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   is_deleted: boolean;
   corrections_count: number;
   // Deudas que cubre, de la más antigua a la más nueva (al bajar el monto
@@ -55,6 +56,7 @@ interface RawPaymentRow {
   paid_at: string | Date;
   payment_account_id: number | null;
   payment_account_name: string | null;
+  operation_number: string | null;
   is_deleted: number | boolean;
   corrections_count: number | string;
 }
@@ -104,7 +106,7 @@ const findEmployeeDebtPaymentById = async ({
 }): Promise<EmployeeDebtPaymentRecord> => {
   const [payment] = await DataBase.instance.sequelize.query<RawPaymentRow>(
     `SELECT p.id, p.company_id, p.user_id, CONCAT(u.name, ' ', u.paternal_lastname) AS employee_name, p.amount,
-            p.paid_at, p.payment_account_id, pa.name AS payment_account_name, p.is_deleted,
+            p.paid_at, p.payment_account_id, pa.name AS payment_account_name, p.operation_number, p.is_deleted,
             ${correctionsCountSql("employee_debt_payment", "p.id")} AS corrections_count
      FROM employee_debt_payment p
      INNER JOIN user u ON u.id = p.user_id
@@ -123,7 +125,6 @@ const findEmployeeDebtPaymentById = async ({
             ${DEBT_BUSINESS_UNIT_SQL} AS business_unit_id
      FROM employee_debt ed
      ${DEBT_QUOTATION_JOINS_SQL}
-     LEFT JOIN quotation_expense dqe ON dqe.id = dpop.quotation_expense_id
      LEFT JOIN employee_debt_payment_allocation a ON a.employee_debt_id = ed.id AND a.employee_debt_payment_id = :paymentId
      WHERE ed.user_id = :userId AND ed.company_id = :companyId
        AND (a.id IS NOT NULL OR ed.status = 'pending')
@@ -145,6 +146,7 @@ const findEmployeeDebtPaymentById = async ({
     paid_at: toDateOnlyString(payment.paid_at),
     payment_account_id: payment.payment_account_id === null ? null : Number(payment.payment_account_id),
     payment_account_name: payment.payment_account_name,
+    operation_number: payment.operation_number,
     is_deleted: Boolean(payment.is_deleted),
     corrections_count: Number(payment.corrections_count),
     allocations: covered.map(toLine),

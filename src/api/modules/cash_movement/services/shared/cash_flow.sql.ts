@@ -2,11 +2,12 @@
 // usan exactamente estos fragmentos (texto fijo del código, nunca valores
 // del usuario), para que sus totales cuadren siempre.
 
-// Un gasto de cotización (alias `qe`) mueve la caja de la empresa salvo que
-// sea una compra pagada con plata de un trabajador: ahí la empresa no soltó
-// nada todavía — su egreso es la reposición.
+// Un gasto de cotización (alias `qe`) mueve la caja de la empresa salvo que lo
+// haya pagado un trabajador con su plata: ahí la empresa no soltó nada todavía,
+// su egreso es la reposición. En una compra manda la compra (`fpop`); en un
+// gasto manual, el propio gasto.
 export const EXPENSE_FUNDING_JOIN_SQL = "LEFT JOIN purchase_order_item_purchase fpop ON fpop.quotation_expense_id = qe.id";
-export const EXPENSE_PAID_BY_COMPANY_SQL = "(fpop.id IS NULL OR fpop.funding_source = 'company')";
+export const EXPENSE_PAID_BY_COMPANY_SQL = "COALESCE(fpop.funding_source, qe.funding_source) = 'company'";
 
 // Un gasto (o compra) anulado deja de existir para el dinero: ni Caja, ni
 // Estadísticas, ni el margen lo cuentan. TODA consulta que lea
@@ -15,15 +16,16 @@ export const EXPENSE_ACTIVE_SQL = "qe.is_deleted = false";
 
 // Reposiciones a trabajadores (alias `p`), una fila por asignación (`a`) a
 // cada deuda (`ed`). La tienda de cada parte es la de la cotización de la
-// compra o, en una deuda manual, la de la propia deuda: así una reposición
-// que cubre compras de dos tiendas se reparte entre ambas.
+// compra o del gasto o, en una deuda manual, la de la propia deuda: así una
+// reposición que cubre compras de dos tiendas se reparte entre ambas.
 export const REIMBURSEMENT_ALLOCATIONS_FROM_SQL = `employee_debt_payment p
   INNER JOIN employee_debt_payment_allocation a ON a.employee_debt_payment_id = p.id
   INNER JOIN employee_debt ed ON ed.id = a.employee_debt_id
   LEFT JOIN purchase_order_item_purchase rpop ON rpop.id = ed.purchase_order_item_purchase_id
   LEFT JOIN purchase_order_item rpoi ON rpoi.id = rpop.purchase_order_item_id
   LEFT JOIN purchase_order rpo ON rpo.id = rpoi.purchase_order_id
-  LEFT JOIN quotation rq ON rq.id = rpo.quotation_id`;
+  LEFT JOIN quotation_expense rqe ON rqe.id = ed.quotation_expense_id
+  LEFT JOIN quotation rq ON rq.id = COALESCE(rpo.quotation_id, rqe.quotation_id)`;
 
 export const REIMBURSEMENT_SCOPE_SQL = `p.is_deleted = false
   AND (:companyId IS NULL OR p.company_id = :companyId)

@@ -75,6 +75,7 @@ const createManualEmployeeDebt = async (input: CreateManualEmployeeDebtInput) =>
         user_id: input.userId,
         origin: "manual",
         purchase_order_item_purchase_id: null,
+        quotation_expense_id: null,
         description: input.description,
         category: input.category,
         business_unit_id: input.businessUnitId,

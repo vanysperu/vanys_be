@@ -5,7 +5,9 @@ import request from "supertest";
 // Express sin servidor HTTP, y evita duplicar el bootstrap de Sequelize.
 export const BASE_URL = process.env.API_BASE_URL ?? "http://localhost:4750";
 
-export const QA_COMPANY_ADMIN = { email: "admin.qa@acme.test", password: "Test1234" };
+// QA_ADMIN_EMAIL: correr las suites con otro admin de la misma empresa, para no
+// cerrar la sesión de quien esté usando admin.qa (una sesión por usuario).
+export const QA_COMPANY_ADMIN = { email: process.env.QA_ADMIN_EMAIL ?? "admin.qa@acme.test", password: "Test1234" };
 
 export interface ApiSuccess<T> {
   success: true;

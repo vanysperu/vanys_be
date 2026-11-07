@@ -229,7 +229,9 @@ const correctManualEmployeeDebt = async ({
     if (debt.origin !== "manual") {
       throw new AppError(
         409,
-        "Esta deuda viene de una compra de orden: se corrige desde la compra (en su orden de compra o en Caja).",
+        debt.origin === "expense"
+          ? "Esta deuda viene de un gasto de cotización: se corrige desde el gasto (en la cotización o en Caja)."
+          : "Esta deuda viene de una compra de orden: se corrige desde la compra (en su orden de compra o en Caja).",
         undefined,
         "DEBT_FROM_PURCHASE"
       );

@@ -30,6 +30,7 @@ export const CORRECTABLE_CASH_MOVEMENT_FIELDS = [
   "category",
   "occurred_at",
   "payment_account_id",
+  "operation_number",
   "description",
   "quotation_id",
   "purchase_order_id",
@@ -45,6 +46,7 @@ export interface CorrectCashMovementInput {
   category?: string;
   occurred_at?: string;
   payment_account_id?: number | string | null;
+  operation_number?: string | null;
   description?: string | null;
   quotation_id?: number | string | null;
   purchase_order_id?: number | string | null;
@@ -68,6 +70,7 @@ type CorrectableSnapshot = {
   category: string;
   occurred_at: string;
   payment_account_id: number | null;
+  operation_number: string | null;
   description: string | null;
   quotation_id: number | null;
   purchase_order_id: number | null;
@@ -78,6 +81,7 @@ const snapshotOf = (movement: CashMovementModel): CorrectableSnapshot => ({
   category: movement.category,
   occurred_at: toDateOnlyString(movement.occurred_at),
   payment_account_id: toNullableId(movement.payment_account_id),
+  operation_number: toNullableText(movement.operation_number),
   description: toNullableText(movement.description),
   quotation_id: toNullableId(movement.quotation_id),
   purchase_order_id: toNullableId(movement.purchase_order_id),
@@ -90,6 +94,7 @@ const requestedSnapshot = (current: CorrectableSnapshot, input: CorrectCashMovem
     category: input.category === undefined ? undefined : input.category.trim(),
     occurred_at: input.occurred_at,
     payment_account_id: input.payment_account_id === undefined ? undefined : toNullableId(input.payment_account_id),
+    operation_number: input.operation_number === undefined ? undefined : toNullableText(input.operation_number),
     description: input.description === undefined ? undefined : toNullableText(input.description),
     quotation_id: input.quotation_id === undefined ? undefined : toNullableId(input.quotation_id),
     purchase_order_id: input.purchase_order_id === undefined ? undefined : toNullableId(input.purchase_order_id),

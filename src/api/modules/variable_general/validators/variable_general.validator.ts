@@ -45,6 +45,10 @@ export const paginationAndFilterValidator = [
 // Columnas STRING(255) en DB (create-variable-general.js) — sin este tope,
 // un valor muy largo produce el mismo error crudo de MySQL (mismo motivo
 // documentado en quotation.validator.ts).
+// Cuentas de pago: ¿sale en el PDF de la cotización? Ver el modelo.
+const showInQuotationRule = () =>
+  body("show_in_quotation").optional().isBoolean().withMessage("show_in_quotation debe ser true o false").toBoolean();
+
 export const createVariableGeneralValidator = [
   body("category")
     .isString()
@@ -95,6 +99,7 @@ export const createVariableGeneralValidator = [
     .bail()
     .isLength({ max: 255 })
     .withMessage("Máximo 255 caracteres"),
+  showInQuotationRule(),
 ];
 
 // ✏️ Validar actualización de registro
@@ -149,4 +154,5 @@ export const updateVariableGeneralValidator = [
     .bail()
     .isLength({ max: 255 })
     .withMessage("Máximo 255 caracteres"),
+  showInQuotationRule(),
 ];

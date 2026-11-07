@@ -62,12 +62,11 @@ const findEmployeeDebtById = async ({ debtId, scope }: { debtId: number; scope: 
     `SELECT ed.id, ed.company_id, ed.user_id, CONCAT(u.name, ' ', u.paternal_lastname) AS user_name, ed.origin,
             COALESCE(ed.description, dqe.description) AS description, ed.category, ed.business_unit_id,
             bu.business_code AS business_unit_name, ${DEBT_BUSINESS_UNIT_SQL} AS effective_business_unit_id,
-            ed.incurred_at, ed.amount, ed.paid_amount, ed.status, ed.paid_at, dpo.quotation_id,
+            ed.incurred_at, ed.amount, ed.paid_amount, ed.status, ed.paid_at, dq.id AS quotation_id,
             dpo.id AS purchase_order_id, ${correctionsCountSql("employee_debt", "ed.id")} AS corrections_count
      FROM employee_debt ed
      INNER JOIN user u ON u.id = ed.user_id
      ${DEBT_QUOTATION_JOINS_SQL}
-     LEFT JOIN quotation_expense dqe ON dqe.id = dpop.quotation_expense_id
      LEFT JOIN business_unit bu ON bu.id = ed.business_unit_id
      WHERE ed.id = :debtId`,
     { type: QueryTypes.SELECT, replacements: { debtId } }
