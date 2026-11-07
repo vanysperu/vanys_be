@@ -1,7 +1,7 @@
 import { DataBase } from "../../../../../database";
 import { VariableGeneralPartialAttributes } from "../../models/variable_general.model";
 import { AppError } from "../../../../../core/errors/AppError";
-import { PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
+import { assertPaymentAccountNumber, PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
 import { loadManageableVariable } from "../shared/variable_scope.service";
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/company_asset.service";
@@ -32,6 +32,15 @@ export async function updateVariableGeneralById(
   const changesCategory = payload.category !== undefined && payload.category !== current.category;
   if (current.category === PAYMENT_ACCOUNT_CATEGORY && changesCategory) {
     throw new AppError(400, "Una cuenta de pago no puede cambiar de categoría. Si ya no se usa, deshabilítala.");
+  }
+
+  // Solo si cambia el tipo o el número: una cuenta vieja con un número inválido
+  // tiene que poder seguir marcándose, renombrándose o cambiando su QR.
+  const nextAccountType = payload.prefix_id ?? current.prefix_id;
+  const nextAccountNumber = payload.ref1 !== undefined ? payload.ref1 : current.ref1;
+  const changesAccountNumber = nextAccountType !== current.prefix_id || nextAccountNumber !== current.ref1;
+  if (current.category === PAYMENT_ACCOUNT_CATEGORY && changesAccountNumber) {
+    assertPaymentAccountNumber(nextAccountType, nextAccountNumber);
   }
 
   // Si cambia ref2 (QR de una cuenta de pago), el nuevo tiene que ser una

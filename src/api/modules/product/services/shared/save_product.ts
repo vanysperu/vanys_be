@@ -1,4 +1,4 @@
-import { Transaction } from "sequelize";
+import { Op, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { AppError } from "../../../../../core/errors/AppError";
 import { nowUtc } from "../../../../../utils/dateUtils";
@@ -60,6 +60,34 @@ const nextCategoryArgs = (current: ProductModel, input: ProductWriteInput) => {
 const touchesCategory = (input: ProductWriteInput) =>
   input.category_id !== undefined || input.subcategory_id !== undefined;
 
+// Un SKU identifica a un solo producto de la empresa: la subida masiva hace
+// upsert por SKU, así que un producto deshabilitado también lo ocupa. La
+// colación de la columna ya ignora mayúsculas. Va acá y no como índice único
+// a propósito: una base con duplicados previos no podría aplicar esa migración
+// y la app no arranca si una migración falla. Por eso solo se valida al crear
+// o al cambiar el SKU: un duplicado viejo se sigue pudiendo editar.
+const assertSkuAvailable = async ({
+  companyId,
+  productId,
+  sku,
+  transaction,
+}: {
+  companyId: number;
+  productId: number | null;
+  sku: string | null | undefined;
+  transaction: Transaction;
+}): Promise<void> => {
+  if (!sku) return;
+  const taken = await DataBase.instance.product.findOne({
+    where: { company_id: companyId, sku, ...(productId === null ? {} : { id: { [Op.ne]: productId } }) },
+    attributes: ["id", "name", "is_deleted"],
+    transaction,
+  });
+  if (!taken) return;
+  const owner = taken.is_deleted ? `el producto deshabilitado "${taken.name}"` : `el producto "${taken.name}"`;
+  throw new AppError(409, `El SKU ${sku} ya lo usa ${owner}`, undefined, "DUPLICATE_SKU");
+};
+
 /** Crea un producto de `companyId` con sus colores, en la transacción dada. */
 export async function createProductRecord({
   companyId,
@@ -82,6 +110,7 @@ export async function createProductRecord({
     transaction,
   });
   if (input.image_path) await assertProductImageUsable(input.image_path, companyId, transaction);
+  await assertSkuAvailable({ companyId, productId: null, sku: input.sku, transaction });
   // El SKU no puede ser el código de proveedor de otro producto.
   await assertSkuNotUsedAsCode({ companyId, productId: null, sku: input.sku, transaction });
 
@@ -150,7 +179,10 @@ export async function updateProductRecord({
     : null;
 
   const changesSku = input.sku !== undefined && (input.sku || null) !== product.sku;
-  if (changesSku) await assertSkuNotUsedAsCode({ companyId, productId: Number(product.id), sku: input.sku, transaction });
+  if (changesSku) {
+    await assertSkuAvailable({ companyId, productId: Number(product.id), sku: input.sku, transaction });
+    await assertSkuNotUsedAsCode({ companyId, productId: Number(product.id), sku: input.sku, transaction });
+  }
 
   const replacesImage = input.image_path !== undefined && (input.image_path || null) !== product.image_path;
   if (replacesImage && input.image_path) await assertProductImageUsable(input.image_path, companyId, transaction);

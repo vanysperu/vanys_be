@@ -101,7 +101,7 @@ export async function createCashClosingTestCompany(superToken: string): Promise<
       title: "Cuenta",
       prefix_id: prefix,
       name,
-      ref1: "123",
+      ref1: "987654321",
       company_id: companyId,
     });
     if (res.status !== 200) throw new Error(`no se pudo crear la cuenta ${name}: ${JSON.stringify(res.body)}`);

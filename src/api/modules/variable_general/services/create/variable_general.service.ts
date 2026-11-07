@@ -3,8 +3,10 @@ import { VariableGeneralPartialAttributes } from "../../models/variable_general.
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { assertProductSubcategoryParent, assertUniqueProductCategoryName } from "../shared/product_category.service";
 import { assertUniqueAdvertisementZoneCode } from "../shared/advertisement_zone.service";
+import { assertPaymentAccountNumber, PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
 
 export async function createVariableGeneral(payload: VariableGeneralPartialAttributes) {
+  if (payload.category === PAYMENT_ACCOUNT_CATEGORY) assertPaymentAccountNumber(payload.prefix_id, payload.ref1);
   // ref2 guarda el QR de una cuenta de pago: tiene que ser una imagen vigente
   // de la misma empresa (ver assertCompanyAssetUsable).
   await assertCompanyAssetUsable(payload.ref2, payload.company_id ?? null);

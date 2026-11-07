@@ -55,7 +55,7 @@ describe("Corrección de pagos", () => {
       title: "Cuenta",
       prefix_id: prefix,
       name,
-      ref1: "123",
+      ref1: "987654321",
       company_id: companyId,
     });
     expect(res.status).toBe(200);

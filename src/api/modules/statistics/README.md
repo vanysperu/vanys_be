@@ -48,6 +48,8 @@ dos o ninguno; por defecto los últimos 30 días; máximo 3 años),
   cuenta.
 - **Por cobrar por antigüedad** es una foto de hoy (no depende del periodo):
   mismo universo que el módulo Por cobrar, por días desde la emisión.
+- Las tarjetas muestran los montos con **céntimos** (reporte de QA): sin
+  decimales, S/ 59.44 y S/ 58.85 se veían iguales y no cuadraban con las tablas.
 - Rankings: top 5 clientes y top 6 productos/técnicas por cotizaciones ganadas;
   cobros por cuenta con máximo 6 barras (el resto se junta en "Otras
   cuentas"); vendedores = quien creó la cotización (máx. 20).

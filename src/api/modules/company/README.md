@@ -42,6 +42,9 @@
   nuevo sea una imagen existente de la misma empresa (`400` si no), se
   actualiza la empresa y se borra la imagen del logo anterior. Así no
   quedan imágenes huérfanas en `company_asset`.
+- **Quitar el logo**: mismo flujo con `logo_url: null` (botón "Quitar logo" en
+  Documentos de la empresa, se aplica al guardar). No mandar `logo_url` lo
+  conserva.
 
 ## Campos especiales
 - `logo_url`: ruta pública `/uploads/company-assets/<company_id>/<uuid>.<ext>`

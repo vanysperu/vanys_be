@@ -29,6 +29,11 @@
   historial a "Efectivo" y Caja dejaba de cuadrar. Se **deshabilita**: deja
   de ofrecerse en los selectores y su historial se conserva. La base también
   lo impide (llaves `RESTRICT`).
+- **Número de Yape y Plin** (reporte de QA): 9 dígitos que empiezan con 9
+  (`400 INVALID_PAYMENT_ACCOUNT_NUMBER`). Se valida al crear y solo cuando
+  cambia el tipo o el número: una cuenta vieja con un número inválido se sigue
+  pudiendo marcar, renombrar, cambiarle el QR y usar en pagos. Una cuenta
+  bancaria no tiene formato fijo.
 - **Cuentas internas** (`show_in_quotation = false`, pedido explícito del
   usuario: "hay cuentas internas y externas"): no salen en el PDF de la
   cotización, pero se siguen usando para registrar pagos, gastos y Caja. Por

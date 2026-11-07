@@ -52,6 +52,13 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 - `create` usa una lista blanca explícita de campos (el body no puede fijar
   `id`, `is_deleted` ni auditoría); `company_id` debe ser el de la sesión.
 - Un SKU vacío (`""`) se guarda como `null` (sin SKU).
+- **El SKU no se repite dentro de la empresa** (reporte de QA): ni con otras
+  mayúsculas, ni contra un producto deshabilitado, que sigue ocupándolo porque
+  la subida masiva lo encuentra por SKU (`409 DUPLICATE_SKU`, el mensaje dice
+  cuál). Solo se valida al crear o al cambiar el SKU. **No hay índice único a
+  propósito**: una base con duplicados previos no podría aplicar esa migración
+  y la app no arranca si una migración falla. Por eso un duplicado viejo se
+  sigue pudiendo editar, y dos altas simultáneas del mismo SKU podrían pasar.
 - Un producto deshabilitado no se puede usar en cotizaciones nuevas.
 - **Categoría y subcategoría** (pedido explícito del usuario): filas de
   Variables Generales (`product_category` / `product_subcategory`, la

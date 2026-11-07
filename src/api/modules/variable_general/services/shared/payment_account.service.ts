@@ -6,6 +6,25 @@ import { AppError } from "../../../../../core/errors/AppError";
 // con esta categoría — las que se cargan en "Documentos de la empresa".
 export const PAYMENT_ACCOUNT_CATEGORY = "payment_account";
 
+// Yape y Plin se identifican por un celular peruano: 9 dígitos que empiezan
+// con 9. Una cuenta bancaria no tiene un formato único, así que no se valida.
+const MOBILE_WALLETS = new Map([
+  ["yape", "Yape"],
+  ["plin", "Plin"],
+]);
+const PERU_MOBILE_REGEX = /^9\d{8}$/;
+
+export const assertPaymentAccountNumber = (type: string | null | undefined, number: string | null | undefined): void => {
+  const wallet = MOBILE_WALLETS.get(type ?? "");
+  if (!wallet || PERU_MOBILE_REGEX.test(number ?? "")) return;
+  throw new AppError(
+    400,
+    `El número de ${wallet} debe tener 9 dígitos y empezar con 9`,
+    undefined,
+    "INVALID_PAYMENT_ACCOUNT_NUMBER"
+  );
+};
+
 /**
  * Valida la cuenta por la que se mueve un dinero (pago recibido, ingreso o
  * egreso de caja, reposición a un trabajador) y devuelve su id, o null si es
