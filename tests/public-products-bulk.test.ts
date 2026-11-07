@@ -159,11 +159,17 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
       name: `De otra empresa jest ${sku}`,
       company_id: otherCompanyId,
     });
-    const withGlobal = await request(BASE_URL)
-      .get(`/api/public/product-categories?include_global=true&search=${encodeURIComponent(`jest ${sku}`)}&limit=50`)
-      .set("X-Api-Key", plainKey);
-    expect(withGlobal.status).toBe(200);
-    const byId = new Map(withGlobal.body.data.data.map((row: { id: number }) => [row.id, row]));
+    // Todas las páginas: con include_global también salen las globales de otras pruebas.
+    const withGlobalRows: { id: number }[] = [];
+    for (let page = 1; page <= 20; page += 1) {
+      const withGlobal = await request(BASE_URL)
+        .get(`/api/public/product-categories?include_global=true&limit=100&page=${page}`)
+        .set("X-Api-Key", plainKey);
+      expect(withGlobal.status).toBe(200);
+      withGlobalRows.push(...withGlobal.body.data.data);
+      if (page >= withGlobal.body.data.meta.totalPages) break;
+    }
+    const byId = new Map(withGlobalRows.map((row) => [row.id, row]));
     expect(byId.get(mainOnlyCategoryId)).toMatchObject({ is_global: false });
     expect(byId.get(categoryId)).toMatchObject({ is_global: true, subcategories: [{ id: subcategoryId }] });
     expect(byId.has(otherCategoryId)).toBe(false);
@@ -171,8 +177,11 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     const invalid = await request(BASE_URL).get("/api/public/product-categories?include_global=quizas").set("X-Api-Key", plainKey);
     expect(invalid.status).toBe(400);
 
+    // `search` ahora busca PRODUCTOS (pedido de la web): las categorías se
+    // siguen listando, con 0 productos.
     const bySearch = await request(BASE_URL).get("/api/public/product-categories?search=no-existe-xyz").set("X-Api-Key", plainKey);
-    expect(bySearch.body.data.meta.total).toBe(0);
+    expect(bySearch.body.data.summary).toEqual({ total: 0, without_category: 0 });
+    expect(bySearch.body.data.data.every((row: { product_count: number }) => row.product_count === 0)).toBe(true);
     expect((await request(BASE_URL).get("/api/public/product-categories")).status).toBe(401);
   });
 

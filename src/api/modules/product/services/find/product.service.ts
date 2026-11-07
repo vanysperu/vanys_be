@@ -1,4 +1,4 @@
-import { Op, FindAndCountOptions, WhereOptions, literal } from "sequelize";
+import { Op, FindAndCountOptions, Order, WhereOptions, literal } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { ProductAttributes } from "../../model/product.model";
@@ -26,6 +26,10 @@ interface ProductListOptions extends IListOptions<ProductAttributes> {
   color?: string;
   // Productos con un código de proveedor que contiene el texto.
   code?: string;
+  // Orden propio (la API pública ordena por precio o categoría). Sin él, por
+  // `orderBy`/`orderDir` con desempate por id.
+  // (No se llama `order`: IListOptions ya usa ese nombre con otro tipo.)
+  sortOrder?: Order;
 }
 
 // Columnas por las que se puede ordenar. `orderBy` llega del query string:
@@ -73,9 +77,16 @@ const getProductsList = async (options: ProductListOptions): Promise<PaginatedRe
   if (options.productSubcategoryId) conditions.push({ subcategory_id: options.productSubcategoryId });
   if (options.color) conditions.push(colorWhere(options.color));
 
+  // Desempate por id: productos creados en la misma tanda comparten
+  // created_at y, sin él, una página podía repetir o saltar productos.
+  const defaultOrder: Order = [
+    [SORTABLE_COLUMNS.has(orderBy) ? orderBy : "created_at", orderDir],
+    ["id", orderDir],
+  ];
+
   const queryOptions: FindAndCountOptions<ProductAttributes> = {
     where: { [Op.and]: conditions },
-    order: [[SORTABLE_COLUMNS.has(orderBy) ? orderBy : "created_at", orderDir]],
+    order: options.sortOrder ?? defaultOrder,
     limit,
     offset: getOffset(page, limit),
   };

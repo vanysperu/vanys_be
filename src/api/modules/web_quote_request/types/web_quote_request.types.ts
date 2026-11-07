@@ -32,6 +32,11 @@ export interface WebQuoteAddedItem {
   product_id: number;
   product_name: string;
   quantity: number;
+  // Pedido mínimo del producto (null = sin mínimo).
+  min_order_quantity: number | null;
+  // true = se pidió menos que el mínimo: el item entra igual y queda marcado
+  // para que el equipo lo revise (decisión del usuario).
+  below_min_order: boolean;
 }
 
 // SKU o código que la web mandó y no corresponde a ningún producto activo de

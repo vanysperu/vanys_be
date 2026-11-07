@@ -26,6 +26,9 @@ export interface ProductAttributes {
   // Si es false, el producto se cotiza SIN técnica de personalización (no
   // hay selector de técnica en la cotización ni técnica en el PDF).
   requires_customization: boolean;
+  // Pedido mínimo: la menor cantidad que se puede pedir (null = sin mínimo).
+  // Informativo: la cotización no lo bloquea (decisión del usuario).
+  min_order_quantity: number | null;
   // Categoría / subcategoría: filas de Variables Generales (category =
   // "product_category" / "product_subcategory"). Ver services/shared/catalog.ts.
   category_id: number | null;
@@ -64,6 +67,7 @@ export function ProductFactory(sequelize: Sequelize): ProductStatic {
       price_half_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       requires_customization: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      min_order_quantity: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
       category_id: { type: DataTypes.BIGINT, allowNull: true },
       subcategory_id: { type: DataTypes.BIGINT, allowNull: true },
       image_path: { type: DataTypes.STRING(255), allowNull: true },

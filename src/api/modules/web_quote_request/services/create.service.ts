@@ -8,6 +8,7 @@ import { getIgvRate } from "../../quotation/services/shared/tax_config";
 import { logQuotationEvent } from "../../quotation/services/timeline/quotation_event.service";
 import { WebQuoteAddedItem, WebQuoteRequestInput, WebQuoteRequestResult } from "../types/web_quote_request.types";
 import { suggestDraftPricing } from "./shared/draft_pricing";
+import { describeBelowMinimum, isBelowMinOrder, minOrderOf } from "./shared/min_order";
 import { describeMissingItems, notifyMissingProducts } from "./shared/notify_missing_products";
 import { resolveWebClient } from "./shared/resolve_client";
 import { loadWebCatalog, resolveWebItems } from "./shared/resolve_items";
@@ -113,10 +114,15 @@ export async function createWebQuoteRequestService(
         ? ` ${pendingNotes.join(" ")} ` +
           (notifiedCount > 0 ? `Se avisó a ${notifiedCount} usuario(s).` : "No había ningún usuario a quien avisar.")
         : "";
+    // Pedido mínimo (decisión del usuario): el item entra igual y queda
+    // marcado en la respuesta y en el Historial para que el equipo lo revise.
+    const belowMinimum = found.filter(({ item }) => isBelowMinOrder(item.product, item.quantity));
+    const belowMinimumNote =
+      belowMinimum.length > 0 ? ` Debajo del pedido mínimo: ${belowMinimum.map(({ item }) => describeBelowMinimum(item)).join("; ")}.` : "";
     await logQuotationEvent({
       quotationId: quotation.id,
       action: "created",
-      description: `Pedido recibido desde la web (${apiKey.name}) con ${found.length} producto(s).${missingNote}`,
+      description: `Pedido recibido desde la web (${apiKey.name}) con ${found.length} producto(s).${missingNote}${belowMinimumNote}`,
       actorId: undefined,
       transaction,
     });
@@ -128,6 +134,8 @@ export async function createWebQuoteRequestService(
       product_id: product.id,
       product_name: product.name,
       quantity: item.quantity,
+      min_order_quantity: minOrderOf(product),
+      below_min_order: isBelowMinOrder(product, item.quantity),
     }));
 
     return {
@@ -137,7 +145,11 @@ export async function createWebQuoteRequestService(
       client_created: created,
       items_added: itemsAdded,
       missing_items: missingItems,
-      warnings: [...warnings, ...variantIssues],
+      warnings: [
+        ...warnings,
+        ...variantIssues,
+        ...belowMinimum.map(({ item }) => `Debajo del pedido mínimo: ${describeBelowMinimum(item)}`),
+      ],
     };
   });
 }

@@ -35,6 +35,16 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 ## Reglas de negocio propias del módulo
 - Hasta 4 precios por unidad según el volumen (unidad, ciento, medio millar,
   millar); se exige al menos uno.
+- **Pedido mínimo** (`min_order_quantity`, pedido explícito del usuario): la
+  menor cantidad que se puede pedir, entero de 1 a 1 000 000 u opcional (`null`
+  = sin mínimo, valor de los productos que ya existían). Se edita en la
+  pantalla de Productos y en la subida masiva; al actualizar, si no se manda
+  se conserva y `null` lo quita. Es **solo informativo** (decisión del
+  usuario): la cotización no lo valida; el formulario y el detalle muestran
+  "Debajo del mínimo (N)" junto a la cantidad
+  (`grulla_fe/.../quotations/components/MinOrderNotice.tsx`). Un pedido de la
+  web por debajo se recibe igual y queda marcado (ver
+  [`web_quote_request`](../web_quote_request/README.md)).
 - **"Requiere personalización"** (`requires_customization`, pedido explícito
   del usuario: "muchos productos no requieren personalizado"). Apagado por
   defecto; la migración `20261107110000` lo apagó en todos los productos (se
@@ -106,3 +116,5 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
 ## Campos especiales
 - Precios `DECIMAL(10,2)` opcionales; `requires_customization` BOOLEAN
   (default `false`).
+- `min_order_quantity` INT UNSIGNED, `NULL` = sin mínimo (migración
+  `20261109150000-add-min-order-quantity-to-product.js`).

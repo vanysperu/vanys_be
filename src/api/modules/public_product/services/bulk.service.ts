@@ -48,6 +48,7 @@ const toWriteInput = (item: BulkProductItem): ProductWriteInput => ({
   price_hundred: item.price_hundred,
   price_half_thousand: item.price_half_thousand,
   price_thousand: item.price_thousand,
+  min_order_quantity: item.min_order_quantity,
   category_id: item.category_id,
   subcategory_id: item.subcategory_id,
   colors: item.colors,

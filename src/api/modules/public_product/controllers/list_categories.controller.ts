@@ -6,8 +6,9 @@ import { parsePaginationParams } from "../../../../core/validators/pagination.va
 import { listPublicCategoriesService } from "../services/list_categories.service";
 
 // GET /public/product-categories?page=&limit=&search=&include_global=true
-// Categorías (con sus subcategorías) de la empresa de la key. Las globales
-// solo llegan si se piden con include_global=true.
+// Categorías (con sus subcategorías) de la empresa de la key, con cuántos
+// productos activos de la búsqueda (`search`) tiene cada una y un resumen.
+// Las globales solo llegan si se piden con include_global=true.
 export const listPublicCategoriesController = asyncHandler(async (req: Request, res: Response) => {
   const apiKey = req.apiKey;
   if (!apiKey) throw new AppError(401, "API key inválida o revocada", undefined, "INVALID_API_KEY");

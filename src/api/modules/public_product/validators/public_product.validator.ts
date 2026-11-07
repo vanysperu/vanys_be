@@ -48,17 +48,53 @@ export const bulkProductsValidator = [
   ...productCatalogRules("products.*."),
 ];
 
+// `skus`: varios SKU separados por coma (carrito, fichas por enlace y fotos de
+// merchandising de la web). Hasta 100 distintos; los vacíos y repetidos no cuentan.
+export const MAX_SKUS = 100;
+// 100 SKU de hasta 50 caracteres más sus comas (y algo de holgura por espacios).
+const MAX_SKUS_PARAM_LENGTH = 6000;
+
+export const parseSkuList = (value: string): string[] => [
+  ...new Set(
+    value
+      .split(",")
+      .map((sku) => sku.trim())
+      .filter(Boolean)
+  ),
+];
+
+export const PUBLIC_PRODUCT_ORDER_BY = ["name", "sku", "price_unit", "price_hundred", "category", "created_at"] as const;
+
 export const listPublicProductsValidator = [
   query("search").optional({ values: "falsy" }).isString().isLength({ max: 100 }),
   query("sku").optional({ values: "falsy" }).isString().isLength({ max: 50 }),
+  query("skus")
+    .optional({ values: "falsy" })
+    .isString()
+    .withMessage("skus debe ser una lista de SKU separados por coma")
+    .bail()
+    .isLength({ max: MAX_SKUS_PARAM_LENGTH })
+    .withMessage(`Envía como máximo ${MAX_SKUS} SKU en skus`)
+    .bail()
+    .custom((value: string) => parseSkuList(value).length <= MAX_SKUS)
+    .withMessage(`Envía como máximo ${MAX_SKUS} SKU en skus`),
   query("category_id").optional({ values: "falsy" }).isInt({ gt: 0 }).withMessage("category_id debe ser un id válido"),
+  query("without_category")
+    .optional({ values: "falsy" })
+    .isIn(["true", "false"])
+    .withMessage("without_category debe ser true o false")
+    .bail()
+    // Pedir una categoría y a la vez los productos sin categoría no tiene sentido.
+    .custom((value: string, { req }) => !(value === "true" && req.query?.category_id))
+    .withMessage("No envíes category_id junto con without_category=true"),
   query("subcategory_id").optional({ values: "falsy" }).isInt({ gt: 0 }).withMessage("subcategory_id debe ser un id válido"),
   query("color").optional({ values: "falsy" }).isString().isLength({ max: 60 }),
   query("code").optional({ values: "falsy" }).isString().isLength({ max: 60 }),
-  query("orderBy").optional({ values: "falsy" }).isIn(["name", "sku", "price_unit", "created_at"]).withMessage("orderBy no válido"),
+  query("orderBy").optional({ values: "falsy" }).isIn([...PUBLIC_PRODUCT_ORDER_BY]).withMessage("orderBy no válido"),
 ];
 
 export const listPublicCategoriesValidator = [
+  // Búsqueda de productos: cambia las cantidades (product_count y summary).
   query("search").optional({ values: "falsy" }).isString().isLength({ max: 100 }),
   query("include_global").optional({ values: "falsy" }).isIn(["true", "false"]).withMessage("include_global debe ser true o false"),
 ];

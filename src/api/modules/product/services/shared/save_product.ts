@@ -21,6 +21,8 @@ export interface ProductWriteInput {
   price_half_thousand?: number | null;
   price_thousand?: number | null;
   requires_customization?: boolean;
+  // Pedido mínimo (entero ≥ 1); null = sin mínimo.
+  min_order_quantity?: number | null;
   category_id?: number | null;
   subcategory_id?: number | null;
   colors?: ProductColorInput[];
@@ -131,6 +133,7 @@ export async function createProductRecord({
       price_thousand: toNullablePrice(input.price_thousand),
       // Apagado por defecto (decisión del usuario): la mayoría no se personaliza.
       requires_customization: input.requires_customization ?? false,
+      min_order_quantity: input.min_order_quantity ?? null,
       category_id: categories.category_id,
       subcategory_id: categories.subcategory_id,
       image_path: input.image_path || null,
@@ -198,6 +201,8 @@ export async function updateProductRecord({
       price_half_thousand: toNullablePrice(nextPrices.price_half_thousand),
       price_thousand: toNullablePrice(nextPrices.price_thousand),
       requires_customization: input.requires_customization ?? product.requires_customization,
+      // undefined = no se mandó (se conserva); null = sin mínimo.
+      min_order_quantity: input.min_order_quantity === undefined ? product.min_order_quantity : input.min_order_quantity,
       category_id: categories ? categories.category_id : product.category_id,
       subcategory_id: categories ? categories.subcategory_id : product.subcategory_id,
       image_path: replacesImage ? input.image_path || null : product.image_path,

@@ -60,7 +60,8 @@ Content-Type: application/json
     "status": "quote_requested",
     "client_id": 2909,
     "client_created": true,
-    "items_added": [{ "sku": "LAP-0034", "code": "E6000-01", "color": "Negro", "product_id": 99, "product_name": "Lapicero", "quantity": 100 }],
+    "items_added": [{ "sku": "LAP-0034", "code": "E6000-01", "color": "Negro", "product_id": 99, "product_name": "Lapicero", "quantity": 100,
+                      "min_order_quantity": 50, "below_min_order": false }],
     "missing_items": [{ "sku": null, "code": "E9999", "quantity": 50 }],
     "warnings": []
   }
@@ -96,6 +97,14 @@ Content-Type: application/json
   Historial de la cotización registra los SKU y a cuántos usuarios se avisó.
   El equipo crea el producto y lo agrega al completar. Si
   faltan todos, la cotización se crea igual, sin items.
+- **Pedido mínimo** (decisión del usuario: "recibirlo y marcarlo"): un item
+  con menos unidades que el `min_order_quantity` del producto **entra igual**
+  y queda marcado para que el equipo lo revise al completar:
+  `items_added[].below_min_order: true` (con `min_order_quantity`), un aviso en
+  `warnings` ("Debajo del pedido mínimo: SKU Nombre (se pidieron 30, mínimo
+  50)") y la misma línea en el Historial. No crea Recordatorios. En la
+  cotización, el item muestra "Debajo del mínimo (N)" mientras la cantidad
+  siga por debajo (`services/shared/min_order.ts`).
 - **Precio sugerido (borrador)**: cada item toma la tarifa de catálogo de
   mayor volumen que alcanza la cantidad (≥1000 millar, ≥500 medio millar,
   ≥100 ciento, si no unidad); si el producto no tiene esa tarifa, la

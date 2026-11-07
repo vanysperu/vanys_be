@@ -1,3 +1,4 @@
+import { PaginatedResult } from "../../../../core/utils/paginate";
 import { ProductColorDto } from "../../product/services/shared/colors";
 import { ProductCodeDto } from "../../product/services/shared/codes";
 import { CatalogRef } from "../../product/services/shared/product_mapper";
@@ -54,6 +55,9 @@ export interface PublicProductDto {
   price_half_thousand: number | null;
   price_thousand: number | null;
   requires_customization: boolean;
+  // Pedido mínimo (null = sin mínimo). Informativo: un pedido por debajo se
+  // recibe igual y queda marcado (ver web_quote_request).
+  min_order_quantity: number | null;
   category: CatalogRef | null;
   subcategory: CatalogRef | null;
   colors: ProductColorDto[];
@@ -61,4 +65,32 @@ export interface PublicProductDto {
   codes: ProductCodeDto[];
   // null si no tiene foto o si la empresa no tiene habilitadas las fotos.
   image_url: string | null;
+}
+
+export interface PublicSubcategoryDto {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface PublicCategoryDto {
+  id: number;
+  name: string;
+  code: string;
+  // true = categoría global (solo llega con include_global).
+  is_global: boolean;
+  // Productos activos de esta categoría que cumplen `search` (0 si ninguno).
+  product_count: number;
+  subcategories: PublicSubcategoryDto[];
+}
+
+// GET /public/product-categories: la página de categorías más el resumen de
+// TODA la búsqueda (no solo de la página).
+export interface PublicCategoriesResult extends PaginatedResult<PublicCategoryDto> {
+  summary: {
+    // Productos activos que cumplen `search` (= meta.total de /public/products).
+    total: number;
+    // De esos, los que no tienen categoría vigente.
+    without_category: number;
+  };
 }

@@ -2,10 +2,17 @@ import { body } from "express-validator";
 import { HEX_COLOR_REGEX, MAX_PRODUCT_COLORS } from "../services/shared/colors";
 import { MAX_PRODUCT_CODES } from "../services/shared/codes";
 
-// Reglas de categoría, subcategoría, colores y foto de un producto. `prefix`
+// Reglas de pedido mínimo, categoría, subcategoría, colores y foto de un producto. `prefix`
 // permite usarlas en el body plano ("") o dentro de una lista
 // ("products.*.") de la subida masiva.
 export const productCatalogRules = (prefix = "") => [
+  // Pedido mínimo: entero de 1 a 1 000 000 (el mismo tope que la cantidad de
+  // un pedido de la web); null o ausente = sin mínimo.
+  body(`${prefix}min_order_quantity`)
+    .optional({ values: "null" })
+    .isInt({ min: 1, max: 1000000 })
+    .withMessage("El pedido mínimo debe ser un número entero de 1 a 1 000 000")
+    .toInt(),
   body(`${prefix}category_id`).optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La categoría debe ser un id válido").toInt(),
   body(`${prefix}subcategory_id`)
     .optional({ values: "null" })

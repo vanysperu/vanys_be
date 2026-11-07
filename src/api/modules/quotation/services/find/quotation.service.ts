@@ -146,6 +146,8 @@ const getQuotationById = async (id: number) => {
               "price_half_thousand",
               "price_thousand",
               "requires_customization",
+              // Para mostrar el pedido mínimo junto a la cantidad (informativo).
+              "min_order_quantity",
               "is_deleted",
             ],
           },
