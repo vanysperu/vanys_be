@@ -25,24 +25,29 @@ import { CashPeriodMap, isClosedPeriod } from "./period_state.service";
 // que el resumen de Caja), nunca de SQL propio: así un mes cerrado coincide
 // siempre con lo que muestra Caja para ese rango (invariante I1).
 //
-//   cierre(P, cuenta) = inicial(P) + ingresos(P) − egresos(P) + ajustes(P)
+//   cierre(P, cuenta) = inicial(P) + ingresos(P) − egresos(P)
+//                       + transferencias(P) + ajustes(P)
 //   inicial(P)        = cierre(P−1) guardado, o el saldo inicial declarado si
 //                       P es el mes de inicio (I2).
+//
+// Transferencias entre cuentas: mueven el saldo de cada cuenta pero no son
+// ingreso ni egreso; sumadas en toda la empresa dan 0.
 //
 // Cálculo interno en céntimos enteros (core/utils/money.ts).
 
 // Cuenta: 0 = Efectivo, si no el id de la cuenta.
 export const accountKeyOf = (paymentAccountId: number | null): number => paymentAccountId ?? CASH_ACCOUNT_KEY;
 
-interface AccountRef {
+export interface AccountRef {
   accountKey: number;
   paymentAccountId: number | null;
   name: string;
 }
 
-interface AccountFlowCents extends AccountRef {
+export interface AccountFlowCents extends AccountRef {
   incomeCents: number;
   expenseCents: number;
+  transfersCents: number;
   adjustmentsCents: number;
 }
 
@@ -54,7 +59,7 @@ export interface DeclaredOpening extends AccountAmountCents {
   historyCents: number | null;
 }
 
-const ZERO_TOTALS: CashPeriodTotals = { opening: 0, income: 0, expense: 0, adjustments: 0, closing: 0 };
+const ZERO_TOTALS: CashPeriodTotals = { opening: 0, income: 0, expense: 0, transfers: 0, adjustments: 0, closing: 0 };
 
 // Efectivo primero; después las cuentas por nombre.
 const byAccountOrder = (a: { accountKey: number; name: string }, b: { accountKey: number; name: string }): number => {
@@ -65,7 +70,7 @@ const byAccountOrder = (a: { accountKey: number; name: string }, b: { accountKey
 };
 
 /**
- * Ingresos, egresos y ajustes por cuenta en un rango (fechas de Lima,
+ * Ingresos, egresos, transferencias y ajustes por cuenta en un rango (fechas de Lima,
  * inclusivas; sin `dateTo` = sin tope), de TODA la empresa (sin filtro de
  * tienda). Un rango vacío (desde > hasta) devuelve un mapa vacío.
  */
@@ -93,12 +98,17 @@ export async function loadFlowsByAccount(
           name: account.payment_account_name,
           incomeCents: toCents(account.income),
           expenseCents: toCents(account.expense),
+          transfersCents: toCents(account.transfers),
           adjustmentsCents: toCents(account.adjustments),
         },
       ];
     })
   );
 }
+
+/** Efecto neto de los movimientos de una cuenta en su saldo (céntimos con signo). */
+export const flowNetCents = (flow: AccountFlowCents | undefined): number =>
+  flow ? flow.incomeCents - flow.expenseCents + flow.transfersCents + flow.adjustmentsCents : 0;
 
 /** Saldo inicial declarado (cash_ledger_opening) por cuenta. */
 export async function loadDeclaredOpenings(
@@ -136,6 +146,7 @@ export async function loadStoredBalances(
         opening: Number(row.opening),
         income: Number(row.income),
         expense: Number(row.expense),
+        transfers: Number(row.transfers ?? 0),
         adjustments: Number(row.adjustments),
         closing: Number(row.closing),
       },
@@ -211,9 +222,6 @@ async function runningBase(
   return { anchor, base, flows };
 }
 
-const flowNetCents = (flow: AccountFlowCents | undefined): number =>
-  flow ? flow.incomeCents - flow.expenseCents + flow.adjustmentsCents : 0;
-
 /**
  * Saldo inicial de cada cuenta para el mes `period`:
  *   - mes de inicio → saldo inicial declarado;
@@ -283,6 +291,7 @@ export const totalsOf = (balances: readonly CashPeriodAccountBalance[]): CashPer
     opening: sum((row) => row.opening),
     income: sum((row) => row.income),
     expense: sum((row) => row.expense),
+    transfers: sum((row) => row.transfers),
     adjustments: sum((row) => row.adjustments),
     closing: sum((row) => row.closing),
   };
@@ -332,6 +341,7 @@ export async function computePeriodBalances(
       opening: fromCents(openingCents),
       income: fromCents(flow?.incomeCents ?? 0),
       expense: fromCents(flow?.expenseCents ?? 0),
+      transfers: fromCents(flow?.transfersCents ?? 0),
       adjustments: fromCents(flow?.adjustmentsCents ?? 0),
       closing: fromCents(openingCents + flowNetCents(flow)),
     }));
@@ -361,7 +371,7 @@ const provisionalNoteOf = (map: CashPeriodMap, anchor: string | null): string | 
  * Saldo actual por cuenta (GET /cash-closing/balances):
  *   base   = cierre del ancla (último mes de la cadena cerrada contigua) o el
  *            saldo inicial declarado;
- *   actual = base + ingresos − egresos + ajustes con fecha posterior al ancla
+ *   actual = base + ingresos − egresos + transferencias + ajustes con fecha posterior al ancla
  *            (sin tope: una fecha futura es imposible, moneyDateRule).
  * Es igual a saldo inicial + Σ neto de Caja desde el inicio (I4).
  */
@@ -379,7 +389,7 @@ export async function computeCurrentBalances(
       base_label: null,
       provisional_note: null,
       accounts: [],
-      totals: { base_balance: 0, income: 0, expense: 0, adjustments: 0, current_balance: 0 },
+      totals: { base_balance: 0, income: 0, expense: 0, transfers: 0, adjustments: 0, current_balance: 0 },
     };
   }
 
@@ -406,6 +416,7 @@ export async function computeCurrentBalances(
         base_balance: fromCents(baseCents),
         income: fromCents(flow?.incomeCents ?? 0),
         expense: fromCents(flow?.expenseCents ?? 0),
+        transfers: fromCents(flow?.transfersCents ?? 0),
         adjustments: fromCents(flow?.adjustmentsCents ?? 0),
         current_balance: fromCents(baseCents + flowNetCents(flow)),
       })
@@ -425,6 +436,7 @@ export async function computeCurrentBalances(
       base_balance: sum((row) => row.base_balance),
       income: sum((row) => row.income),
       expense: sum((row) => row.expense),
+      transfers: sum((row) => row.transfers),
       adjustments: sum((row) => row.adjustments),
       current_balance: sum((row) => row.current_balance),
     },

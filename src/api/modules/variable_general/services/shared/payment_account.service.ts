@@ -86,21 +86,25 @@ export const resolvePaymentAccountId = async ({
 // un mes cerrado y patas de ajuste): tienen FK RESTRICT a general_variable,
 // así que sin revisarlas acá borrar o re-categorizar la cuenta fallaba con un
 // error crudo de la base (500) en vez del 409 PAYMENT_ACCOUNT_IN_USE.
+// Las transferencias entre cuentas (cash_transfer) guardan las dos puntas en
+// columnas propias: [tabla, columna].
 const PAYMENT_ACCOUNT_REFERENCES = [
-  "quotation_payment",
-  "quotation_expense",
-  "cash_movement",
-  "employee_debt_payment",
-  "employee_debt",
-  "cash_ledger_opening",
-  "cash_period_balance",
-  "cash_adjustment_entry",
+  ["quotation_payment", "payment_account_id"],
+  ["quotation_expense", "payment_account_id"],
+  ["cash_movement", "payment_account_id"],
+  ["employee_debt_payment", "payment_account_id"],
+  ["employee_debt", "payment_account_id"],
+  ["cash_ledger_opening", "payment_account_id"],
+  ["cash_period_balance", "payment_account_id"],
+  ["cash_adjustment_entry", "payment_account_id"],
+  ["cash_transfer", "from_payment_account_id"],
+  ["cash_transfer", "to_payment_account_id"],
 ] as const;
 
 export const isPaymentAccountInUse = async (accountId: number): Promise<boolean> => {
-  // Nombres de tabla fijos del código, nunca un valor externo.
+  // Nombres de tabla y columna fijos del código, nunca un valor externo.
   const checks = PAYMENT_ACCOUNT_REFERENCES.map(
-    (table) => `EXISTS (SELECT 1 FROM ${table} WHERE payment_account_id = :accountId)`
+    ([table, column]) => `EXISTS (SELECT 1 FROM ${table} WHERE ${column} = :accountId)`
   );
   const [row] = await DataBase.instance.sequelize.query<{ in_use: number | string }>(
     `SELECT (${checks.join(" OR ")}) AS in_use`,

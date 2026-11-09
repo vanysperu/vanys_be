@@ -26,7 +26,7 @@ export function withStoredAccounts(
   const freshKeys = new Set(fresh.map((row) => row.account_key));
   const missing = [...stored.values()]
     .filter((row) => !freshKeys.has(row.account_key))
-    .map((row) => ({ ...row, opening: 0, income: 0, expense: 0, adjustments: 0, closing: 0 }));
+    .map((row) => ({ ...row, opening: 0, income: 0, expense: 0, transfers: 0, adjustments: 0, closing: 0 }));
   return [...fresh, ...missing];
 }
 
@@ -61,6 +61,7 @@ export async function upsertPeriodBalances({
       opening: row.opening,
       income: row.income,
       expense: row.expense,
+      transfers: row.transfers,
       adjustments: row.adjustments,
       closing: row.closing,
       created_by: actorId,
@@ -76,6 +77,7 @@ export async function upsertPeriodBalances({
         "opening",
         "income",
         "expense",
+        "transfers",
         "adjustments",
         "closing",
         "updated_by",
@@ -85,7 +87,8 @@ export async function upsertPeriodBalances({
   );
 }
 
-// Columnas de totales de cash_period.
+// Columnas de totales de cash_period. Sin columna de transferencias: en toda
+// la empresa siempre suman 0 (el detalle por cuenta va en cash_period_balance).
 export const totalsColumns = (totals: CashPeriodTotals) => ({
   opening_total: totals.opening,
   income_total: totals.income,
@@ -95,7 +98,7 @@ export const totalsColumns = (totals: CashPeriodTotals) => ({
 });
 
 /**
- * Cuentas cuyo ingreso, egreso o ajustes difieren entre lo guardado y lo
+ * Cuentas cuyo ingreso, egreso, transferencias o ajustes difieren entre lo guardado y lo
  * recalculado (en céntimos). Un mes cerrado nunca debería cambiar (las patas
  * "Valor al cierre" lo protegen): si cambia es un bug (I5).
  */
@@ -112,6 +115,7 @@ export function driftedAccounts(
     return (
       differs(before?.income, after?.income) ||
       differs(before?.expense, after?.expense) ||
+      differs(before?.transfers, after?.transfers) ||
       differs(before?.adjustments, after?.adjustments)
     );
   });

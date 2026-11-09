@@ -19,7 +19,7 @@ import {
   SetCashOpeningInput,
 } from "../../types/cash_closing.types";
 import { CashLedgerState, loadPeriodMap } from "../shared/period_state.service";
-import { accountKeyOf, DeclaredOpening, loadDeclaredOpenings, loadFlowsByAccount } from "../shared/balances.service";
+import { accountKeyOf, DeclaredOpening, flowNetCents, loadDeclaredOpenings, loadFlowsByAccount } from "../shared/balances.service";
 import {
   getCashOpening,
   isOpeningEditable,
@@ -173,10 +173,8 @@ export async function setCashOpening({
 
       // Pista: neto de Caja de cada cuenta ANTES del inicio (al guardar).
       const history = await loadFlowsByAccount(companyId, { dateTo: addDaysToDateOnly(startDate, -1) }, transaction);
-      const historyCentsOf = (key: number): number => {
-        const flow = history.get(key);
-        return flow ? flow.incomeCents - flow.expenseCents + flow.adjustmentsCents : 0;
-      };
+      // Incluye las transferencias entre cuentas (mismo cálculo que los saldos).
+      const historyCentsOf = (key: number): number => flowNetCents(history.get(key));
 
       // Lo enviado + lo que ya estaba (para refrescar su pista si cambió el
       // mes de inicio). Una sentencia: INSERT … ON DUPLICATE KEY UPDATE sobre

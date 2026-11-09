@@ -5,7 +5,7 @@ import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import { createCashMovement } from "../services/create/cash_movement.service";
 import {
-  CASH_MOVEMENT_SOURCES,
+  CASH_FLOW_SOURCES,
   getCashMovementById,
   getCashMovementsList,
 } from "../services/find/cash_movement.service";
@@ -93,7 +93,8 @@ export const listCashMovementsController = asyncHandler(async (req: Request, res
     businessUnitId: resolveBusinessUnitFilter(user),
     direction: direction === "income" || direction === "expense" ? direction : undefined,
     category: (category as string) || undefined,
-    source: CASH_MOVEMENT_SOURCES.find((value) => value === source),
+    // Incluye "transfer" (transferencias entre cuentas).
+    source: CASH_FLOW_SOURCES.find((value) => value === source),
     paymentAccountId:
       paymentAccountId === "cash" ? "cash" : Number(paymentAccountId) > 0 ? Number(paymentAccountId) : undefined,
     quotationId: quotationId ? Number(quotationId) : undefined,

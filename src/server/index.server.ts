@@ -32,6 +32,7 @@ import { router as CustomizationTechniqueRoutes } from "../api/modules/customiza
 import { router as QuotationRoutes } from "../api/modules/quotation/routes/quotation.routes";
 import { router as PurchaseOrderRoutes } from "../api/modules/purchase_order/routes/purchase_order.routes";
 import { router as CashMovementRoutes } from "../api/modules/cash_movement/routes/cash_movement.routes";
+import { router as CashTransferRoutes } from "../api/modules/cash_transfer/routes/cash_transfer.routes";
 import { router as CashClosingRoutes } from "../api/modules/cash_closing/routes/cash_closing.routes";
 import { router as PaymentRoutes } from "../api/modules/payment/routes/payment.routes";
 import { router as EmployeeDebtRoutes } from "../api/modules/employee_debt/routes/employee_debt.routes";
@@ -163,6 +164,9 @@ export default class Server {
     this._router.use("/customization-technique", CustomizationTechniqueRoutes);
     this._router.use("/quotation", QuotationRoutes);
     this._router.use("/purchase-order", PurchaseOrderRoutes);
+    // Antes que /cash-movement: las transferencias son parte de Caja y viven
+    // bajo su prefijo (/cash-movement/transfer/...).
+    this._router.use("/cash-movement/transfer", CashTransferRoutes);
     this._router.use("/cash-movement", CashMovementRoutes);
     this._router.use("/cash-closing", CashClosingRoutes);
     this._router.use("/payment", PaymentRoutes);

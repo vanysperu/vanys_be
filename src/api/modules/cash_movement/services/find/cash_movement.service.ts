@@ -16,6 +16,7 @@ import {
 import { correctionsCountSql } from "../../../money_correction/services/shared/corrections_count";
 import { parseMoneyCorrectionValues } from "../../../money_correction/services/find/money_correction.service";
 import {
+  CASH_ACCOUNT_NAME,
   CashAdjustmentAction,
   CashAdjustmentLegType,
   CashEntryKind,
@@ -62,9 +63,28 @@ export const CASH_MOVEMENT_SOURCES: CashMovementSource[] = [
   "employee_debt_payment",
 ];
 
+// Fuentes de las filas de Caja: las 5 de arriba + las transferencias entre
+// cuentas (tabla cash_transfer). Una transferencia se lista como DOS filas
+// (sale de una cuenta / entra a otra) que mueven el saldo de cada cuenta pero
+// NO son ingreso ni egreso de la empresa: van a `transfers` en el resumen.
+// Se mantiene aparte de CashMovementSource porque las transferencias no tienen
+// historial en money_correction ni patas de ajuste (ver cash_transfer/README).
+export type CashFlowSource = CashMovementSource | "transfer";
+
+export const CASH_FLOW_SOURCES: CashFlowSource[] = [...CASH_MOVEMENT_SOURCES, "transfer"];
+
+// Solo en filas de transferencia: las dos puntas.
+export interface CashTransferLegInfo {
+  transfer_id: number;
+  from_payment_account_id: number | null;
+  from_account_name: string;
+  to_payment_account_id: number | null;
+  to_account_name: string;
+}
+
 export interface CashMovementListItem {
   id: string;
-  source: CashMovementSource;
+  source: CashFlowSource;
   // Solo los movimientos "manual" se pueden deshabilitar desde este módulo
   // — el resto se gestiona desde su propia pantalla de origen.
   source_id: number;
@@ -119,6 +139,8 @@ export interface CashMovementListItem {
   period_status: CashRowPeriodStatus;
   // Solo en las patas: qué corrección las generó y por qué.
   adjustment: CashRowAdjustmentInfo | null;
+  // Solo en filas source = "transfer": de qué cuenta a qué cuenta.
+  transfer: CashTransferLegInfo | null;
 }
 
 export interface CashAccountSummary {
@@ -127,6 +149,9 @@ export interface CashAccountSummary {
   payment_account_name: string;
   income: number;
   expense: number;
+  // Transferencias entre cuentas (neto con signo: lo que entró por
+  // transferencia menos lo que salió). No es ingreso ni egreso.
+  transfers: number;
   // Ajustes de meses cerrados registrados en el rango (patas "adjustment",
   // con signo: lo que suman o restan al saldo).
   adjustments: number;
@@ -134,12 +159,15 @@ export interface CashAccountSummary {
 }
 
 // Totales de TODO lo filtrado (no de la página), solo con lo que mueve caja.
-// net = income − expense + adjustments. Las patas "Valor al cierre" ya van
-// dentro de income/expense (con signo), así un mes cerrado suma exactamente
-// lo que sumaba al cerrarse.
+// net = income − expense + transfers + adjustments. Las patas "Valor al
+// cierre" ya van dentro de income/expense (con signo), así un mes cerrado
+// suma exactamente lo que sumaba al cerrarse. `transfers` de la empresa es 0
+// salvo que se filtre por cuenta (entonces solo se ve una de las dos puntas):
+// pasar plata entre cuentas propias no cambia lo que tiene la empresa.
 export interface CashMovementSummary {
   income: number;
   expense: number;
+  transfers: number;
   adjustments: number;
   net: number;
   by_account: CashAccountSummary[];
@@ -160,7 +188,7 @@ export interface CashMovementListFilter {
   businessUnitId?: number;
   direction?: CashMovementDirection;
   category?: string;
-  source?: CashMovementSource;
+  source?: CashFlowSource;
   // Cuenta; "cash" = solo los movimientos en efectivo (sin cuenta).
   paymentAccountId?: number | "cash";
   quotationId?: number;
@@ -254,6 +282,7 @@ const toItem = (source: CashMovementSource, prefix: string, row: RawRow): CashMo
   // Se completa después, solo para las filas de la página (ver withPeriodStatus).
   period_status: "no_ledger",
   adjustment: null,
+  transfer: null,
 });
 
 const selectRows = async <T = RawRow>(sql: string, filter: CashFlowFilter): Promise<T[]> =>
@@ -523,6 +552,7 @@ const toAdjustmentItem = (row: RawAdjustmentRow): CashMovementListItem => {
       reason: row.reason,
       created_by_name: row.created_by_name,
     },
+    transfer: null,
   };
 };
 
@@ -566,19 +596,123 @@ const getAdjustmentEntries = async (filter: CashFlowFilter): Promise<CashMovemen
   return rows.map(toAdjustmentItem);
 };
 
-const SOURCE_LOADERS: Record<CashMovementSource, (filter: CashFlowFilter) => Promise<CashMovementListItem[]>> = {
+interface RawTransferRow {
+  id: number;
+  amount: string;
+  description: string | null;
+  occurred_at: string;
+  business_unit_id: number | null;
+  company_id: number;
+  operation_number: string | null;
+  from_payment_account_id: number | null;
+  from_account_name: string | null;
+  to_payment_account_id: number | null;
+  to_account_name: string | null;
+  created_at: Date;
+}
+
+// ¿La pata (cuenta de esa punta) pasa el filtro de cuenta?
+const legMatchesAccount = (accountId: number | null, filter: CashFlowFilter): boolean => {
+  if (filter.paymentAccountId === undefined) return true;
+  if (filter.paymentAccountId === "cash") return accountId === null;
+  return accountId === filter.paymentAccountId;
+};
+
+// Una pata de transferencia como fila de Caja: la salida es un "expense" de la
+// cuenta de origen y la entrada un "income" de la de destino (así el saldo de
+// cada cuenta cuadra), pero buildSummary las suma en `transfers`, nunca en
+// ingresos/egresos de la empresa.
+const toTransferLeg = (row: RawTransferRow, direction: CashMovementDirection): CashMovementListItem => {
+  const fromId = nullableNumber(row.from_payment_account_id);
+  const toId = nullableNumber(row.to_payment_account_id);
+  const transfer: CashTransferLegInfo = {
+    transfer_id: Number(row.id),
+    from_payment_account_id: fromId,
+    from_account_name: fromId === null ? CASH_ACCOUNT_NAME : (row.from_account_name ?? "Cuenta"),
+    to_payment_account_id: toId,
+    to_account_name: toId === null ? CASH_ACCOUNT_NAME : (row.to_account_name ?? "Cuenta"),
+  };
+  const isOut = direction === "expense";
+  return {
+    ...toItem("manual", "trf", {
+      id: row.id,
+      direction,
+      category: null,
+      amount: row.amount,
+      description: row.description,
+      occurred_at: toDateOnlyString(row.occurred_at),
+      quotation_id: null,
+      purchase_order_id: null,
+      business_unit_id: row.business_unit_id,
+      company_id: row.company_id,
+      moves_cash: 1,
+      payment_account_id: isOut ? fromId : toId,
+      payment_account_name: isOut ? transfer.from_account_name : transfer.to_account_name,
+      operation_number: row.operation_number,
+      created_at: row.created_at,
+    }),
+    // Dos filas por transferencia: el id de la fila lleva la punta.
+    id: `trf-${row.id}-${isOut ? "out" : "in"}`,
+    source: "transfer",
+    transfer,
+  };
+};
+
+// 7.º lector: transferencias entre cuentas (cash_transfer). Mismos filtros que
+// el resto; una transferencia no tiene categoría, cotización ni orden, así que
+// con esos filtros no entra ninguna. Con filtro de cuenta o de sentido entra
+// solo la punta que corresponde.
+const getTransferMovements = async (filter: CashFlowFilter): Promise<CashMovementListItem[]> => {
+  const cannotMatch =
+    filter.category !== undefined || filter.quotationId !== undefined || filter.purchaseOrderId !== undefined;
+  if (cannotMatch) return [];
+
+  const rows = await selectRows<RawTransferRow>(
+    `
+      SELECT t.id, t.amount, t.description, t.occurred_at, t.business_unit_id, t.company_id, t.operation_number,
+             t.from_payment_account_id, fa.name AS from_account_name,
+             t.to_payment_account_id, ta.name AS to_account_name, t.created_at
+      FROM cash_transfer t
+      LEFT JOIN general_variable fa ON fa.id = t.from_payment_account_id
+      LEFT JOIN general_variable ta ON ta.id = t.to_payment_account_id
+      WHERE t.is_deleted = false
+        AND (:companyId IS NULL OR t.company_id = :companyId)
+        AND (:businessUnitId IS NULL OR t.business_unit_id = :businessUnitId)
+        AND (:dateFrom IS NULL OR t.occurred_at >= :dateFrom)
+        AND (:dateTo IS NULL OR t.occurred_at <= :dateTo)
+    `,
+    filter
+  );
+
+  const wants = (direction: CashMovementDirection) => filter.direction === undefined || filter.direction === direction;
+  return rows.flatMap((row) => {
+    const legs: CashMovementListItem[] = [];
+    if (wants("expense") && legMatchesAccount(nullableNumber(row.from_payment_account_id), filter)) {
+      legs.push(toTransferLeg(row, "expense"));
+    }
+    if (wants("income") && legMatchesAccount(nullableNumber(row.to_payment_account_id), filter)) {
+      legs.push(toTransferLeg(row, "income"));
+    }
+    return legs;
+  });
+};
+
+const SOURCE_LOADERS: Record<CashFlowSource, (filter: CashFlowFilter) => Promise<CashMovementListItem[]>> = {
   manual: getManualMovements,
   quotation_payment: getQuotationPaymentMovements,
   quotation_expense: getQuotationExpenseMovements,
   employee_debt: getManualDebtMovements,
   employee_debt_payment: getReimbursementMovements,
+  transfer: getTransferMovements,
 };
 
-// Todas las filas filtradas (las 5 fuentes, o la pedida, + las patas de
-// ajuste), sin ordenar ni paginar.
+// Todas las filas filtradas (las 6 fuentes, o la pedida, + las patas de
+// ajuste), sin ordenar ni paginar. Las patas de ajuste nunca son de una
+// transferencia: con ?source=transfer no se cargan.
 const loadCashFlowRows = async (filter: CashFlowFilter): Promise<CashMovementListItem[]> => {
-  const sources: CashMovementSource[] = filter.source ? [filter.source] : CASH_MOVEMENT_SOURCES;
-  const loaders = [...sources.map((source) => SOURCE_LOADERS[source]), getAdjustmentEntries];
+  const sources: CashFlowSource[] = filter.source ? [filter.source] : CASH_FLOW_SOURCES;
+  const withAdjustments = filter.source !== "transfer";
+  const loaders = [...sources.map((source) => SOURCE_LOADERS[source]), ...(withAdjustments ? [getAdjustmentEntries] : [])];
   const results = await Promise.all(loaders.map((loader) => loader(filter)));
   return results.flat();
 };
@@ -588,6 +722,7 @@ interface AccountCents {
   name: string;
   income: number;
   expense: number;
+  transfers: number;
   adjustments: number;
 }
 
@@ -597,11 +732,14 @@ const netCents = (direction: CashMovementDirection, cents: number): number => (d
 // Totales en céntimos (sin errores de redondeo), solo de lo que mueve caja.
 //   - movement y closing_hold suman a income/expense según su sentido (una
 //     pata "Valor al cierre" lleva signo: puede restar);
+//   - transfer (pata de una transferencia entre cuentas) va a `transfers` con
+//     su efecto en el saldo de ESA cuenta: no es ingreso ni egreso;
 //   - adjustment (pata posting) va a `adjustments` con su efecto en el saldo.
 const buildSummary = (rows: CashMovementListItem[]): CashMovementSummary => {
   const accounts = new Map<string, AccountCents>();
   let incomeCents = 0;
   let expenseCents = 0;
+  let transferCents = 0;
   let adjustmentCents = 0;
 
   for (const row of rows) {
@@ -613,8 +751,15 @@ const buildSummary = (rows: CashMovementListItem[]): CashMovementSummary => {
       name: row.payment_account_id === null ? "Efectivo" : (row.payment_account_name ?? "Cuenta"),
       income: 0,
       expense: 0,
+      transfers: 0,
       adjustments: 0,
     };
+    if (row.source === "transfer") {
+      const effect = netCents(row.direction, cents);
+      transferCents += effect;
+      accounts.set(key, { ...current, transfers: current.transfers + effect });
+      continue;
+    }
     if (row.entry_kind === "adjustment") {
       const effect = netCents(row.direction, cents);
       adjustmentCents += effect;
@@ -638,15 +783,17 @@ const buildSummary = (rows: CashMovementListItem[]): CashMovementSummary => {
       payment_account_name: account.name,
       income: fromCents(account.income),
       expense: fromCents(account.expense),
+      transfers: fromCents(account.transfers),
       adjustments: fromCents(account.adjustments),
-      net: fromCents(account.income - account.expense + account.adjustments),
+      net: fromCents(account.income - account.expense + account.transfers + account.adjustments),
     }));
 
   return {
     income: fromCents(incomeCents),
     expense: fromCents(expenseCents),
+    transfers: fromCents(transferCents),
     adjustments: fromCents(adjustmentCents),
-    net: fromCents(incomeCents - expenseCents + adjustmentCents),
+    net: fromCents(incomeCents - expenseCents + transferCents + adjustmentCents),
     by_account: byAccount,
   };
 };

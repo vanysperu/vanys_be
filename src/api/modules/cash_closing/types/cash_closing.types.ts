@@ -105,15 +105,21 @@ export interface CashPeriodStatus {
   today: string; // YYYY-MM-DD (Lima)
 }
 
+// `transfers`: transferencias entre cuentas (neto con signo). De la empresa
+// entera siempre suma 0 (sale de una cuenta y entra a otra el mismo día);
+// por cuenta, no. Fotos guardadas antes de las transferencias no lo traen:
+// se lee como 0.
 export interface CashPeriodTotals {
   opening: number;
   income: number;
   expense: number;
+  transfers: number;
   adjustments: number;
   closing: number;
 }
 
 // Una cuenta dentro de un mes (snapshot guardado o vista previa).
+// closing = opening + income − expense + transfers + adjustments.
 export interface CashPeriodAccountBalance {
   account_key: number;
   payment_account_id: number | null;
@@ -121,6 +127,7 @@ export interface CashPeriodAccountBalance {
   opening: number;
   income: number;
   expense: number;
+  transfers: number;
   adjustments: number;
   closing: number;
 }
@@ -234,6 +241,8 @@ export interface CashBalanceAccount {
   base_balance: number;
   income: number;
   expense: number;
+  // Transferencias entre cuentas desde la base (neto con signo).
+  transfers: number;
   adjustments: number;
   current_balance: number;
 }

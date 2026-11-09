@@ -12,6 +12,7 @@
 | PUT    | /cash-movement/disable/:id | disable      | cash_movement   |
 | PUT    | /cash-movement/update/:id  | update (corregir) | cash_movement |
 | GET    | /cash-movement/:sourceId/corrections?source=<fuente> | historial de correcciones de CUALQUIER fila de Caja (pag; `source` por defecto `manual`) | cash_movement |
+| *      | /cash-movement/transfer/... | transferencias entre cuentas (list/create/update/disable) | cash_movement — ver [`cash_transfer`](../cash_transfer/README.md) |
 
 ## Vistas de frontend vinculadas
 - cash_movement.list
@@ -19,6 +20,9 @@
 ## Botones/acciones vinculadas
 - cash_movement.create.button
 - cash_movement.disable.button
+- cash_movement.transfer.create.button / .update.button / .disable.button y
+  cash_movement.transfer.list.endpoint (transferencias entre cuentas, ver
+  [`cash_transfer`](../cash_transfer/README.md))
 - cash_movement.update.button (corregir; lo tienen los roles con disable)
 - cash_movement.corrections.button (ver historial de cualquier fila; tipo
   botón porque `/auth/my-access` solo expone botones: el frontend decide si el
@@ -129,11 +133,20 @@ llama a SU endpoint. Botón por fuente: manual `cash_movement.update.button`,
   manual de una cotización guardan desde qué cuenta salió el dinero
   (`quotation_expense.payment_account_id`, `null` = efectivo).
 - **Totales**: la respuesta de `list` trae `summary` (`income`, `expense`,
-  `net` y `by_account`) calculado sobre TODO lo filtrado — no sobre la
-  página — y solo con lo que mueve caja. Estadísticas usa exactamente los
-  mismos fragmentos SQL (`services/shared/cash_flow.sql.ts`).
+  `transfers`, `adjustments`, `net` y `by_account`) calculado sobre TODO lo
+  filtrado — no sobre la página — y solo con lo que mueve caja. Estadísticas
+  usa exactamente los mismos fragmentos SQL (`services/shared/cash_flow.sql.ts`).
+  `net = income − expense + transfers + adjustments`.
+- **Transferencias entre cuentas** (fuente `transfer`, tabla `cash_transfer`):
+  cada una se lista como DOS filas (salida de la cuenta origen = `expense`,
+  entrada a la cuenta destino = `income`, con `transfer: { from_…, to_… }`). Mueven
+  el saldo de cada cuenta pero se suman en `transfers`, nunca en `income`/
+  `expense`: pasar plata entre cuentas propias no es ingreso ni egreso (antes se
+  registraba como egreso + ingreso manual e inflaba los dos totales). En toda la
+  empresa `transfers` da 0; con filtro de cuenta se ve solo su punta. Estadísticas
+  no las lee. Se registran/corrigen/anulan en `/cash-movement/transfer/...`.
 - Los pagos anulados (`is_deleted`) ya no aparecen como ingreso.
-- Filtros de `list`: `direction`, `source` (las 5 fuentes),
+- Filtros de `list`: `direction`, `source` (las 5 fuentes + `transfer`),
   `paymentAccountId` (id o `cash`), `category`, `quotationId`,
   `purchaseOrderId`, `dateFrom`/`dateTo`, y `companyId` solo para el Super
   Administrador (sin él, sus totales mezclan todas las empresas).

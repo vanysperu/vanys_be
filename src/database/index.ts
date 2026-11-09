@@ -92,6 +92,7 @@ import {
   CashAdjustmentEntryFactory,
   CashAdjustmentEntryStatic,
 } from "../api/modules/cash_closing/model/cash_adjustment_entry.model";
+import { CashTransferFactory, CashTransferStatic } from "../api/modules/cash_transfer/model/cash_transfer.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -153,6 +154,8 @@ export class DataBase {
   public cash_period_balance: CashPeriodBalanceStatic;
   public cash_period_event: CashPeriodEventStatic;
   public cash_adjustment_entry: CashAdjustmentEntryStatic;
+  // Transferencias entre cuentas (migración 20261110100000-create-cash-transfer.js).
+  public cash_transfer: CashTransferStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -231,6 +234,7 @@ export class DataBase {
     this.cash_period_balance = CashPeriodBalanceFactory(this.sequelize);
     this.cash_period_event = CashPeriodEventFactory(this.sequelize);
     this.cash_adjustment_entry = CashAdjustmentEntryFactory(this.sequelize);
+    this.cash_transfer = CashTransferFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

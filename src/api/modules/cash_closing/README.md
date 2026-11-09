@@ -85,8 +85,14 @@ close/reopen → `CashPeriodDetail`).
   hay ningún mes anterior reabierto. Sin espera obligatoria: en los días 1–5 del mes
   siguiente solo hay una advertencia. Otras advertencias: saldo final negativo,
   meses que un re-cierre recalcularía.
-- **Números**: `cierre = inicial + ingresos − egresos + ajustes` por cuenta, con
-  `getCashFlowSummary` de Caja (mismo cálculo; ningún SQL propio). Inicial = cierre
+- **Números**: `cierre = inicial + ingresos − egresos + transferencias + ajustes`
+  por cuenta (CHECK en `cash_period_balance`), con `getCashFlowSummary` de Caja
+  (mismo cálculo; ningún SQL propio). `transferencias` = transferencias entre
+  cuentas del mes (neto con signo, ver [`cash_transfer`](../cash_transfer/README.md));
+  en toda la empresa suman 0, por eso `cash_period` no tiene columna de total para
+  ellas y los totales de la lista las traen en 0. Los saldos actuales y la pista
+  `history_amount` también las incluyen. Una transferencia de un mes cerrado no se
+  toca (409): se reabre el mes. Inicial = cierre
   guardado del mes anterior, o el saldo declarado en el mes de inicio. Cuentas = las
   del saldo inicial ∪ las con movimiento; una cuenta que queda en cero conserva su
   fila (nunca se borran).
@@ -113,8 +119,8 @@ close/reopen → `CashPeriodDetail`).
   `CashPeriodAdjustmentItem`.
 - En `find/:period`, `totals` de una vista previa son los en vivo; de un mes
   cerrado, los guardados.
-- Una cuenta usada en `cash_ledger_opening`, `cash_period_balance` o
-  `cash_adjustment_entry` no se elimina (409 `PAYMENT_ACCOUNT_IN_USE`).
+- Una cuenta usada en `cash_ledger_opening`, `cash_period_balance`,
+  `cash_adjustment_entry` o `cash_transfer` no se elimina (409 `PAYMENT_ACCOUNT_IN_USE`).
 
 ## Neto de cada mes
 La lista (`/cash-closing/list`) y el detalle (`/cash-closing/find/:period`) traen `finance`:

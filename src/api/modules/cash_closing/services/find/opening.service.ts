@@ -5,7 +5,7 @@ import { addDaysToDateOnly, periodBounds, periodOf, shiftPeriod, todayInBusiness
 import { PAYMENT_ACCOUNT_CATEGORY } from "../../../variable_general/services/shared/payment_account.service";
 import { CASH_ACCOUNT_KEY, CASH_ACCOUNT_NAME, CashOpeningAccount, CashOpeningResponse } from "../../types/cash_closing.types";
 import { CashPeriodMap, loadPeriodMap } from "../shared/period_state.service";
-import { loadDeclaredOpenings, loadFlowsByAccount } from "../shared/balances.service";
+import { flowNetCents, loadDeclaredOpenings, loadFlowsByAccount } from "../shared/balances.service";
 
 export interface CompanyPaymentAccount {
   id: number;
@@ -84,7 +84,7 @@ export async function getCashOpening(companyId: number, requestedStartPeriod?: s
         name: key === CASH_ACCOUNT_KEY ? CASH_ACCOUNT_NAME : (account?.name ?? opening?.name ?? flow?.name ?? "Cuenta"),
         active: key === CASH_ACCOUNT_KEY || (account?.active ?? false),
         amount: opening ? fromCents(opening.cents) : null,
-        history_amount: fromCents(flow ? flow.incomeCents - flow.expenseCents + flow.adjustmentsCents : 0),
+        history_amount: fromCents(flowNetCents(flow)),
       };
     })
     .sort((a, b) => {

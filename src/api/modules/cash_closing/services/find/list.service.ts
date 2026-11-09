@@ -12,6 +12,9 @@ const totalsOfRow = (row: CashPeriodModel): CashPeriodTotals => ({
   opening: Number(row.opening_total),
   income: Number(row.income_total),
   expense: Number(row.expense_total),
+  // Transferencias entre cuentas: en toda la empresa siempre suman 0 (el
+  // detalle por cuenta está en cash_period_balance).
+  transfers: 0,
   adjustments: Number(row.adjustment_total),
   closing: Number(row.closing_total),
 });

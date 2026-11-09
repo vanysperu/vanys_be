@@ -1,9 +1,10 @@
 import { BuildOptions, DataTypes, Model, Optional, Sequelize } from "sequelize";
 
 // Foto de UNA cuenta en un mes cerrado. La base exige
-// closing = opening + income - expense + adjustments (CHECK). Un re-cierre
-// actualiza las filas existentes e inserta cuentas nuevas; nunca borra (una
-// cuenta que queda en cero conserva su fila en cero).
+// closing = opening + income - expense + transfers + adjustments (CHECK,
+// migración 20261110100000-create-cash-transfer.js). Un re-cierre actualiza
+// las filas existentes e inserta cuentas nuevas; nunca borra (una cuenta que
+// queda en cero conserva su fila en cero).
 export interface CashPeriodBalanceAttributes {
   id: number;
   company_id: number;
@@ -14,6 +15,8 @@ export interface CashPeriodBalanceAttributes {
   opening: number;
   income: number;
   expense: number;
+  // Transferencias entre cuentas del mes (neto con signo; 0 en cierres viejos).
+  transfers: number;
   adjustments: number;
   closing: number;
   created_by: number;
@@ -48,6 +51,7 @@ export function CashPeriodBalanceFactory(sequelize: Sequelize): CashPeriodBalanc
       opening: money(),
       income: money(),
       expense: money(),
+      transfers: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
       adjustments: money(),
       closing: money(),
       created_by: { type: DataTypes.BIGINT, allowNull: false },
