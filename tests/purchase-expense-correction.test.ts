@@ -1,9 +1,8 @@
-import { authedRequest, login, QA_COMPANY_ADMIN, wordStamp } from "./helpers/apiClient";
+import { activateInvitedUser, authedRequest, login, QA_COMPANY_ADMIN, wordStamp } from "./helpers/apiClient";
 import { createPurchaseOrderFixture, createQuotationFixture, createUnscopedCompanyAdmin } from "./helpers/fixtures";
 import { queryRows } from "./helpers/db";
 
 const QA_SUPERADMIN = { email: "qa.superadmin@grulla.test", password: "Test1234" };
-const TEMPORARY_PASSWORD = "123456";
 
 interface RoleTreeNode {
   id: number;
@@ -620,9 +619,7 @@ describe("Corrección y anulación de gastos y compras", () => {
         roleIds: roleId,
       });
       expect(created.status).toBe(200);
-      const first = await login(email, TEMPORARY_PASSWORD);
-      await authedRequest(first.token).patch("/user/change/password", { oldPassword: TEMPORARY_PASSWORD, newPassword: "Test1234" });
-      gestor = authedRequest((await login(email, "Test1234")).token);
+      gestor = authedRequest((await activateInvitedUser(created.body, email, "Test1234")).token);
 
       otherStoreQuotationId = (await createStoreQuotation(otherStore)).quotationId;
       ownStoreQuotationId = (await createStoreQuotation(ownStore)).quotationId;

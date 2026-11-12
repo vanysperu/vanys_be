@@ -1,10 +1,9 @@
-import { authedRequest, login, wordStamp } from "./helpers/apiClient";
+import { activateInvitedUser, authedRequest, login, wordStamp } from "./helpers/apiClient";
 import { CashClosingTestCompany, createCashClosingTestCompany, createUnscopedCompanyAdmin } from "./helpers/fixtures";
 import { queryRows } from "./helpers/db";
 
 const QA_SUPERADMIN = { email: "qa.superadmin@grulla.test", password: "Test1234" };
 const SETUP_TIMEOUT = 300_000;
-const TEMPORARY_PASSWORD = "123456";
 const READY_PASSWORD = "Test1234";
 
 // ---------------------------------------------------------------------------
@@ -343,13 +342,7 @@ describe("Cierre de caja (2): ajustes, permisos y ciclo de reapertura", () => {
       roleIds: roleId,
     });
     expect(createdUser.status).toBe(200);
-    const first = await login(email, TEMPORARY_PASSWORD);
-    const changed = await authedRequest(first.token).patch("/user/change/password", {
-      oldPassword: TEMPORARY_PASSWORD,
-      newPassword: READY_PASSWORD,
-    });
-    expect(changed.status).toBe(200);
-    limitedToken = (await login(email, READY_PASSWORD)).token;
+    limitedToken = (await activateInvitedUser(createdUser.body, email, READY_PASSWORD)).token;
 
     expect((await admin().put("/cash-closing/opening", openingBody(ctx, CLOSED_PERIOD))).status).toBe(200);
 

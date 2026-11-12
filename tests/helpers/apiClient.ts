@@ -22,6 +22,27 @@ export interface ApiFailure {
   code?: string;
 }
 
+/**
+ * Activa un usuario recién creado con su enlace de invitación (Sprint 2: ya no
+ * hay contraseña temporal "123456"). `createBody` es la respuesta de
+ * POST /user/create, que trae el enlace en data.invitation.url (el token va
+ * después de "#token="). Devuelve la sesión con la contraseña elegida.
+ */
+export async function activateInvitedUser(
+  createBody: { data?: { invitation?: { url?: string } } },
+  email: string,
+  password = "Test1234"
+): Promise<{ token: string; userId: number }> {
+  const url = createBody.data?.invitation?.url ?? "";
+  const token = decodeURIComponent(url.split("#token=")[1] ?? "");
+  if (!token) throw new Error(`la respuesta de crear usuario no trae el enlace de invitación: ${JSON.stringify(createBody)}`);
+  const completed = await request(BASE_URL).post("/api/password/link/complete").send({ token, password });
+  if (completed.status !== 200) {
+    throw new Error(`no se pudo activar la cuenta con el enlace: ${JSON.stringify(completed.body)}`);
+  }
+  return login(email, password);
+}
+
 export async function login(email: string, password: string): Promise<{ token: string; userId: number }> {
   const res = await request(BASE_URL).post("/api/signin").send({ email, password });
   if (res.status !== 200 || !res.body.success) {

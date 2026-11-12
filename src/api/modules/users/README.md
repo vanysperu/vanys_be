@@ -14,6 +14,7 @@
 | PUT    | /user/disable/:id       | disable (toggle)        | users           |
 | PUT    | /user/batch/disable     | disable masivo          | users           |
 | PATCH  | /user/change/password   | cambiar contraseña      | users           |
+| POST   | /user/:id/password-link | reenviar invitación o enlace de restablecer | users (`users.passwordLink.button`) |
 | GET    | /role/list              | roles para el selector  | users (`users.roleOptions.endpoint`) |
 
 `GET /role/list` es del módulo `role`, pero su permiso vive acá: el
@@ -28,6 +29,7 @@ Roles y accesos es exclusiva del Super Administrador.
 - users.update.button
 - users.disable.button
 - users.batchDisable.button
+- users.passwordLink.button
 
 ## Reglas de negocio propias del módulo
 - **Email único.**
@@ -58,8 +60,17 @@ Roles y accesos es exclusiva del Super Administrador.
   también contempla el batch: deshabilitar a los dos únicos admins en una
   sola operación se bloquea (`alsoBeingDisabled`), porque si no cada chequeo
   veía al otro todavía activo.
-- Un usuario creado desde el panel nace con contraseña temporal fija y
-  `must_change_password` — el middleware `requirePasswordChanged` lo obliga
+- **Sin contraseña temporal** (Sprint 2, pedido del usuario: "quiero que llegue link para crear contraseña"):
+  un usuario creado desde el panel nace con una contraseña aleatoria que nadie conoce y recibe por correo
+  un enlace de invitación (72 h) para elegir la suya. La respuesta de `create` trae
+  `invitation: { url, expiresAt, emailConfigured }`: si el correo no llega o no está configurado, el admin
+  copia el enlace y lo manda por WhatsApp. Antes nacía con "123456" y quien supiera su correo podía entrar
+  antes que él; la migración `20261113100000` dejó inutilizable esa contraseña en los usuarios que nunca la
+  cambiaron (entran con el enlace o con "¿Olvidaste tu contraseña?").
+- `POST /user/:id/password-link` con `purpose`: `invite` (72 h) o `reset` (30 min). Mismo alcance que editar
+  (`userBelongsToCaller`: empresa y tienda del que llama; 403 si no). Un enlace nuevo anula los anteriores.
+  Usuario deshabilitado → 409 `USER_DISABLED`. Detalle de los enlaces en `auth/README.md`.
+- `must_change_password` queda solo para usuarios viejos: el middleware `requirePasswordChanged` los obliga
   a cambiarla antes de usar el resto de la API.
 - Bloqueo por intentos fallidos: al alcanzar el máximo (`>=`, no `===`) se
   bloquea por `lockout_minutes`. La comparación por igualdad era un bug: tras

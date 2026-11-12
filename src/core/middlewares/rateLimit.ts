@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { AppError } from "../errors/AppError";
+import { isProduction } from "../../config/runtime";
 
 // Límite de intentos por ventana de tiempo, en memoria (sin librería nueva:
 // express-rate-limit no está aprobado en CLAUDE.md). Alcanza porque en
@@ -51,9 +52,18 @@ export function consumeRateLimit(name: string, key: string, windowMs: number, ma
   return bucket.count <= max;
 }
 
+const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+// En desarrollo las pruebas automáticas llaman cientos de veces desde la misma
+// máquina (ej. activan cada usuario de prueba con su enlace): ahí no se limita
+// lo que viene de localhost. En producción el límite rige siempre: detrás del
+// proxy del hosting, req.ip es la IP real del visitante, nunca localhost.
+const isExempt = (req: Request): boolean => !isProduction() && LOOPBACK.has(req.ip ?? "");
+
 export const rateLimit =
   ({ name, windowMs, max, keyOf }: RateLimitOptions) =>
   (req: Request, _res: Response, next: NextFunction) => {
+    if (isExempt(req)) return next();
     const key = keyOf ? keyOf(req) : req.ip ?? "unknown";
     if (consumeRateLimit(name, key, windowMs, max)) return next();
     return next(new AppError(429, "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.", undefined, "RATE_LIMITED"));

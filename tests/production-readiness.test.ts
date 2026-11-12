@@ -141,7 +141,7 @@ describe("Producción: endpoint del cron de vencimiento", () => {
 });
 
 describe("Producción: contraseña nueva de mínimo 8 caracteres", () => {
-  it("rechaza 7 caracteres y acepta 8 (mismo mínimo que la pantalla)", async () => {
+  it("rechaza 7 caracteres y acepta 8 al activar la cuenta con el enlace (mismo mínimo que la pantalla)", async () => {
     const superToken = (await login(QA_SUPERADMIN.email, QA_SUPERADMIN.password)).token;
     const adminToken = (await login(QA_COMPANY_ADMIN.email, QA_COMPANY_ADMIN.password)).token;
     const access = await authedRequest(adminToken).get("/access/me");
@@ -166,13 +166,18 @@ describe("Producción: contraseña nueva de mínimo 8 caracteres", () => {
     });
     expect(created.status).toBe(200);
 
-    const temporary = await login(email, "123456");
-    const user = authedRequest(temporary.token);
+    // Ya no hay contraseña temporal "123456": la cuenta se activa con el enlace.
+    await expect(login(email, "123456")).rejects.toThrow();
+    const token = decodeURIComponent(String(created.body.data.invitation.url).split("#token=")[1] ?? "");
 
-    const tooShort = await user.patch("/user/change/password", { oldPassword: "123456", newPassword: "Abc1234" });
+    const tooShort = await request(BASE_URL).post("/api/password/link/complete").send({ token, password: "Kq7mZp2" });
     expect(tooShort.status).toBe(400);
 
-    const ok = await user.patch("/user/change/password", { oldPassword: "123456", newPassword: "Abcd1234" });
+    // 8 caracteres, pero de las más comunes: también se rechaza.
+    const common = await request(BASE_URL).post("/api/password/link/complete").send({ token, password: "Abcd1234" });
+    expect(common.status).toBe(400);
+
+    const ok = await request(BASE_URL).post("/api/password/link/complete").send({ token, password: "Kq7mZp2w" });
     expect(ok.status).toBe(200);
   });
 });

@@ -1,20 +1,8 @@
-import { authedRequest, login, wordStamp } from "./apiClient";
+import { activateInvitedUser, authedRequest, login, wordStamp } from "./apiClient";
 
 const ADMIN_ROLE_ID = 2;
 const GESTOR_ROLE_ID = 6; // rol plantilla "Gestor" (20260928110000-seed-gestor-role.js)
-const TEMPORARY_PASSWORD = "123456"; // DEFAULT_TEMPORARY_PASSWORD del backend
 const READY_PASSWORD = "Test1234";
-
-// Primer login con la contraseña temporal + cambio obligatorio + login final.
-async function activateUser(email: string): Promise<{ token: string; userId: number }> {
-  const first = await login(email, TEMPORARY_PASSWORD);
-  const changed = await authedRequest(first.token)
-    .patch("/user/change/password", { oldPassword: TEMPORARY_PASSWORD, newPassword: READY_PASSWORD });
-  if (changed.status !== 200) {
-    throw new Error(`no se pudo cambiar la contraseña temporal: ${JSON.stringify(changed.body)}`);
-  }
-  return login(email, READY_PASSWORD);
-}
 
 export interface CashClosingTestUser {
   token: string;
@@ -89,7 +77,7 @@ export async function createCashClosingTestCompany(superToken: string): Promise<
     if (created.status !== 200) {
       throw new Error(`no se pudo crear el usuario ${label}: ${JSON.stringify(created.body)}`);
     }
-    return { ...(await activateUser(email)), email };
+    return { ...(await activateInvitedUser(created.body, email, READY_PASSWORD)), email };
   };
   const gestor = await createStoreUser("Gestor", GESTOR_ROLE_ID);
   const storeAdmin = await createStoreUser("Tienda", ADMIN_ROLE_ID);
@@ -159,14 +147,7 @@ export async function createUnscopedCompanyAdmin(
     throw new Error(`no se pudo crear el admin sin tienda: ${JSON.stringify(created.body)}`);
   }
 
-  const first = await login(email, TEMPORARY_PASSWORD);
-  const changed = await authedRequest(first.token)
-    .patch("/user/change/password", { oldPassword: TEMPORARY_PASSWORD, newPassword: password });
-  if (changed.status !== 200) {
-    throw new Error(`no se pudo cambiar la contraseña temporal: ${JSON.stringify(changed.body)}`);
-  }
-
-  const ready = await login(email, password);
+  const ready = await activateInvitedUser(created.body, email, password);
   return { token: ready.token, userId: ready.userId, email };
 }
 

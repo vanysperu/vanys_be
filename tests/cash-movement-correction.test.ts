@@ -1,4 +1,4 @@
-import { authedRequest, login, QA_COMPANY_ADMIN, wordStamp } from "./helpers/apiClient";
+import { activateInvitedUser, authedRequest, login, QA_COMPANY_ADMIN, wordStamp } from "./helpers/apiClient";
 import { createQuotationFixture, createUnscopedCompanyAdmin } from "./helpers/fixtures";
 import { queryRows } from "./helpers/db";
 
@@ -436,13 +436,7 @@ describe("Caja: alcance de escritura de un gestor con 'ver todas las tiendas'", 
       roleIds: roleId,
     });
     expect(createdUser.status).toBe(200);
-    const first = await login(email, "123456");
-    const changed = await authedRequest(first.token).patch("/user/change/password", {
-      oldPassword: "123456",
-      newPassword: "Test1234",
-    });
-    expect(changed.status).toBe(200);
-    gestorApi = authedRequest((await login(email, "Test1234")).token);
+    gestorApi = authedRequest((await activateInvitedUser(createdUser.body, email, "Test1234")).token);
   });
 
   it("LEE las dos tiendas (ver todas), incluido el historial", async () => {
