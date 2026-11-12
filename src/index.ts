@@ -8,6 +8,7 @@ import { DataBase } from "./database";
 import { runPendingMigrations, shouldAutoMigrate } from "./database/autoMigrate";
 import { expireOverdueQuotations } from "./api/modules/quotation/services/jobs/expireQuotations.job";
 import { retryPendingDriveCopies } from "./api/modules/invoice/services/shared/drive_copy";
+import { dispatchPendingEmails } from "./api/modules/email/services/outbox/dispatch.service";
 import { formatInstantDateTimeEsPe } from "./utils/dateUtils";
 
 assertProductionEnv();
@@ -47,6 +48,19 @@ const runDriveRetryJob = () => {
 };
 let driveRetryTimer: NodeJS.Timeout | null = null;
 
+// Cola de correos (Sprint 2): cada minuto se mandan los pendientes. Además se
+// mandan apenas se encolan y con el cron de hPanel (/internal/jobs/tick), por
+// si la app estuvo dormida.
+const EMAIL_DISPATCH_INTERVAL_MS = 60 * 1000;
+const runEmailDispatchJob = () => {
+  dispatchPendingEmails()
+    .then((result) => {
+      if (result.sent + result.failed > 0) console.log(`[jobs] Correos: ${result.sent} enviado(s), ${result.failed} fallido(s)`);
+    })
+    .catch((error) => console.error("[jobs] Error al enviar correos:", error));
+};
+let emailDispatchTimer: NodeJS.Timeout | null = null;
+
 // La base se actualiza ANTES de abrir el puerto: el código nuevo espera las
 // tablas/columnas nuevas. Si la actualización falla, la app no arranca (el
 // error queda en los logs del hosting) en vez de atender con una base a
@@ -62,6 +76,8 @@ const startServer = async () => {
     runExpireQuotationsJob();
     expireJobTimer = setInterval(runExpireQuotationsJob, EXPIRE_QUOTATIONS_INTERVAL_MS);
     driveRetryTimer = setInterval(runDriveRetryJob, DRIVE_RETRY_INTERVAL_MS);
+    runEmailDispatchJob();
+    emailDispatchTimer = setInterval(runEmailDispatchJob, EMAIL_DISPATCH_INTERVAL_MS);
   });
 };
 
@@ -85,6 +101,7 @@ const shutdown = async (signal: string) => {
 
   if (expireJobTimer) clearInterval(expireJobTimer);
   if (driveRetryTimer) clearInterval(driveRetryTimer);
+  if (emailDispatchTimer) clearInterval(emailDispatchTimer);
   const forceExit = setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS);
   forceExit.unref();
 

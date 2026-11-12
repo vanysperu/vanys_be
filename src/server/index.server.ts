@@ -55,6 +55,7 @@ import path from "path";
 import { securityHeaders } from "../core/middlewares/securityHeaders";
 import { requireCronSecret } from "../core/middlewares/requireCronSecret";
 import { expireQuotationsJobController } from "../api/modules/quotation/controllers/jobs.controller";
+import { jobsTickController } from "../api/modules/jobs/controllers/tick.controller";
 import {
   isProduction,
   resolveCorsOptions,
@@ -117,6 +118,9 @@ export default class Server {
     // Tareas programadas disparadas por el cron del hosting — autenticadas
     // con un secreto compartido, no con sesión (ver requireCronSecret).
     this._router.post("/internal/jobs/expire-quotations", requireCronSecret, expireQuotationsJobController);
+    // Todas las tareas pendientes en un solo llamado (correos, vencer
+    // cotizaciones, copias a Drive...): el cron de hPanel lo llama cada 10 min.
+    this._router.post("/internal/jobs/tick", requireCronSecret, jobsTickController);
 
     // Integraciones sin sesión (la web pública de cada empresa): se
     // autentican con API key por empresa, no con token (que vence). Ver

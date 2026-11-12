@@ -42,9 +42,6 @@ export interface UserAttributes {
   // Device Id
   device_id?: string;
 
-  // Codigos adicionales
-  recovery_code?: string | null;
-
   business_unit_id?: number | null;
   // Empresa del usuario (CLAUDE.md sección 10: toda tabla de negocio
   // necesita company_id) — obligatoria para todo usuario que no sea
@@ -210,11 +207,6 @@ export function UserFactory(sequelize: Sequelize): UserStatic {
 
       device_id: {
         type: DataTypes.TEXT,
-        allowNull: true,
-      },
-
-      recovery_code: {
-        type: DataTypes.STRING(50),
         allowNull: true,
       },
 

@@ -93,6 +93,12 @@ import {
   CashAdjustmentEntryStatic,
 } from "../api/modules/cash_closing/model/cash_adjustment_entry.model";
 import { CashTransferFactory, CashTransferStatic } from "../api/modules/cash_transfer/model/cash_transfer.model";
+import { EmailOutboxFactory, EmailOutboxStatic } from "../api/modules/email/model/email_outbox.model";
+import { EmailDailyUsageFactory, EmailDailyUsageStatic } from "../api/modules/email/model/email_daily_usage.model";
+import {
+  PasswordResetTokenFactory,
+  PasswordResetTokenStatic,
+} from "../api/modules/auth/model/password_reset_token.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -156,6 +162,11 @@ export class DataBase {
   public cash_adjustment_entry: CashAdjustmentEntryStatic;
   // Transferencias entre cuentas (migración 20261110100000-create-cash-transfer.js).
   public cash_transfer: CashTransferStatic;
+  // Cola de correos y enlaces de contraseña (migración
+  // 20261113100000-email-outbox-and-password-links.js).
+  public email_outbox: EmailOutboxStatic;
+  public email_daily_usage: EmailDailyUsageStatic;
+  public password_reset_token: PasswordResetTokenStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -235,6 +246,9 @@ export class DataBase {
     this.cash_period_event = CashPeriodEventFactory(this.sequelize);
     this.cash_adjustment_entry = CashAdjustmentEntryFactory(this.sequelize);
     this.cash_transfer = CashTransferFactory(this.sequelize);
+    this.email_outbox = EmailOutboxFactory(this.sequelize);
+    this.email_daily_usage = EmailDailyUsageFactory(this.sequelize);
+    this.password_reset_token = PasswordResetTokenFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

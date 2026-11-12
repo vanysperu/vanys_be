@@ -144,7 +144,7 @@ const getUsersList = async (
       u.document_type, u.document_number, u.gender,
       u.phone_number, u.address, u.login_status,
       u.failed_attempts, u.last_lock_date, u.last_unlock_date,
-      u.lockout_minutes, u.device_id, u.recovery_code, u.business_unit_id,
+      u.lockout_minutes, u.device_id, u.business_unit_id,
       u.is_deleted, u.created_by, u.updated_at, u.updated_by,
       -- Empresa efectiva (igual criterio que getUserTenantInfo): si tiene
       -- tienda, la empresa de esa tienda manda; si no (admin de empresa sin
@@ -272,7 +272,7 @@ const getAccountById = async (userId: number): Promise<IUserAccount> => {
               u.date_of_birth, u.document_type, u.document_number, u.gender,
               u.phone_number, u.address, u.login_status, u.failed_attempts,
               u.last_lock_date, u.last_unlock_date, u.lockout_minutes, u.device_id,
-              u.recovery_code, u.business_unit_id, u.is_deleted, u.created_by, u.created_at,
+              u.business_unit_id, u.is_deleted, u.created_by, u.created_at,
               u.updated_at, u.updated_by, u.status,
               coalesce(json_arrayagg( json_object('id', ur.role_id, 'name', r.name, 'rol', r.key_code)), '[]') roles
         from user u
@@ -313,7 +313,7 @@ const findUserInformationById = async (userId: number, companyId: number | null)
                 u.date_of_birth, u.status, u.document_type, u.document_number, u.gender,
                 u.phone_number, u.address, u.login_status, u.failed_attempts,
                 u.last_lock_date, u.last_unlock_date, u.lockout_minutes, u.device_id,
-                u.recovery_code, u.business_unit_id, u.is_deleted, u.created_by, u.created_at,
+                u.business_unit_id, u.is_deleted, u.created_by, u.created_at,
                 u.updated_at, u.updated_by,
                 coalesce(json_arrayagg( json_object('id', ur.role_id, 'name', r.name)), '[]') roles,
                 any_value(ur.role_id) as roleIds

@@ -1,5 +1,5 @@
 import { body } from "express-validator";
-import { allValidator } from "../../../../middlewares/error-validator";
+import { passwordPolicyError } from "../../../../core/validators/password.policy";
 
 const emailValidator = body("email")
   .not()
@@ -13,18 +13,6 @@ const emailValidator = body("email")
   .withMessage("El email debe ser una cadena de texto")
   .bail();
 
-const recoveryCodeValidator = body("verificationCode")
-  .not()
-  .isEmpty()
-  .withMessage("El código de verificación es obligatorio")
-  .bail()
-  .isString()
-  .withMessage("El código de verificación debe ser una cadena de texto")
-  .bail()
-  .isLength({ min: 4, max: 4 })
-  .withMessage("El código de verificación debe ser de 4 dígitos")
-  .bail();
-
 const passwordValidator = body("password")
   .not()
   .isEmpty()
@@ -34,17 +22,30 @@ const passwordValidator = body("password")
   .withMessage("Se requiere una cadena de texto para la contraseña")
   .bail();
 
+// Token de un enlace de contraseña: base64url de 32 bytes (43 caracteres). Se
+// acepta un rango para no atarse al largo exacto.
+const linkTokenValidator = body("token")
+  .isString()
+  .withMessage("El enlace no es válido")
+  .bail()
+  .matches(/^[A-Za-z0-9_-]{30,100}$/)
+  .withMessage("El enlace no es válido");
+
+// Contraseña nueva: misma política en todas las pantallas (core/validators/password.policy.ts).
+const newPasswordValidator = body("password")
+  .isString()
+  .withMessage("La contraseña es obligatoria")
+  .bail()
+  .custom((value: string) => {
+    const problem = passwordPolicyError(value);
+    if (problem) throw new Error(problem);
+    return true;
+  });
+
 export const signInValidator = [emailValidator, passwordValidator];
 
-export const sendCodeForRecoveryValidator = [emailValidator];
+export const forgotPasswordValidator = [emailValidator];
 
-export const verifyRecoveryCodeValidator = [
-  emailValidator,
-  recoveryCodeValidator,
-];
+export const checkPasswordLinkValidator = [linkTokenValidator];
 
-export const recoveryUserAccountValidator = [
-  emailValidator,
-  passwordValidator,
-  recoveryCodeValidator,
-];
+export const completePasswordLinkValidator = [linkTokenValidator, newPasswordValidator];

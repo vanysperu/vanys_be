@@ -1,5 +1,7 @@
+import { randomBytes } from "crypto";
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
+import { utcToBusinessParts } from "../../../../utils/dateUtils";
 import {
   findOneUser,
   findUserInformationById,
@@ -12,7 +14,7 @@ import { AppError } from "../../../../core/errors/AppError";
 import { asyncHandler } from "../../../../core/utils/asyncHandler";
 import { ok } from "../../../../core/utils/response";
 import { CreateUserDto } from "../dtos";
-import { DEFAULT_TEMPORARY_PASSWORD } from "../constants/defaultValues";
+import { userBelongsToCaller } from "../services/shared/user_scope.service";
 import {
   assertNotLastCompanyAdmin,
   assertRoleIsAssignable,
@@ -97,10 +99,12 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
   }
 
   await assertRoleIsAssignable({ roleId: roleIds, callerIsSystem: isSystem, targetCompanyId: resolvedCompanyId });
-  // Contraseña temporal fija (no se envía correo real todavía — ver
-  // README del módulo). El usuario la cambia obligatoriamente en su
-  // primer login (must_change_password, ver services/create).
-  const temporaryPassword = DEFAULT_TEMPORARY_PASSWORD;
+  // Sin contraseña temporal (Sprint 2, decisión del usuario: "quiero que
+  // llegue link para crear contraseña"). El usuario nace con una contraseña
+  // aleatoria que nadie conoce y recibe por correo un enlace para elegir la
+  // suya (ver services/create y auth/services/password_link). Antes nacía con
+  // "123456": quien supiera su correo podía entrar antes que él.
+  const unusablePassword = randomBytes(32).toString("base64");
 
   let result;
   try {
@@ -111,7 +115,7 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
         paternal_lastname,
         email,
         username: email,
-        password: temporaryPassword,
+        password: unusablePassword,
         document_number,
         document_type,
         company_id: resolvedCompanyId,
@@ -132,6 +136,8 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
     if (err instanceof sequelize.ValidationError) {
       throw new AppError(400, "Los datos ingresados no son válidos.", err.message);
     }
+    // Ej. falta APP_PUBLIC_URL para armar la invitación: se respeta su status.
+    if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : "No se pudo crear el usuario";
     throw new AppError(404, message);
   }
@@ -147,11 +153,23 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
   };
   createLogController(payloadLog);
 
+  // El enlace también vuelve en la respuesta: si el correo no llega (o no está
+  // configurado), el admin lo copia y lo manda por WhatsApp.
+  const { invitation } = result;
   ok(
     res,
     200,
-    { id: result.id, temporaryPassword: temporaryPassword },
-    `Usuario creado correctamente. Contraseña temporal: "${temporaryPassword}" (se le pedirá cambiarla al iniciar sesión)`
+    {
+      id: result.id,
+      invitation: {
+        url: invitation.url,
+        expiresAt: utcToBusinessParts(invitation.expiresAt),
+        emailConfigured: invitation.emailConfigured,
+      },
+    },
+    invitation.emailConfigured
+      ? `Usuario creado. Le enviamos a ${email} un enlace para crear su contraseña.`
+      : "Usuario creado. El correo no está configurado: copia el enlace de invitación y envíaselo."
   );
 });
 
@@ -161,29 +179,7 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
 // autenticado podía editar/deshabilitar un usuario de OTRA empresa con solo
 // conocer su id numérico. Mismo patrón `assertXBelongsToCaller` que ya usan
 // client.controller.ts/quotation.controller.ts.
-const assertUserBelongsToCaller = async (targetUserId: number, user: IToken): Promise<boolean> => {
-  if (user.isSystem) return true;
-
-  const target = await DataBase.instance.user.findOne({
-    where: { id: targetUserId },
-    include: [{ association: "business_unit", attributes: ["id", "company_id"] }],
-  });
-  if (!target) return false;
-
-  // Igual que getUserTenantInfo: si el objetivo tiene tienda, la empresa
-  // de esa tienda manda; si no (admin de empresa sin tienda propia), cae
-  // al company_id directo del usuario.
-  const targetCompanyId =
-    (target as unknown as { business_unit?: { company_id: number } | null }).business_unit?.company_id ??
-    target.company_id ??
-    null;
-  if (targetCompanyId !== user.companyId) return false;
-
-  const scopedBusinessUnitId = resolveBusinessUnitFilter(user);
-  if (scopedBusinessUnitId === undefined) return true;
-
-  return target.business_unit_id === scopedBusinessUnitId;
-};
+const assertUserBelongsToCaller = userBelongsToCaller;
 
 // Empresa efectiva del usuario objetivo — misma regla que getUserTenantInfo
 // y assertUserBelongsToCaller: si tiene tienda, manda la empresa de la

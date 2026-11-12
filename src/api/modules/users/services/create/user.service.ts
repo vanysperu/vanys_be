@@ -7,6 +7,7 @@ import { USER_DEFAULT_VALUES } from "../../constants/defaultValues";
 import { setRolesForUser } from "../../../user_role/services/create/user_role.service";
 import { NullishPropertiesOf } from "sequelize/types/utils";
 import { nowUtc } from "../../../../../utils/dateUtils";
+import { issuePasswordLink } from "../../../auth/services/password_link/issue_password_link.service";
 
 export const createUserAndSendMailService = async ({
   createUserDto,
@@ -154,7 +155,9 @@ const createUserSimple = async ({
       status: true,
       login_status: USER_DEFAULT_VALUES.LOGIN_STATUS,
       failed_attempts: USER_DEFAULT_VALUES.FAILED_ATTEMPTS,
-      must_change_password: true,
+      // Nace sin contraseña conocida: la elige con el enlace de invitación,
+      // así que no hay contraseña temporal que obligar a cambiar.
+      must_change_password: false,
       id: 0,
       is_deleted: false,
     };
@@ -203,9 +206,20 @@ export const createUserAndSendMailServiceSimple = async ({
       }
     );
 
+    // Invitación por correo para que elija su contraseña, en la misma
+    // transacción: si no se puede armar el enlace, el usuario tampoco se crea.
+    const invitation = await issuePasswordLink({
+      userId: user_details.id,
+      purpose: "invite",
+      requestedIp: null,
+      actorId: createdBy,
+      companyId: createUserDto.company_id ?? null,
+      transaction,
+    });
+
     await transaction.commit();
 
-    return user_details;
+    return { ...user_details, invitation };
   } catch (err) {
     console.log({ err });
     await transaction.rollback();

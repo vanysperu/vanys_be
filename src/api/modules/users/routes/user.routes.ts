@@ -19,6 +19,8 @@ import {
   updateUserDtoValidator,
 } from "../validators/user.validator";
 import { allValidator } from "../../../../middlewares/error-validator";
+import { sendPasswordLinkController } from "../controllers/send_password_link.controller";
+import { sendPasswordLinkValidator } from "../validators/password_link.validator";
 import { paginationValidator } from "../../../validators/pagination.validator";
 
 export const router: Router = Router();
@@ -70,6 +72,14 @@ router.put(
   batchDisableUserValidator,
   allValidator,
   batchDisableUserController
+);
+// Reenviar invitación / enviar enlace para restablecer (Sprint 2, ítem 4).
+router.post(
+  "/:id/password-link",
+  verifyAccess,
+  sendPasswordLinkValidator,
+  allValidator,
+  sendPasswordLinkController
 );
 router.patch(
   "/change/password",

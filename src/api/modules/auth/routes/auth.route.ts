@@ -1,50 +1,51 @@
 import { Router } from "express";
+import { signInController, signOutController } from "../controllers/auth.controller";
+import { forgotPasswordController } from "../controllers/forgot_password.controller";
+import { checkPasswordLinkController } from "../controllers/check_password_link.controller";
+import { completePasswordLinkController } from "../controllers/complete_password_link.controller";
 import {
-  recoveryUserAccountController,
-  sendCodeForRecoveryPasswordController,
-  signInController,
-  signOutController,
-  verifyRecoveryCodeController,
-} from "../controllers/auth.controller";
-import {
-  recoveryUserAccountValidator,
-  sendCodeForRecoveryValidator,
+  checkPasswordLinkValidator,
+  completePasswordLinkValidator,
+  forgotPasswordValidator,
   signInValidator,
-  verifyRecoveryCodeValidator,
 } from "../validators/auth.validator";
 import { allValidator } from "../../../../middlewares/error-validator";
+import { rateLimit } from "../../../../core/middlewares/rateLimit";
 
 export const unprotectedRouter: Router = Router();
 export const protectedRouter: Router = Router();
 
+const MINUTE = 60_000;
+
 // Iniciar sesión
-unprotectedRouter.post(
-  "/signin",
-  signInValidator,
-  allValidator,
-  signInController
-);
+unprotectedRouter.post("/signin", signInValidator, allValidator, signInController);
 
 protectedRouter.post("/signout", signOutController);
 
-// Recuperar cuenta/password
+// Enlaces para crear o recuperar la contraseña (Sprint 2, ítem 4). Públicos
+// por diseño, como /signin: se llega desde el correo sin sesión. Reemplazan a
+// las rutas /recovery/* (código de 4 dígitos sin vencimiento ni límite de
+// intentos, que permitían tomar cualquier cuenta). Cada una con límite por IP.
 unprotectedRouter.post(
-  "/recovery/send-code",
-  sendCodeForRecoveryValidator,
+  "/password/forgot",
+  rateLimit({ name: "password-forgot", windowMs: 60 * MINUTE, max: 10 }),
+  forgotPasswordValidator,
   allValidator,
-  sendCodeForRecoveryPasswordController
+  forgotPasswordController
 );
 
 unprotectedRouter.post(
-  "/recovery/verify-code",
-  verifyRecoveryCodeValidator,
+  "/password/link/check",
+  rateLimit({ name: "password-link-check", windowMs: 10 * MINUTE, max: 30 }),
+  checkPasswordLinkValidator,
   allValidator,
-  verifyRecoveryCodeController
-);
-unprotectedRouter.post(
-  "/recovery/user-account",
-  recoveryUserAccountValidator,
-  allValidator,
-  recoveryUserAccountController
+  checkPasswordLinkController
 );
 
+unprotectedRouter.post(
+  "/password/link/complete",
+  rateLimit({ name: "password-link-complete", windowMs: 10 * MINUTE, max: 10 }),
+  completePasswordLinkValidator,
+  allValidator,
+  completePasswordLinkController
+);

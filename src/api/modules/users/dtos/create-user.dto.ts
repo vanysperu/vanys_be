@@ -14,7 +14,6 @@ interface UserOmit
     | "last_lock_date"
     | "last_unlock_date"
     | "lockout_minutes"
-    | "recovery_code"
     | "created_at"
     | "created_by"
     | "updated_at"
