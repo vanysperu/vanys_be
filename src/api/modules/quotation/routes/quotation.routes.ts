@@ -39,6 +39,19 @@ import { quotationBoardController } from "../controllers/board.controller";
 import { getQuotationProfitController } from "../controllers/profit.controller";
 import { quotationResetPreviewController } from "../controllers/reset_preview.controller";
 import { resetQuotationController } from "../controllers/reset.controller";
+import {
+  getPublicLinkController,
+  logWhatsappShareController,
+  regeneratePublicLinkController,
+  sendQuotationEmailController,
+  setPublicLinkEnabledController,
+} from "../controllers/share/share.controllers";
+import {
+  logWhatsappShareValidator,
+  quotationShareIdValidator,
+  sendQuotationEmailValidator,
+  setPublicLinkEnabledValidator,
+} from "../validators/share.validator";
 
 export const router: Router = Router();
 
@@ -58,6 +71,13 @@ router.get(
 );
 router.get("/find/:id", verifyAccess, getQuotationValidator, allValidator, getQuotationController);
 router.get("/:id/pdf", verifyAccess, getQuotationValidator, allValidator, downloadQuotationPdfController);
+// Compartir con el cliente (Sprint 2, ítem 7): enlace público, interruptor,
+// enlace nuevo, WhatsApp y correo. La vista pública está en public_quotation.routes.ts.
+router.get("/:id/public-link", verifyAccess, quotationShareIdValidator, allValidator, getPublicLinkController);
+router.put("/:id/public-link", verifyAccess, setPublicLinkEnabledValidator, allValidator, setPublicLinkEnabledController);
+router.post("/:id/public-link/regenerate", verifyAccess, quotationShareIdValidator, allValidator, regeneratePublicLinkController);
+router.post("/:id/share/whatsapp", verifyAccess, logWhatsappShareValidator, allValidator, logWhatsappShareController);
+router.post("/:id/share/email", verifyAccess, sendQuotationEmailValidator, allValidator, sendQuotationEmailController);
 // Ganancia (pagos, IGV, gastos, compras y neto). Solo en el sistema, no en el PDF.
 router.get("/:id/profit", verifyAccess, getQuotationValidator, allValidator, getQuotationProfitController);
 // Resetear a Pendiente borrando lo que generó: solo Super Administrador.

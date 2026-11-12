@@ -37,7 +37,7 @@ export class BrevoEmailProvider implements EmailProvider {
         accept: "application/json",
       },
       body: JSON.stringify({
-        sender: { name: this.config.fromName, email: this.config.fromAddress },
+        sender: { name: email.fromName || this.config.fromName, email: this.config.fromAddress },
         to: [{ email: email.to }],
         ...(email.cc ? { cc: [{ email: email.cc }] } : {}),
         ...(email.replyTo ? { replyTo: { email: email.replyTo } } : {}),

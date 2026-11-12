@@ -40,6 +40,7 @@ import { router as ReceivableRoutes } from "../api/modules/receivable/routes/rec
 import { router as ReminderRoutes } from "../api/modules/reminder/routes/reminder.routes";
 import { router as PublicWebRoutes } from "../api/modules/web_quote_request/routes/web_quote_request.routes";
 import { router as PublicProductRoutes } from "../api/modules/public_product/routes/public_product.routes";
+import { router as PublicQuotationRoutes } from "../api/modules/quotation/routes/public_quotation.routes";
 import { router as PublicAdvertisementRoutes } from "../api/modules/advertisement/routes/public_advertisement.routes";
 import { router as AdvertisementRoutes } from "../api/modules/advertisement/routes/advertisement.routes";
 import { router as InvoiceRoutes } from "../api/modules/invoice/routes/invoice.routes";
@@ -125,6 +126,9 @@ export default class Server {
     // Integraciones sin sesión (la web pública de cada empresa): se
     // autentican con API key por empresa, no con token (que vence). Ver
     // web_quote_request/README.md.
+    // Cotización compartida con el cliente (Sprint 2): pública SIN API key,
+    // protegida por su código aleatorio y el interruptor de la cotización.
+    this._router.use("/public/q", PublicQuotationRoutes);
     this._router.use("/public", PublicWebRoutes);
     this._router.use("/public", PublicProductRoutes);
     this._router.use("/public", PublicAdvertisementRoutes);

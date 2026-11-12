@@ -101,6 +101,7 @@ async function processOne(row: EmailOutboxModel, provider: EmailProvider | null)
   try {
     const rendered = await renderEmail(row.template, payload);
     const result = await provider.send({
+      fromName: rendered.fromName,
       to: row.to_email,
       cc: row.cc_email,
       replyTo: row.reply_to,

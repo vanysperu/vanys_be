@@ -19,7 +19,14 @@ export type QuotationEventAction =
   | "purchase_disabled"
   // Reset de la cotización por el Super Administrador.
   | "quotation_reset"
-  | "updated";
+  | "updated"
+  // Compartir con el cliente (Sprint 2, ítem 7): envío por WhatsApp o correo,
+  // cambios del enlace público (prender/apagar, enlace nuevo) y la primera vez
+  // que el cliente la abre.
+  | "shared_whatsapp"
+  | "shared_email"
+  | "public_link_changed"
+  | "viewed_by_client";
 
 export interface QuotationEventAttributes {
   id: number;

@@ -99,6 +99,10 @@ import {
   PasswordResetTokenFactory,
   PasswordResetTokenStatic,
 } from "../api/modules/auth/model/password_reset_token.model";
+import {
+  QuotationPublicLinkFactory,
+  QuotationPublicLinkStatic,
+} from "../api/modules/quotation/model/quotation_public_link.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -167,6 +171,8 @@ export class DataBase {
   public email_outbox: EmailOutboxStatic;
   public email_daily_usage: EmailDailyUsageStatic;
   public password_reset_token: PasswordResetTokenStatic;
+  // Enlace público de cada cotización (migración 20261113110000-create-quotation-public-link.js).
+  public quotation_public_link: QuotationPublicLinkStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -249,6 +255,7 @@ export class DataBase {
     this.email_outbox = EmailOutboxFactory(this.sequelize);
     this.email_daily_usage = EmailDailyUsageFactory(this.sequelize);
     this.password_reset_token = PasswordResetTokenFactory(this.sequelize);
+    this.quotation_public_link = QuotationPublicLinkFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

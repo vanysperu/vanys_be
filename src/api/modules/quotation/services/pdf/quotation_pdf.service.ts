@@ -12,6 +12,7 @@ import {
 import { QUOTATION_STATUS_LABEL, QuotationStatus } from "../../model/quotation.model";
 import { getQuotationById } from "../find/quotation.service";
 import { allocateIgvByLine } from "../shared/igv_breakdown";
+import { loadQuotationBranding, parseTermsLines } from "../shared/quotation_branding";
 import { CompanyAttributes } from "../../../company/model/company.model";
 import { VariableGeneralAttributes } from "../../../variable_general/models/variable_general.model";
 
@@ -197,17 +198,8 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 24, left: 32, right: 32, fontSize: 7.5, color: "#8A8F9C", textAlign: "center" },
 });
 
-// Cada línea del textarea de "Términos y condiciones" (Documentos de la
-// empresa) es una tarjeta — se le quita un posible "1. "/"1) " inicial
-// porque el número ya lo pone el círculo de la tarjeta.
-const parseTermsLines = (text: string | null | undefined): string[] => {
-  if (!text) return [];
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.replace(/^\d+[.)]\s*/, ""));
-};
+// Términos y condiciones: cada línea es una tarjeta (parseTermsLines en
+// shared/quotation_branding.ts, compartido con la vista pública).
 
 // yape/plin son cuentas digitales cortas (van en grilla de 2 columnas);
 // bank (y cualquier otro tipo futuro) se queda en el layout de una fila
@@ -547,22 +539,7 @@ export const generateQuotationPdf = async (quotationId: number): Promise<Buffer>
   // de este módulo) — por eso el paso intermedio por `unknown`, nunca `any`.
   const plain = quotation.toJSON() as unknown as Omit<QuotationPdfData, "company" | "paymentAccounts">;
 
-  const company = await DataBase.instance.company.findOne({ where: { id: plain.company_id ?? undefined } });
-  const paymentAccounts = await DataBase.instance.variable_general.findAll({
-    // Solo cuentas activas: una cuenta deshabilitada ya no debe ofrecérsele
-    // al cliente para pagar (antes salían todas, incluidas las dadas de baja).
-    // Tampoco las internas: el cliente solo ve las que la empresa eligió.
-    where: { category: "payment_account", company_id: plain.company_id, is_deleted: false, show_in_quotation: true },
-    order: [["id", "ASC"]],
-  });
-
-  // Mismo criterio que el frontend (useBrandTheme.ts): "blue" es la paleta
-  // por defecto, si la empresa no tiene ninguna elegida o el código no
-  // coincide con ningún tema activo, se cae al azul de siempre.
-  // Azul de Vanys (seeder 20261021140000-vanys-default-theme.js).
-  const DEFAULT_BRAND_COLOR = "#002E77";
-  const theme = await DataBase.instance.theme.findOne({ where: { code: company?.theme_color || "blue" } });
-  const brandColor = theme?.primary_color || DEFAULT_BRAND_COLOR;
+  const { company, paymentAccounts, brandColor } = await loadQuotationBranding(plain.company_id);
 
   // Logo y QRs se cargan en paralelo desde la base antes de armar el
   // documento (que es síncrono).

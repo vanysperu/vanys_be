@@ -1,5 +1,6 @@
 import { EmailPayloadByTemplate, EmailTemplateName, RenderedEmail } from "../../types/email.types";
 import { renderAccountInvitation, renderPasswordChanged, renderPasswordReset } from "./password.templates";
+import { renderQuotationEmail } from "./quotation.template";
 
 type Renderers = { [K in EmailTemplateName]: (payload: EmailPayloadByTemplate[K]) => Promise<RenderedEmail> | RenderedEmail };
 
@@ -9,6 +10,7 @@ const RENDERERS: Renderers = {
   password_reset: renderPasswordReset,
   account_invitation: renderAccountInvitation,
   password_changed: renderPasswordChanged,
+  quotation: renderQuotationEmail,
 };
 
 export const isKnownTemplate = (template: string): template is EmailTemplateName => template in RENDERERS;
