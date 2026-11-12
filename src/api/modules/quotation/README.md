@@ -10,6 +10,13 @@
 | GET    | /quotation/board                 | tablero: cada columna con sus primeras cotizaciones y totales reales | cotizacion (`cotizacion.board.endpoint`) |
 | GET    | /quotation/find/:id              | detail                     | cotizacion      |
 | GET    | /quotation/:id/pdf               | PDF                        | cotizacion      |
+| GET    | /quotation/:id/public-link       | enlace para compartir (lo crea la primera vez) | cotizacion (`cotizacion.publicLink.endpoint`) |
+| PUT    | /quotation/:id/public-link       | interruptor "Visible para el cliente" (`enabled`) | cotizacion (`cotizacion.publicLink.toggle.button`) |
+| POST   | /quotation/:id/public-link/regenerate | enlace nuevo (anula el anterior) | cotizacion (`cotizacion.publicLink.regenerate.button`) |
+| POST   | /quotation/:id/share/whatsapp    | deja en el historial el envío por WhatsApp | cotizacion (`cotizacion.share.whatsapp.button`) |
+| POST   | /quotation/:id/share/email       | manda la cotización por correo (enlace + PDF) | cotizacion (`cotizacion.share.email.button`) |
+| GET    | /public/q/:code                  | vista pública para el cliente | — (pública, ver abajo) |
+| GET    | /public/q/:code/pdf              | PDF de la vista pública    | — (pública, ver abajo) |
 | GET    | /quotation/:id/profit            | ganancia (`cotizacion.profit.view.button`) | cotizacion |
 | GET    | /quotation/:id/reset-preview     | qué borraría el reset (solo Super Administrador) | cotizacion (`cotizacion.resetPreview.endpoint`) |
 | PUT    | /quotation/:id/reset             | resetear a Pendiente (solo Super Administrador) | cotizacion (`cotizacion.reset.button`) |
@@ -46,6 +53,43 @@ hora el cron del hosting y se autentica con el secreto compartido
 `CRON_SECRET` no está configurado, el endpoint queda apagado (404), nunca
 abierto. Existe porque en el hosting la app se apaga sola sin tráfico, y el
 `setInterval` interno no alcanza.
+
+### Compartir con el cliente (Sprint 2, ítem 7)
+Pedido explícito del usuario: "una vista para que el cliente pueda ver la cotización, así podremos
+enviarle por WhatsApp; debe poder verse sin logeo", "un toggle que siempre esté en on: si lo ponemos
+off ya no pueden verla" y "un método para enviar la cotización por correo, por link o PDF, como
+salga mejor".
+- **Enlace:** `quotation_public_link`, uno por cotización, `/c/<código>` con 22 caracteres
+  aleatorios (16 bytes). Nunca el número: cambiándolo, cualquiera vería cotizaciones ajenas
+  (decisión confirmada por el usuario). Se crea la primera vez que se comparte y nace encendido.
+- **Interruptor** (`enabled`): apagado, `/public/q/:code` y su PDF responden 404
+  `PUBLIC_QUOTATION_UNAVAILABLE` (sin decir por qué). Al encenderlo, el MISMO enlace vuelve a
+  funcionar. "Generar enlace nuevo" cambia el código, anula el anterior para siempre y pone las
+  vistas en cero.
+- **Vista pública** (`/api/public/q/*`, montada aparte de las rutas `/public` con API key):
+  - sin sesión ni API key, límite de 120 consultas cada 10 minutos por IP;
+  - cabeceras `X-Robots-Tag: noindex`, `Cache-Control: private, no-store` y
+    `Referrer-Policy: no-referrer`;
+  - devuelve SOLO lo que muestra el PDF (`services/share/public_view.service.ts`, la prueba
+    compara las claves): nunca pagos, gastos, compras, ganancia, historial ni notas internas;
+  - una "Pendiente de cotizar" no se comparte (409 `QUOTATION_INCOMPLETE`) ni se muestra.
+- **Vistas:** cada apertura suma `view_count` y `last_viewed_at`; la primera queda en el
+  historial (`viewed_by_client`).
+- **WhatsApp** (gratis, sin la API de Meta): el frontend abre `wa.me/51<celular>?text=…` con
+  el enlace; en el celular también comparte el PDF como archivo. El backend solo registra el
+  clic (`shared_whatsapp`), porque WhatsApp no confirma la entrega.
+- **Correo** (enlace + PDF adjunto, decisión: "como salga mejor"):
+  - va por la cola del módulo [`email`](../email/README.md) y el PDF se genera al enviar
+    (versión vigente);
+  - remitente "<Empresa> vía Vanys" y `Reply-To` = correo de la empresa;
+  - con el enlace apagado va sin el botón "Ver cotización";
+  - queda en el historial (`shared_email`).
+- **Alcance:**
+  - ver el enlace, WhatsApp y correo: alcance de LECTURA de la cotización;
+  - interruptor y enlace nuevo: alcance de ESCRITURA (`assertQuotationWritable`);
+  - otra empresa: 403.
+- La marca (empresa, cuentas de pago, color y términos) sale de
+  `services/shared/quotation_branding.ts`, el mismo helper que usa el PDF.
 
 ## Reglas de negocio propias del módulo
 
