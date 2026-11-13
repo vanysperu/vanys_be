@@ -1,12 +1,16 @@
-import { Op, Transaction, UniqueConstraintError } from "sequelize";
+import { Op, Transaction, UniqueConstraintError, WhereOptions } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { AppError } from "../../../../../core/errors/AppError";
 import { nowUtc } from "../../../../../utils/dateUtils";
+import type { ProductCodeAttributes } from "../../model/product_code.model";
 
 export const MAX_PRODUCT_CODES = 50;
 
 export interface ProductCodeInput {
   code: string;
+  // Proveedor del módulo Proveedores (Sprint 2). Si no llega pero llega el
+  // texto `supplier` (integraciones viejas), se busca o se crea por nombre.
+  supplier_id?: number | null;
   supplier?: string | null;
   // Nombre de uno de los colores del producto.
   color?: string | null;
@@ -14,41 +18,133 @@ export interface ProductCodeInput {
 
 export interface ProductCodeDto {
   code: string;
+  supplier_id: number | null;
   supplier: string | null;
   color: string | null;
 }
 
 const codeTaken = (message: string) => new AppError(409, message, undefined, "PRODUCT_CODE_TAKEN");
 
-// Códigos sin espacios sobrantes, en el orden que llegaron. Un código NO puede
-// repetirse (pedido explícito del usuario), ni siquiera con otro proveedor ni
-// con otras mayúsculas: se rechaza en vez de descartarlo en silencio.
-export const normalizeCodes = (codes: ProductCodeInput[]): ProductCodeDto[] => {
-  const normalized = codes
-    .map((entry) => ({ code: entry.code.trim(), supplier: entry.supplier?.trim() || null, color: entry.color?.trim() || null }))
-    .filter((entry) => entry.code !== "");
+const trimmedOrNull = (value: string | null | undefined) => value?.trim() || null;
 
+// Códigos sin espacios sobrantes y con su proveedor ya resuelto, en el orden
+// que llegaron. Decisión D6: el mismo código puede repetirse con OTRO
+// proveedor, pero no dos veces con el mismo (ni con otras mayúsculas): se
+// rechaza en vez de descartarlo en silencio.
+export const assertNoRepeatedCodes = (codes: ProductCodeDto[]): void => {
   const seen = new Set<string>();
   const repeated = new Set<string>();
-  for (const entry of normalized) {
-    const key = entry.code.toUpperCase();
+  for (const entry of codes) {
+    const key = `${entry.supplier_id ?? 0}|${entry.code.toUpperCase()}`;
     if (seen.has(key)) repeated.add(entry.code);
     seen.add(key);
   }
   if (repeated.size > 0) {
-    throw new AppError(400, `Códigos repetidos en el producto: ${[...repeated].join(", ")}`, undefined, "DUPLICATE_PRODUCT_CODE");
+    throw new AppError(400, `Códigos repetidos con el mismo proveedor: ${[...repeated].join(", ")}`, undefined, "DUPLICATE_PRODUCT_CODE");
   }
-  return normalized;
 };
+
+// Proveedor de cada código: por id (tiene que ser de la empresa) o, si solo
+// llega el nombre (integraciones), el de ese nombre o uno nuevo. Una sola
+// consulta por tipo, sin N+1.
+export async function resolveCodeSuppliers({
+  companyId,
+  codes,
+  actorId,
+  transaction,
+}: {
+  companyId: number;
+  codes: ProductCodeInput[];
+  actorId: number | null;
+  transaction: Transaction;
+}): Promise<ProductCodeDto[]> {
+  const entries = codes
+    .map((entry) => ({
+      code: entry.code.trim(),
+      supplierId: entry.supplier_id ? Number(entry.supplier_id) : null,
+      supplierName: trimmedOrNull(entry.supplier),
+      color: trimmedOrNull(entry.color),
+    }))
+    .filter((entry) => entry.code !== "");
+
+  const ids = [...new Set(entries.flatMap((entry) => (entry.supplierId ? [entry.supplierId] : [])))];
+  const byId = new Map<number, string>();
+  if (ids.length > 0) {
+    const rows = await DataBase.instance.supplier.findAll({
+      where: { id: { [Op.in]: ids }, company_id: companyId },
+      attributes: ["id", "name"],
+      transaction,
+    });
+    rows.forEach((row) => byId.set(Number(row.id), row.name));
+    const missing = ids.find((id) => !byId.has(id));
+    if (missing) throw new AppError(400, "Uno de los proveedores no existe en esta empresa", undefined, "SUPPLIER_NOT_FOUND");
+  }
+
+  const names = [...new Set(entries.flatMap((entry) => (!entry.supplierId && entry.supplierName ? [entry.supplierName] : [])))];
+  const byName = await findOrCreateSuppliersByName(companyId, names, actorId, transaction);
+
+  return entries.map((entry) => {
+    if (entry.supplierId) return { code: entry.code, supplier_id: entry.supplierId, supplier: byId.get(entry.supplierId) ?? null, color: entry.color };
+    if (!entry.supplierName) return { code: entry.code, supplier_id: null, supplier: null, color: entry.color };
+    const supplier = byName.get(entry.supplierName.toUpperCase());
+    return { code: entry.code, supplier_id: supplier?.id ?? null, supplier: supplier?.name ?? entry.supplierName, color: entry.color };
+  });
+}
+
+// Busca proveedores por nombre (sin distinguir mayúsculas) y crea los que falten.
+async function findOrCreateSuppliersByName(
+  companyId: number,
+  names: string[],
+  actorId: number | null,
+  transaction: Transaction
+): Promise<Map<string, { id: number; name: string }>> {
+  const byName = new Map<string, { id: number; name: string }>();
+  if (names.length === 0) return byName;
+
+  const existing = await DataBase.instance.supplier.findAll({
+    where: { company_id: companyId, name: { [Op.in]: names } },
+    attributes: ["id", "name"],
+    transaction,
+  });
+  existing.forEach((row) => byName.set(row.name.toUpperCase(), { id: Number(row.id), name: row.name }));
+
+  const now = nowUtc();
+  for (const name of names) {
+    if (byName.has(name.toUpperCase())) continue;
+    const created = await DataBase.instance.supplier.create(
+      {
+        id: 0,
+        company_id: companyId,
+        document_type: null,
+        document_number: null,
+        name,
+        trade_name: null,
+        email: null,
+        phone: null,
+        address: null,
+        is_carrier: false,
+        mtc_registration: null,
+        active: true,
+        created_by: actorId,
+        created_at: now,
+        updated_by: actorId,
+        updated_at: now,
+      },
+      { transaction }
+    );
+    byName.set(name.toUpperCase(), { id: Number(created.id), name });
+  }
+  return byName;
+}
 
 const describeProduct = (product: { name: string; sku: string | null } | null | undefined) =>
   product ? `"${product.name}"${product.sku ? ` (SKU ${product.sku})` : ""}` : "otro producto";
 
 /**
- * Un código identifica a UN solo producto de la empresa: no puede estar en los
- * códigos de otro producto, ni ser el SKU de otro (la búsqueda por código
- * devolvería dos productos). Entre empresas distintas sí puede repetirse.
- * `productId` null = producto nuevo.
+ * Un código identifica a UN solo producto por proveedor dentro de la empresa
+ * (D6): no puede estar con el mismo proveedor en otro producto, ni ser el SKU
+ * de otro (la búsqueda por código devolvería otro producto). Entre empresas
+ * distintas sí puede repetirse. `productId` null = producto nuevo.
  */
 export async function assertCodesAvailable({
   companyId,
@@ -58,24 +154,35 @@ export async function assertCodesAvailable({
 }: {
   companyId: number;
   productId: number | null;
-  codes: string[];
+  codes: Pick<ProductCodeDto, "code" | "supplier_id">[];
   transaction: Transaction;
 }): Promise<void> {
   if (codes.length === 0) return;
-  const otherProduct = productId === null ? {} : { [Op.ne]: productId };
+  const otherProduct: WhereOptions<ProductCodeAttributes> = productId === null ? {} : { product_id: { [Op.ne]: productId } };
 
   const usedAsCode = await DataBase.instance.product_code.findOne({
-    where: { company_id: companyId, code: { [Op.in]: codes }, ...(productId === null ? {} : { product_id: otherProduct }) },
-    attributes: ["code", "product_id"],
+    where: {
+      [Op.and]: [
+        { company_id: companyId },
+        otherProduct,
+        { [Op.or]: codes.map((entry) => ({ code: entry.code, supplier_id: entry.supplier_id })) },
+      ],
+    },
+    attributes: ["code", "product_id", "supplier"],
     transaction,
   });
   if (usedAsCode) {
     const owner = await DataBase.instance.product.findByPk(usedAsCode.product_id, { attributes: ["name", "sku"], transaction });
-    throw codeTaken(`El código "${usedAsCode.code}" ya pertenece a ${describeProduct(owner)}`);
+    const supplierText = usedAsCode.supplier ? ` con el proveedor "${usedAsCode.supplier}"` : "";
+    throw codeTaken(`El código "${usedAsCode.code}"${supplierText} ya pertenece a ${describeProduct(owner)}`);
   }
 
   const usedAsSku = await DataBase.instance.product.findOne({
-    where: { company_id: companyId, sku: { [Op.in]: codes }, ...(productId === null ? {} : { id: otherProduct }) },
+    where: {
+      company_id: companyId,
+      sku: { [Op.in]: codes.map((entry) => entry.code) },
+      ...(productId === null ? {} : { id: { [Op.ne]: productId } }),
+    },
     attributes: ["name", "sku"],
     transaction,
   });
@@ -83,7 +190,7 @@ export async function assertCodesAvailable({
 }
 
 // Al revés: el SKU de un producto no puede ser el código de proveedor de OTRO
-// producto de la empresa.
+// producto de la empresa (con ningún proveedor).
 export async function assertSkuNotUsedAsCode({
   companyId,
   productId,
@@ -162,8 +269,10 @@ export async function replaceProductCodes({
   actorId: number | null;
   transaction: Transaction;
 }): Promise<void> {
-  const normalized = linkCodesToColors(normalizeCodes(codes), await loadColorNames(productId, transaction));
-  await assertCodesAvailable({ companyId, productId, codes: normalized.map((entry) => entry.code), transaction });
+  const resolved = await resolveCodeSuppliers({ companyId, codes, actorId, transaction });
+  assertNoRepeatedCodes(resolved);
+  const normalized = linkCodesToColors(resolved, await loadColorNames(productId, transaction));
+  await assertCodesAvailable({ companyId, productId, codes: normalized, transaction });
 
   await DataBase.instance.product_code.destroy({ where: { product_id: productId }, transaction });
   if (normalized.length === 0) return;
@@ -176,6 +285,7 @@ export async function replaceProductCodes({
         company_id: companyId,
         product_id: productId,
         code: entry.code,
+        supplier_id: entry.supplier_id,
         supplier: entry.supplier,
         color: entry.color,
         position: index,
@@ -187,9 +297,9 @@ export async function replaceProductCodes({
       { transaction }
     );
   } catch (error) {
-    // Dos guardados simultáneos con el mismo código: el índice único de la
-    // base (company_id, code) frena al segundo.
-    if (error instanceof UniqueConstraintError) throw codeTaken("Uno de los códigos ya lo usa otro producto de la empresa");
+    // Dos guardados simultáneos con el mismo código y proveedor: el índice
+    // único de la base (company_id, supplier_key, code) frena al segundo.
+    if (error instanceof UniqueConstraintError) throw codeTaken("Uno de los códigos ya lo usa otro producto con el mismo proveedor");
     throw error;
   }
 }
@@ -201,7 +311,7 @@ export async function loadCodesByProduct(productIds: number[]): Promise<Map<numb
 
   const rows = await DataBase.instance.product_code.findAll({
     where: { product_id: { [Op.in]: productIds } },
-    attributes: ["product_id", "code", "supplier", "color"],
+    attributes: ["product_id", "code", "supplier_id", "supplier", "color"],
     order: [
       ["product_id", "ASC"],
       ["position", "ASC"],
@@ -210,7 +320,12 @@ export async function loadCodesByProduct(productIds: number[]): Promise<Map<numb
   for (const row of rows) {
     const productId = Number(row.product_id);
     const list = byProduct.get(productId) ?? [];
-    list.push({ code: row.code, supplier: row.supplier, color: row.color });
+    list.push({
+      code: row.code,
+      supplier_id: row.supplier_id === null ? null : Number(row.supplier_id),
+      supplier: row.supplier,
+      color: row.color,
+    });
     byProduct.set(productId, list);
   }
   return byProduct;

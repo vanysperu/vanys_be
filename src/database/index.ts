@@ -115,6 +115,8 @@ import {
   QuotationItemStageLogFactory,
   QuotationItemStageLogStatic,
 } from "../api/modules/production_workflow/model/quotation_item_stage_log.model";
+import { CompanyFeatureFactory, CompanyFeatureStatic } from "../api/modules/company_feature/model/company_feature.model";
+import { SupplierFactory, SupplierStatic } from "../api/modules/supplier/model/supplier.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -189,6 +191,9 @@ export class DataBase {
   public production_workflow: ProductionWorkflowStatic;
   public production_workflow_stage: ProductionWorkflowStageStatic;
   public quotation_item_stage_log: QuotationItemStageLogStatic;
+  // Funcionalidades por empresa y proveedores (migración 20261114100000-create-company-feature-and-supplier.js).
+  public company_feature: CompanyFeatureStatic;
+  public supplier: SupplierStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -275,6 +280,8 @@ export class DataBase {
     this.production_workflow = ProductionWorkflowFactory(this.sequelize);
     this.production_workflow_stage = ProductionWorkflowStageFactory(this.sequelize);
     this.quotation_item_stage_log = QuotationItemStageLogFactory(this.sequelize);
+    this.company_feature = CompanyFeatureFactory(this.sequelize);
+    this.supplier = SupplierFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

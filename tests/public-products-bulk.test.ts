@@ -246,8 +246,9 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     expect(replicaProduct.colors).toEqual([{ name: "Rojo", hex: "#FF0000" }]);
     // Sin `codes` en la actualización, se conservan los del alta.
     expect(replicaProduct.codes).toEqual([
-      { code: `PROV-A-${sku}`, supplier: "Proveedor A", color: null },
-      { code: `PROV-B-${sku}`, supplier: null, color: null },
+      // El texto "Proveedor A" se volvió un proveedor de la empresa (Sprint 2).
+      { code: `PROV-A-${sku}`, supplier_id: expect.any(Number), supplier: "Proveedor A", color: null },
+      { code: `PROV-B-${sku}`, supplier_id: null, supplier: null, color: null },
     ]);
     expect(replicaProduct.sku).toBe(sku);
     expect(replicaProduct.category).toMatchObject({ id: categoryId });
@@ -299,20 +300,25 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     }
   });
 
-  it("los códigos de proveedor no se repiten en la empresa (ni con otro proveedor, ni con un SKU)", async () => {
+  it("un código no se repite con el mismo proveedor ni choca con un SKU (D6: con otro proveedor sí)", async () => {
     const send = (product: object) => publicPost("/products/bulk", { products: [product] });
     const resultOf = async (product: object) => (await send(product)).body.data.results[0];
 
-    // Repetido dentro del mismo producto (otras mayúsculas y otro proveedor).
+    // Repetido dentro del mismo producto con el mismo proveedor (otras mayúsculas).
     expect(
-      await resultOf({ sku: `${sku}-D1`, name: "Dup", price_unit: 1, codes: [{ code: `DUP-${sku}` }, { code: `dup-${sku}`, supplier: "Otro" }] })
+      await resultOf({ sku: `${sku}-D1`, name: "Dup", price_unit: 1, codes: [{ code: `DUP-${sku}`, supplier: "Otro" }, { code: `dup-${sku}`, supplier: "otro" }] })
     ).toMatchObject({ status: "error", code: "DUPLICATE_PRODUCT_CODE" });
 
-    // Ya es código de otro producto (PROV-A lo tiene el producto principal).
-    expect(await resultOf({ sku: `${sku}-D2`, name: "Ajeno", price_unit: 1, codes: [{ code: `prov-a-${sku}`, supplier: "X" }] })).toMatchObject({
-      status: "error",
-      code: "PRODUCT_CODE_TAKEN",
-    });
+    // Ya es código de otro producto con el MISMO proveedor (PROV-A lo tiene el
+    // producto principal con "Proveedor A").
+    expect(
+      await resultOf({ sku: `${sku}-D2`, name: "Ajeno", price_unit: 1, codes: [{ code: `prov-a-${sku}`, supplier: "proveedor a" }] })
+    ).toMatchObject({ status: "error", code: "PRODUCT_CODE_TAKEN" });
+
+    // D6: el mismo código con OTRO proveedor sí se puede (otra importadora).
+    expect(
+      await resultOf({ sku: `${sku}-D4`, name: "Otra importadora", price_unit: 1, codes: [{ code: `PROV-A-${sku}`, supplier: "Proveedor Z" }] })
+    ).toMatchObject({ status: "ok" });
 
     // Es el SKU de otro producto.
     expect(await resultOf({ sku: `${sku}-D3`, name: "SKU ajeno", price_unit: 1, codes: [{ code: sku }] })).toMatchObject({
@@ -471,8 +477,8 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     });
     expect(created.body.data.results[0].status).toBe("ok");
     expect(await codesIn(mainCompanyId)).toEqual([
-      { code: codeBlack, supplier: null, color: "Negro" },
-      { code: codeBlue, supplier: null, color: "Azul" },
+      { code: codeBlack, supplier_id: null, supplier: null, color: "Negro" },
+      { code: codeBlue, supplier_id: null, supplier: null, color: "Azul" },
     ]);
     // La réplica conserva el vínculo.
     expect((await codesIn(replicaCompanyId))[0]).toMatchObject({ code: codeBlack, color: "Negro" });
@@ -485,8 +491,8 @@ describe("Productos por API key: subida masiva, réplica, colores, categorías y
     // Quitar un color sin mandar códigos: el código sigue, sin color.
     await send({ colors: [{ name: "Azul" }] });
     expect(await codesIn(mainCompanyId)).toEqual([
-      { code: codeBlack, supplier: null, color: null },
-      { code: codeBlue, supplier: null, color: "Azul" },
+      { code: codeBlack, supplier_id: null, supplier: null, color: null },
+      { code: codeBlue, supplier_id: null, supplier: null, color: "Azul" },
     ]);
   });
 

@@ -58,4 +58,7 @@ export interface MyAccessResponse {
   // habilita el Super Administrador). Para el Super Administrador (sin
   // empresa) es false: él ve la bandera de cada producto en el listado.
   productImagesEnabled: boolean;
+  // Funcionalidades contratadas por la empresa del usuario (Sprint 2,
+  // company_feature). Vacío para el Super Administrador (sin empresa).
+  features: string[];
 }

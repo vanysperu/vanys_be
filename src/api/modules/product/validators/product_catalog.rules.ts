@@ -50,6 +50,11 @@ export const productCatalogRules = (prefix = "") => [
     .withMessage("Cada código necesita su valor")
     .isLength({ max: 60 })
     .withMessage("El código tiene máximo 60 caracteres"),
+  body(`${prefix}codes.*.supplier_id`)
+    .optional({ values: "null" })
+    .isInt({ min: 1 })
+    .withMessage("El proveedor del código no es válido")
+    .toInt(),
   body(`${prefix}codes.*.supplier`)
     .optional({ values: "falsy" })
     .isString()

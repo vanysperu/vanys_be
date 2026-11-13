@@ -78,8 +78,12 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
   subcategoría la limpia.
 - **Un solo SKU, varios códigos** (tabla `product_code`, pedido explícito del
   usuario): cada proveedor puede identificar el producto con su propio código.
-  Cada código lleva el nombre del proveedor opcional (texto libre: no hay
-  entidad de proveedores). Hasta 50; guardar reemplaza la lista completa. El
+  Cada código lleva su proveedor opcional: `supplier_id` (módulo Proveedores,
+  Sprint 2) y `supplier`, el nombre del proveedor copiado al guardar (editar
+  el proveedor lo actualiza). Las integraciones que mandan solo el texto
+  `supplier` siguen funcionando: se usa el proveedor de ese nombre (sin
+  distinguir mayúsculas) o se crea uno. Un `supplier_id` de otra empresa →
+  `400 SUPPLIER_NOT_FOUND`. Hasta 50; guardar reemplaza la lista completa. El
   SKU sigue siendo uno solo y es la llave de la subida masiva. La búsqueda
   general (`searchTerm`, ver `product_search.ts`) encuentra por nombre, SKU, **código** o color, con plurales y varias palabras; el filtro
   `code` busca solo en los códigos.
@@ -89,15 +93,19 @@ ver [`public_product`](../public_product/README.md) (subida masiva por API key).
   guarda el nombre del color; uno que el producto no tiene →
   `400 CODE_COLOR_NOT_FOUND`. Si cambian los colores y no llega la lista de
   códigos, los que apuntaban a un color quitado quedan sin color.
-- **Los códigos no se repiten** (pedido explícito del usuario), dentro de la
-  empresa y sin distinguir mayúsculas:
-  - ni dentro del mismo producto, aunque cambie el proveedor
+- **Un código no se repite con el mismo proveedor** (decisión D6 del Sprint 2:
+  dos importadoras pueden usar el mismo código para productos distintos),
+  dentro de la empresa y sin distinguir mayúsculas:
+  - ni dentro del mismo producto con el mismo proveedor
     (`400 DUPLICATE_PRODUCT_CODE`);
-  - ni en otro producto, ni como SKU de otro producto; y un SKU no puede ser el
-    código de otro producto (`409 PRODUCT_CODE_TAKEN`, el mensaje dice cuál).
-  - La base lo garantiza con el índice único `(company_id, code)` (migración
-    `20261104120000`). Entre empresas distintas sí puede repetirse: la réplica
-    de la subida masiva copia los códigos a cada empresa.
+  - ni en otro producto con el mismo proveedor, ni como SKU de otro producto; y
+    un SKU no puede ser el código de otro producto con ningún proveedor
+    (`409 PRODUCT_CODE_TAKEN`, el mensaje dice cuál).
+  - La base lo garantiza con el índice único `(company_id, supplier_key, code)`,
+    donde `supplier_key = COALESCE(supplier_id, 0)`: los códigos sin proveedor
+    tampoco se repiten (migración `20261114100000`). Entre empresas distintas
+    sí puede repetirse: la réplica de la subida masiva copia los códigos a cada
+    empresa.
 - **Colores** (tabla `product_color`): nombre + hex opcional, en orden, hasta
   30 y sin repetidos. Guardar los colores reemplaza la lista completa.
 - **Foto** (`image_path`, imagen de `company_asset` de la MISMA empresa): solo si

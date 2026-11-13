@@ -7,6 +7,7 @@ import { ModuleModel } from "../../../module/models/module.model";
 import { ResourceModel } from "../../../resource/models/resource.model";
 import { RolesResourcesModel } from "../../../roles_resources/models/roles_resources.model";
 import { getIgvRate } from "../../../quotation/services/shared/tax_config";
+import { listEnabledFeatures } from "../../../company_feature/services/shared/feature_store";
 import { isSystemOnlyModule, isSystemOnlyResource } from "../../../../../core/rbac/systemOnlyModules";
 
 const getUserRoles = async (userId: number) => {
@@ -75,12 +76,13 @@ export const getMyAccess = async (
   const roleIds = roles.map((role) => role.id);
   const roleName = roles.length > 0 ? roles.map((role) => role.name).join(", ") : null;
 
-  const [themeColor, businessUnitName, companyName, igvRate, productImagesEnabled] = await Promise.all([
+  const [themeColor, businessUnitName, companyName, igvRate, productImagesEnabled, features] = await Promise.all([
     getCompanyThemeColor(companyId),
     getBusinessUnitName(businessUnitId),
     getCompanyName(companyId),
     getIgvRate(companyId),
     companyId ? companyProductImagesEnabled(companyId) : Promise.resolve(false),
+    companyId ? listEnabledFeatures(companyId) : Promise.resolve([]),
   ]);
 
   if (roleIds.length === 0) {
@@ -97,6 +99,7 @@ export const getMyAccess = async (
       companyName,
       igvRate,
       productImagesEnabled,
+      features,
     };
   }
 
@@ -186,5 +189,6 @@ export const getMyAccess = async (
     companyName,
     igvRate,
     productImagesEnabled,
+    features,
   };
 };

@@ -9,7 +9,10 @@ export interface ProductCodeAttributes {
   company_id: number;
   product_id: number;
   code: string;
-  // Nombre del proveedor que usa este código (texto libre, opcional).
+  // Proveedor que usa este código (Sprint 2, D6: el código es único por
+  // proveedor dentro de la empresa).
+  supplier_id: number | null;
+  // Nombre del proveedor al guardar el código (antes era texto libre).
   supplier: string | null;
   // Color del producto al que corresponde este código (nombre; opcional).
   color: string | null;
@@ -34,6 +37,7 @@ export function ProductCodeFactory(sequelize: Sequelize): ProductCodeStatic {
       company_id: { type: DataTypes.BIGINT, allowNull: false },
       product_id: { type: DataTypes.BIGINT, allowNull: false },
       code: { type: DataTypes.STRING(60), allowNull: false },
+      supplier_id: { type: DataTypes.BIGINT, allowNull: true },
       supplier: { type: DataTypes.STRING(150), allowNull: true },
       color: { type: DataTypes.STRING(60), allowNull: true },
       position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
