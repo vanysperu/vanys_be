@@ -74,6 +74,9 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   (`POST /invoice/:id/file`). En el frontend la pregunta "¿La compra tiene
   factura?" es obligatoria. Una factura puede cubrir varios productos: con
   `invoice_id` la compra se suma a esa factura ya registrada, en vez de crear otra.
+  Sprint 2, ítem 3: con `invoice_pending: true` ("Sí, llega después", incompatible
+  con `has_invoice: true`) la compra queda `invoice_status = pending` y aparece en la
+  bandeja "Compras sin factura" de Facturas; sin ninguno de los dos, `not_required`.
 - Filtros de `list`: `status`, `assignedTo`, `clientName`, `assigneeName`,
   `dateFrom`/`dateTo` (fecha de creación, hora de Lima).
 - Un item que **ya tiene compras registradas no se puede marcar
@@ -104,7 +107,7 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   tiene fotos habilitadas (lo decide el backend). El clic en el producto abre su
   color, código y cantidad en cada lista de órdenes (Inicio, Compras y cotización);
   con fotos habilitadas, también su foto.
-- Cada compra trae `invoice_id`, `invoice_has_file` e `invoice_purchases_count`
+- Cada compra trae `invoice_id`, `invoice_status`, `invoice_has_file` e `invoice_purchases_count`
   (compras vigentes en esa factura): el diálogo de corregir los usa para ofrecer
   dejarla, moverla o quitarla y para avisar si la factura se elimina.
 - `purchase_order_item_purchase.funding_source`/`paid_by_user_id` se

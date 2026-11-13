@@ -8,4 +8,5 @@ export const invoiceActorOf = (user: IToken): InvoiceActor => ({
   isSystem: user.isSystem,
   companyId: user.companyId,
   businessUnitId: resolveBusinessUnitFilter(user),
+  writeBusinessUnitId: user.isSystem || user.businessUnitId === null ? undefined : user.businessUnitId,
 });

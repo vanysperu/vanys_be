@@ -26,7 +26,10 @@ export const INVOICE_PURCHASE_SEARCH_SQL = `EXISTS (
 
 // Condición completa de búsqueda de una factura (alias `i`). Lo mismo en
 // Facturas y en el selector de facturas al registrar una compra.
-export const INVOICE_SEARCH_SQL = `(i.description LIKE :search OR CAST(i.quotation_id AS CHAR) = :searchId OR ${INVOICE_PURCHASE_SEARCH_SQL})`;
+// También por serie-número y por proveedor (Sprint 2, ítem 3, D9).
+export const INVOICE_SEARCH_SQL = `(i.description LIKE :search OR CAST(i.quotation_id AS CHAR) = :searchId OR i.series_number LIKE :search
+  OR EXISTS (SELECT 1 FROM supplier ssu WHERE ssu.id = i.supplier_id AND (ssu.name LIKE :search OR ssu.document_number LIKE :search))
+  OR ${INVOICE_PURCHASE_SEARCH_SQL})`;
 
 // Texto y número de la búsqueda ("COT-0012" -> "12") para los replacements.
 export const invoiceSearchReplacements = (search: string | undefined) => ({

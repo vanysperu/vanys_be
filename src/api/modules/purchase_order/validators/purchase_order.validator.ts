@@ -71,6 +71,16 @@ export const createPurchaseOrderItemPurchaseValidator = [
   body("warehouse_id").optional({ values: "null" }).isInt({ min: 1 }).withMessage("El almacén no es válido"),
   // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
   body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
+  // "Sí, llega después" (Sprint 2, ítem 3): sin factura todavía, queda en la bandeja.
+  body("invoice_pending")
+    .optional()
+    .isBoolean()
+    .withMessage("invoice_pending debe ser verdadero o falso")
+    .toBoolean()
+    .custom((value: boolean, { req }) => {
+      if (!value || req.body.has_invoice !== true) return true;
+      throw new Error("Una compra con factura no puede quedar con la factura pendiente");
+    }),
   // Factura de compra ya registrada a la que se suma esta compra (varias compras, una factura).
   body("invoice_id").optional({ values: "null" }).isInt({ gt: 0 }).withMessage("La factura elegida no es válida").toInt(),
   body("funding_source")

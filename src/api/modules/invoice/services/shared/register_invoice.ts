@@ -2,7 +2,16 @@ import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { AppError } from "../../../../../core/errors/AppError";
-import { InvoiceType } from "../../model/invoice.model";
+import { InvoiceCurrency, InvoiceType } from "../../model/invoice.model";
+
+// Datos opcionales de una factura de compra (Sprint 2, ítem 3, D9).
+export interface InvoiceDetails {
+  supplierId?: number | null;
+  seriesNumber?: string | null;
+  issueDate?: string | null;
+  currency?: InvoiceCurrency | null;
+  total?: number | null;
+}
 
 // Largo de la columna invoice.description.
 const DESCRIPTION_MAX = 255;
@@ -21,6 +30,7 @@ export async function registerInvoice({
   quotationId,
   purchaseId,
   description,
+  details = {},
   actorId,
   transaction,
 }: {
@@ -30,6 +40,7 @@ export async function registerInvoice({
   quotationId: number;
   purchaseId: number | null;
   description: string;
+  details?: InvoiceDetails;
   actorId: number | null;
   transaction: Transaction;
 }): Promise<number> {
@@ -41,6 +52,11 @@ export async function registerInvoice({
       business_unit_id: businessUnitId,
       type,
       quotation_id: quotationId,
+      supplier_id: details.supplierId ?? null,
+      series_number: details.seriesNumber ?? null,
+      issue_date: details.issueDate ?? null,
+      currency: details.currency ?? null,
+      total: details.total ?? null,
       description: description.slice(0, DESCRIPTION_MAX),
       file_name: null,
       mime_type: null,
@@ -68,7 +84,7 @@ export async function registerInvoice({
   return Number(invoice.id);
 }
 
-const createPurchaseLink = async ({
+export const createPurchaseLink = async ({
   invoiceId,
   purchaseId,
   companyId,
@@ -94,6 +110,11 @@ const createPurchaseLink = async ({
       updated_at: now,
     },
     { transaction }
+  );
+  // La compra deja la bandeja "Compras sin factura" (Sprint 2, ítem 3).
+  await DataBase.instance.purchase_order_item_purchase.update(
+    { invoice_status: "linked", updated_by: actorId, updated_at: now },
+    { where: { id: purchaseId }, transaction }
   );
 };
 

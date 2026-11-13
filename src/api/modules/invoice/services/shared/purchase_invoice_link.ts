@@ -145,6 +145,13 @@ export async function applyPurchaseInvoiceChange({
   }
 
   if (currentInvoiceId !== null) await DataBase.instance.invoice_purchase.destroy({ where: { purchase_id: purchaseId }, transaction });
+  // "Ya no lleva factura": sale de la bandeja también (Sprint 2, ítem 3).
+  if (change.kind === "remove") {
+    await DataBase.instance.purchase_order_item_purchase.update(
+      { invoice_status: "not_required", updated_by: actorId, updated_at: nowUtc() },
+      { where: { id: purchaseId }, transaction }
+    );
+  }
   if (change.kind === "move") {
     await linkPurchaseToInvoice({ invoiceId: change.invoiceId, purchaseId, companyId, businessUnitId, actorId, transaction });
   }

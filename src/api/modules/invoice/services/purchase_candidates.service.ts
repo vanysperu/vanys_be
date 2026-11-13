@@ -22,6 +22,8 @@ interface CandidateRow {
   id: number | string;
   quotation_id: number | string;
   description: string;
+  series_number: string | null;
+  supplier_name: string | null;
   file_name: string | null;
   created_at: Date;
   creator_name: string | null;
@@ -46,9 +48,10 @@ export async function listPurchaseCandidatesService(itemId: number, search: stri
   if (!item) throw new AppError(404, "El item no existe");
 
   const rows = (await DataBase.instance.sequelize.query(
-    `SELECT i.id, i.quotation_id, i.description, i.file_name, i.created_at,
+    `SELECT i.id, i.quotation_id, i.description, i.series_number, su.name AS supplier_name, i.file_name, i.created_at,
             TRIM(CONCAT(COALESCE(cr.name, ''), ' ', COALESCE(cr.paternal_lastname, ''))) AS creator_name
      FROM invoice i
+     LEFT JOIN supplier su ON su.id = i.supplier_id
      LEFT JOIN \`user\` cr ON cr.id = i.created_by
      WHERE i.type = 'purchase' AND i.company_id = :companyId AND i.business_unit_id <=> :businessUnitId
        ${search ? `AND ${INVOICE_SEARCH_SQL}` : ""}
@@ -70,6 +73,8 @@ export async function listPurchaseCandidatesService(itemId: number, search: stri
     const lines = purchases.get(Number(row.id)) ?? [];
     return {
       id: Number(row.id),
+      series_number: row.series_number,
+      supplier_name: row.supplier_name,
       quotation_codes: invoiceQuotationCodes(Number(row.quotation_id), lines),
       description: invoiceDescription(row.description, lines),
       has_file: row.file_name !== null,

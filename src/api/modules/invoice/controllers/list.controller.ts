@@ -13,7 +13,7 @@ const FILE_FILTERS = ["pending", "uploaded"] as const;
 const DRIVE_STATUSES: InvoiceDriveStatus[] = ["none", "pending", "copied", "failed"];
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
 
-// GET /invoice/list?page=&limit=&type=&file=&drive=&search=&dateFrom=&dateTo=&companyId=
+// GET /invoice/list?page=&limit=&type=&file=&drive=&supplierId=&search=&dateFrom=&dateTo=&companyId=
 export const listInvoicesController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { page, limit } = parsePaginationParams(req.query);
@@ -23,6 +23,7 @@ export const listInvoicesController = asyncHandler(async (req: Request, res: Res
     type: TYPES.find((value) => value === req.query.type),
     file: FILE_FILTERS.find((value) => value === req.query.file),
     drive: DRIVE_STATUSES.find((value) => value === req.query.drive),
+    supplierId: Number(req.query.supplierId) > 0 ? Number(req.query.supplierId) : undefined,
     search: text(req.query.search),
     dateFrom: text(req.query.dateFrom),
     dateTo: text(req.query.dateTo),

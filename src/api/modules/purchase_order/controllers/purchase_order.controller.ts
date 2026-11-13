@@ -174,7 +174,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_id, warehouse_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_pending, invoice_id, warehouse_id } = req.body;
   // "Ingresar al almacén" (Sprint 2, ítem 2): solo uno que el usuario opera.
   const warehouseId = Number(warehouse_id) > 0 ? Number((await findWarehouseForCaller(Number(warehouse_id), req.user as IToken, "write")).id) : undefined;
 
@@ -199,6 +199,8 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       paymentAccountId: payment_account_id,
       operationNumber: operation_number,
       hasInvoice: has_invoice === true,
+      // "Sí, llega después": la compra queda en la bandeja "Compras sin factura".
+      invoicePending: has_invoice !== true && invoice_pending === true,
       // Factura ya registrada a la que se suma esta compra (solo con has_invoice).
       invoiceId: has_invoice === true && Number(invoice_id) > 0 ? Number(invoice_id) : undefined,
       warehouseId,

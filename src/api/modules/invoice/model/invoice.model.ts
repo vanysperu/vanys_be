@@ -2,6 +2,7 @@ import { BuildOptions, DataTypes, Model, Sequelize } from "sequelize";
 
 export type InvoiceType = "issued" | "purchase";
 export type InvoiceDriveStatus = "none" | "pending" | "copied" | "failed";
+export type InvoiceCurrency = "PEN" | "USD";
 
 // Factura (pedido explícito del usuario): la emitida al cerrar una cotización
 // o la recibida al comprar. Su archivo (foto WEBP o PDF) puede faltar: esas
@@ -12,6 +13,12 @@ export interface InvoiceAttributes {
   business_unit_id: number | null;
   type: InvoiceType;
   quotation_id: number;
+  // Datos de la factura de compra (Sprint 2, ítem 3, D9: opcionales).
+  supplier_id: number | null;
+  series_number: string | null;
+  issue_date: string | null;
+  currency: InvoiceCurrency | null;
+  total: number | null;
   description: string;
   file_name: string | null;
   mime_type: string | null;
@@ -48,6 +55,11 @@ export function InvoiceFactory(sequelize: Sequelize): InvoiceStatic {
       business_unit_id: { type: DataTypes.BIGINT, allowNull: true },
       type: { type: DataTypes.ENUM("issued", "purchase"), allowNull: false },
       quotation_id: { type: DataTypes.BIGINT, allowNull: false },
+      supplier_id: { type: DataTypes.BIGINT, allowNull: true },
+      series_number: { type: DataTypes.STRING(30), allowNull: true },
+      issue_date: { type: DataTypes.DATEONLY, allowNull: true },
+      currency: { type: DataTypes.ENUM("PEN", "USD"), allowNull: true },
+      total: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
       description: { type: DataTypes.STRING(255), allowNull: false },
       file_name: { type: DataTypes.STRING(255), allowNull: true },
       mime_type: { type: DataTypes.STRING(100), allowNull: true },

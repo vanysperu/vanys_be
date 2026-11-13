@@ -1,7 +1,7 @@
 import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { correctionsCountSql } from "../../../money_correction/services/shared/corrections_count";
-import { FundingSource } from "../../model/purchase_order_item_purchase.model";
+import { FundingSource, PurchaseInvoiceStatus } from "../../model/purchase_order_item_purchase.model";
 
 // Una compra como la muestran el checklist de la orden y el diálogo de
 // corrección: con su gasto (fecha, cuenta), quién la pagó, su deuda con el
@@ -30,6 +30,8 @@ export interface PurchaseListItem {
   // Factura de la compra (null = sin factura), si ya tiene archivo y cuántas
   // compras vigentes cubre (para avisar antes de sacarla de ahí).
   invoice_id: number | null;
+  // linked | pending (la factura llega después) | not_required (Sprint 2, ítem 3).
+  invoice_status: PurchaseInvoiceStatus;
   invoice_has_file: boolean;
   invoice_purchases_count: number;
   created_at: Date;
@@ -68,6 +70,7 @@ interface RawPurchaseRow {
   debt_status: string | null;
   corrections_count: number | string;
   invoice_id: number | string | null;
+  invoice_status: PurchaseInvoiceStatus;
   invoice_has_file: number | string | null;
   invoice_purchases_count: number | string;
   created_at: Date;
@@ -94,7 +97,7 @@ const PURCHASE_COLUMNS_SQL = `
   pa.name AS payment_account_name, qe.operation_number, ed.id AS debt_id, ed.amount AS debt_amount,
   ed.paid_amount AS debt_paid_amount, ed.status AS debt_status,
   ${correctionsCountSql("quotation_expense", "pop.quotation_expense_id")} AS corrections_count,
-  ip.invoice_id, inv.file_name IS NOT NULL AS invoice_has_file,
+  ip.invoice_id, pop.invoice_status, inv.file_name IS NOT NULL AS invoice_has_file,
   (SELECT COUNT(*) FROM invoice_purchase sip
     INNER JOIN purchase_order_item_purchase spop ON spop.id = sip.purchase_id
     WHERE sip.invoice_id = ip.invoice_id AND spop.is_deleted = false) AS invoice_purchases_count,
@@ -128,6 +131,7 @@ const mapListRow = (row: RawPurchaseRow): PurchaseListItem => ({
   debt_status: row.debt_status,
   corrections_count: Number(row.corrections_count),
   invoice_id: toNullableNumber(row.invoice_id),
+  invoice_status: row.invoice_status,
   invoice_has_file: Boolean(Number(row.invoice_has_file ?? 0)),
   invoice_purchases_count: Number(row.invoice_purchases_count),
   created_at: row.created_at,

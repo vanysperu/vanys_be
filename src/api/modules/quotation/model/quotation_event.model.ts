@@ -26,7 +26,11 @@ export type QuotationEventAction =
   | "shared_whatsapp"
   | "shared_email"
   | "public_link_changed"
-  | "viewed_by_client";
+  | "viewed_by_client"
+  // Factura de una compra vinculada o quitada sin pasar por "Corregir compra"
+  // (Sprint 2, ítem 3): no mueve dinero, no es una corrección.
+  | "purchase_invoice_linked"
+  | "purchase_invoice_unlinked";
 
 export interface QuotationEventAttributes {
   id: number;

@@ -1,6 +1,9 @@
 import { BuildOptions, DataTypes, Model, Sequelize } from "sequelize";
 
 export type FundingSource = "company" | "employee";
+// Sprint 2, ítem 3: "linked" = ya está en una factura; "pending" = la factura
+// llega después (bandeja "Compras sin factura"); "not_required" = no lleva.
+export type PurchaseInvoiceStatus = "linked" | "pending" | "not_required";
 
 export interface PurchaseOrderItemPurchaseAttributes {
   id: number;
@@ -13,6 +16,7 @@ export interface PurchaseOrderItemPurchaseAttributes {
   // paid_by_user_id como acreedor (ver purchase_order_item_purchase.service.ts).
   funding_source: FundingSource;
   paid_by_user_id: number | null;
+  invoice_status: PurchaseInvoiceStatus;
   // Compra anulada (de una sola vía): deja de contar para el estado del item
   // y de la orden; su gasto también queda anulado y su deuda cancelada.
   is_deleted: boolean;
@@ -48,6 +52,7 @@ export function PurchaseOrderItemPurchaseFactory(sequelize: Sequelize): Purchase
       amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       funding_source: { type: DataTypes.ENUM("company", "employee"), allowNull: false, defaultValue: "company" },
       paid_by_user_id: { type: DataTypes.BIGINT, allowNull: true },
+      invoice_status: { type: DataTypes.ENUM("linked", "pending", "not_required"), allowNull: false, defaultValue: "not_required" },
       is_deleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

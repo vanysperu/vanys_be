@@ -12,6 +12,10 @@ foto o PDF, y una lista de las que **faltan subir**.
   una cotización (`cotizacion.changeStatus.button`), Gestor incluido.
 - Elegir una factura ya registrada al comprar: quien registra compras y los
   roles administradores (seeder `20261108100100-seed-invoice-purchase-candidates.js`).
+- Compras sin factura (Sprint 2, ítem 3, seeder `20261115100100-seed-purchase-invoice-link-resources.js`):
+  bandeja, vincular, quitar compra y datos de la factura, para quien registra compras
+  y los roles administradores. Quien registra compras (Gestor incluido) recibe también
+  la vista Facturas y su listado, siempre limitados a su tienda.
 
 ## Endpoints
 | Método | Ruta                         | Acción                                  | Recurso RBAC                 |
@@ -21,6 +25,10 @@ foto o PDF, y una lista de las que **faltan subir**.
 | POST   | /api/invoice/:id/file        | subir/reemplazar archivo (multipart `file`) | invoice.file.upload.button |
 | GET    | /api/invoice/:id/file        | el archivo (privado, solo con sesión)   | invoice.file.view.button     |
 | PUT    | /api/invoice/:id/drive-retry | reintentar la copia a Google Drive      | invoice.drive.retry.button   |
+| GET    | /api/invoice/pending-purchases | bandeja "Compras sin factura" (pag) + `summary.pending_count` | invoice.pendingPurchases.endpoint |
+| POST   | /api/invoice/link-purchases  | UNA factura para varias compras (nueva con sus datos, o `invoice_id` ya registrada); JSON o multipart con `file` opcional | invoice.link.button |
+| PUT    | /api/invoice/:id/remove-purchase | quitar una compra (vuelve a la bandeja) | invoice.removePurchase.button |
+| PUT    | /api/invoice/:id/details     | proveedor, serie-número, fecha de emisión, moneda y total | invoice.details.button |
 
 Las facturas se **crean** en otros flujos:
 - `POST /purchase-order/item/:itemId/purchases` con `has_invoice: true` → factura de
@@ -32,16 +40,25 @@ El archivo se sube después con `POST /invoice/:id/file`; si no se sube, la
 factura queda en "Faltan subir" (`file=pending`).
 
 Filtros del listado: `type` (issued|purchase), `file` (pending|uploaded),
-`drive` (none|pending|copied|failed), `search` (cualquiera de sus productos o
-cotizaciones, o la descripción), `dateFrom`/`dateTo`, `companyId` (solo Super
+`drive` (none|pending|copied|failed), `supplierId`, `search` (cualquiera de sus
+productos o cotizaciones, la descripción, la serie-número o el proveedor), `dateFrom`/`dateTo`, `companyId` (solo Super
 Administrador).
-`summary`: `pending_count` y `drive_failed_count` con los mismos filtros.
+`summary`: `pending_count` y `drive_failed_count` con los mismos filtros, y
+`pending_purchases_count` (compras con la factura pendiente, contador de la pestaña).
+
+Filtros de la bandeja: `includeNotRequired` (también las que no llevan factura),
+`storeId` (afina dentro del alcance del usuario), `quotationId`, `search` (producto,
+cotización o cliente), `dateFrom`/`dateTo` (fecha de la compra). Las compras
+anuladas nunca aparecen. Las compras no guardan proveedor: el proveedor es dato
+de la factura.
 
 ## Vistas de frontend vinculadas
 - `invoice.list` → `/facturas` (grupo Finanzas).
 
 ## Botones/acciones vinculadas
 - `invoice.file.upload.button`, `invoice.file.view.button`, `invoice.drive.retry.button`
+- `invoice.link.button` ("Registrar factura" en la bandeja, "Vincular factura" en cada compra, "Agregar compras" en la factura)
+- `invoice.removePurchase.button` ("Quitar compra"), `invoice.details.button` (datos de la factura)
 
 ## Reglas de negocio propias del módulo
 - **Una factura, varias compras** (pedido explícito del usuario: "en una factura
@@ -80,8 +97,31 @@ Administrador).
 - Alcance: empresa del usuario; un usuario atado a una tienda ve las de su
   tienda. Otra empresa responde 404.
 
+- **Compras sin factura (Sprint 2, ítem 3)**: cada compra tiene `invoice_status`
+  (`linked` | `pending` = la factura llega después | `not_required`). Vincular no pide
+  motivo ni pasa por "Corregir compra" (no mueve dinero): queda como evento
+  `purchase_invoice_linked` / `purchase_invoice_unlinked` en el historial de cada
+  cotización, nunca en `money_correction`. Todo el vínculo va en una transacción: si
+  una compra no se puede vincular (anulada, ya en otra factura, de otra tienda o
+  empresa), no queda ninguna vinculada ni la factura creada.
+- **Archivo en el mismo paso**: `link-purchases` guarda el archivo enseguida con las
+  mismas reglas de "Subir archivo". Si ese paso falla (por ejemplo, Drive sin
+  conectar), la factura queda registrada sin archivo, en "Faltan subir", y la
+  respuesta lo dice (`file_uploaded: false`, `file_error`): el vínculo no se pierde.
+- **Varias tiendas (D8)**: un admin de empresa (sin tienda) puede juntar compras de
+  varias tiendas; la factura queda con `business_unit_id = NULL`. Un usuario atado a
+  una tienda solo vincula compras de su tienda y solo a facturas de su tienda (el
+  permiso "ver todas las tiendas" es de lectura: no amplía esto).
+- **Factura repetida**: misma empresa + proveedor + serie-número responde
+  `409 INVOICE_DUPLICATE_NUMBER`; con `allow_duplicate: true` se registra igual.
+- **Quitar compra**: la compra vuelve a `pending`. Si la factura se queda sin compras,
+  se elimina solo si no tiene archivo (misma regla que al anular).
+
 ## Campos especiales
 - `invoice.file_name IS NULL` = falta subir el archivo.
+- `invoice.supplier_id`, `series_number` (normalizado: `F001-123`), `issue_date`,
+  `currency` (PEN|USD), `total`: opcionales (D9), migración
+  `20261115100000-purchase-invoice-status.js`.
 - `invoice.quotation_id` es la cotización de la primera compra. El listado trae
   `quotation_codes` (todas), `purchases` (producto, cantidad, monto y cotización de
   cada compra vigente) y `purchases_total`; en una factura de compra `description`

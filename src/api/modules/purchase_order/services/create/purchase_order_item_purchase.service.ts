@@ -64,6 +64,9 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // Con hasInvoice: factura de compra YA registrada a la que se suma esta
   // compra (una factura puede cubrir varios productos). Sin esto, se crea una nueva.
   invoiceId?: number;
+  // Sin factura todavía, pero llega después (Sprint 2, ítem 3): la compra
+  // queda "pending" en la bandeja "Compras sin factura".
+  invoicePending?: boolean;
   // Inventario (Sprint 2, ítem 2): almacén al que ingresa lo comprado. El
   // controller ya validó que el usuario opera ese almacén.
   warehouseId?: number;
@@ -117,6 +120,7 @@ const createPurchaseOrderItemPurchase = async ({
   operationNumber,
   hasInvoice = false,
   invoiceId: existingInvoiceId,
+  invoicePending = false,
   warehouseId,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
@@ -224,6 +228,8 @@ const createPurchaseOrderItemPurchase = async ({
         amount,
         funding_source: fundingSource,
         paid_by_user_id: fundingSource === "employee" ? paidByUserId ?? null : null,
+        // Con factura pasa a "linked" al vincularla (abajo, misma transacción).
+        invoice_status: invoicePending ? "pending" : "not_required",
         is_deleted: false,
         created_by: createdBy ?? null,
         created_at: nowUtc(),
