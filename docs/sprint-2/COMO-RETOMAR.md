@@ -24,6 +24,15 @@ cd ../grulla_fe && git checkout feature/sprint-2 && npm install
 
 ## 2. Base de datos
 
+**Opción rápida (recomendada):** el paquete `sesion-claude-sprint2.zip` que se llevó por USB/Drive
+(no está en GitHub porque tiene datos y claves) trae `base\grulla_s2_dev.sql` —la base del sprint
+completa, probada importándola en una base nueva— y `base\importar-base.ps1`, que la crea con
+utf8mb4 sin pisar ninguna base existente. Esa copia ya tiene aplicadas todas las migraciones y
+seeders del sprint. Trae también los `.env` (`config-local\`): **conservar `SECRET_HIDDEN_KEY` y
+`GOOGLE_DRIVE_TOKEN_KEY`**, porque con ellas se cifraron datos de esa base.
+
+**Opción desde cero:**
+
 1. MySQL 8. Crear una base para el sprint copiando la de desarrollo (en la PC original:
    `grulla_s2_dev`, copia de `grulla_dev` con `mysqldump --single-transaction`).
 2. En `grulla_be/.env`: `PROY_BD=<esa base>` (y el usuario/clave de MySQL).
