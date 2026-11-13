@@ -117,6 +117,14 @@ import {
 } from "../api/modules/production_workflow/model/quotation_item_stage_log.model";
 import { CompanyFeatureFactory, CompanyFeatureStatic } from "../api/modules/company_feature/model/company_feature.model";
 import { SupplierFactory, SupplierStatic } from "../api/modules/supplier/model/supplier.model";
+import {
+  SupplierStockImportFactory,
+  SupplierStockImportStatic,
+  SupplierStockItemFactory,
+  SupplierStockItemStatic,
+  SupplierStockSourceFactory,
+  SupplierStockSourceStatic,
+} from "../api/modules/supplier_stock/model/supplier_stock.models";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -194,6 +202,10 @@ export class DataBase {
   // Funcionalidades por empresa y proveedores (migración 20261114100000-create-company-feature-and-supplier.js).
   public company_feature: CompanyFeatureStatic;
   public supplier: SupplierStatic;
+  // Stock de proveedores (migración 20261114110000-create-supplier-stock.js).
+  public supplier_stock_source: SupplierStockSourceStatic;
+  public supplier_stock_import: SupplierStockImportStatic;
+  public supplier_stock_item: SupplierStockItemStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -282,6 +294,9 @@ export class DataBase {
     this.quotation_item_stage_log = QuotationItemStageLogFactory(this.sequelize);
     this.company_feature = CompanyFeatureFactory(this.sequelize);
     this.supplier = SupplierFactory(this.sequelize);
+    this.supplier_stock_source = SupplierStockSourceFactory(this.sequelize);
+    this.supplier_stock_import = SupplierStockImportFactory(this.sequelize);
+    this.supplier_stock_item = SupplierStockItemFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

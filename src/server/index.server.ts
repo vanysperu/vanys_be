@@ -54,6 +54,7 @@ import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.r
 import { router as ProductionWorkflowRoutes } from "../api/modules/production_workflow/routes/production_workflow.routes";
 import { router as CompanyFeatureRoutes } from "../api/modules/company_feature/routes/company_feature.routes";
 import { router as SupplierRoutes } from "../api/modules/supplier/routes/supplier.routes";
+import { router as SupplierStockRoutes } from "../api/modules/supplier_stock/routes/supplier_stock.routes";
 import { serveCompanyAssetController } from "../api/modules/uploads/controllers/uploads.controller";
 import path from "path";
 import { securityHeaders } from "../core/middlewares/securityHeaders";
@@ -192,6 +193,7 @@ export default class Server {
     this._router.use("/uploads", UploadsRoutes);
     this._router.use("/production-workflow", ProductionWorkflowRoutes);
     this._router.use("/company-feature", CompanyFeatureRoutes);
+    this._router.use("/supplier-stock", SupplierStockRoutes);
     this._router.use("/supplier", SupplierRoutes);
 
     this.frontend();
