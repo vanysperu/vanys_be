@@ -47,7 +47,10 @@ describe("Proveedores, funcionalidades por empresa y códigos por proveedor", ()
 
     const saved = await superApi.put(`/company-feature/${ctx.companyId}`, { features: { supplier_stock: true } });
     expect(saved.status).toBe(200);
-    expect(saved.body.data).toEqual([expect.objectContaining({ code: "supplier_stock", enabled: true })]);
+    // La respuesta trae todas las funcionalidades del catálogo (crece con cada ítem): solo se
+    // comprueba la que se prendió y que las demás siguen apagadas.
+    expect(saved.body.data).toContainEqual(expect.objectContaining({ code: "supplier_stock", enabled: true }));
+    expect(saved.body.data.filter((feature: { enabled: boolean }) => feature.enabled)).toHaveLength(1);
 
     const me = await admin().get("/access/me");
     expect(me.body.data.features).toEqual(["supplier_stock"]);
