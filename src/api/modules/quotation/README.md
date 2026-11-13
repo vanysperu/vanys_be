@@ -24,7 +24,7 @@
 | PUT    | /quotation/update/:id            | update                     | cotizacion      |
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
 | PUT    | /quotation/:id/items             | editar la cotización (cualquier estado) | cotizacion (`cotizacion.complete.button`) |
-| PUT    | /quotation/item/:itemId/stage    | mover etapa de producción  | cotizacion      |
+| PUT    | /quotation/item/:itemId/stage    | mover etapa de producción (reglas del flujo de la empresa, ver `production_workflow/README.md`) | cotizacion      |
 | POST   | /quotation/:id/payments          | registrar pago             | cotizacion      |
 | POST   | /quotation/:id/expenses          | registrar gasto            | cotizacion      |
 | GET    | /quotation/expense/find/:id      | gasto por id (diálogo de corrección) | cotizacion (`cotizacion.expense.find.endpoint`) |

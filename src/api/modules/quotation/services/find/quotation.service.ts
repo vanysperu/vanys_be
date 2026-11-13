@@ -155,9 +155,8 @@ const getQuotationById = async (id: number) => {
             association: "technique",
             attributes: ["id", "company_id", "name", "price_unit", "price_hundred", "price_half_thousand", "price_thousand", "is_deleted"],
           },
-          // "stage" es una fila de general_variable (category=production_stage):
-          // name = nombre de la etapa, ref1 = color, ref2 = posición/orden.
-          { association: "stage", attributes: ["id", "name", "ref1", "ref2"] },
+          // Columna del flujo de producción de la empresa (Sprint 2, ítem 5).
+          { association: "stage", attributes: ["id", "name", "color", "position", "category"] },
         ],
       },
       {

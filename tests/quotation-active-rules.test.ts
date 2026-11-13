@@ -33,12 +33,10 @@ describe("Cotización no aceptada: no se avanza nada", () => {
     };
   };
 
-  // Etapa siguiente en el orden de la empresa (globales + propias, por ref2).
+  // Columna siguiente en el flujo de producción de la empresa (activas, en orden).
   const nextStageId = async (currentStageId: number | null) => {
-    const res = await authedRequest(token).get("/variable_general/list?category=production_stage&ignorePagination=true&admin=true");
-    const stages = (res.body.data.data as { id: number; company_id: number | null; ref2: string | null }[])
-      .filter((stage) => stage.company_id === null || stage.company_id === companyId)
-      .sort((a, b) => Number(a.ref2 ?? 0) - Number(b.ref2 ?? 0));
+    const res = await authedRequest(token).get("/production-workflow/board");
+    const stages = res.body.data.stages as { id: number }[];
     const index = stages.findIndex((stage) => stage.id === currentStageId);
     return stages[index + 1]?.id;
   };

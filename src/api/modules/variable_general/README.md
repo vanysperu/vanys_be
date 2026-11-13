@@ -45,8 +45,10 @@
   imagen anterior se borra en la misma transacción. Deshabilitar no la borra. Ver
   `uploads/README.md`.
 - `company_id = NULL` significa variable **global**, visible para todas las
-  empresas (ej. tipos de documento, etapas de producción por defecto, métodos
-  de pago). **Solo el Super Administrador (`is_system`) las ve en la pantalla
+  empresas (ej. tipos de documento, métodos de pago). Las etapas de producción
+  ya no viven acá: desde el Sprint 2 son columnas del flujo de cada empresa
+  (`production_workflow/README.md`); las filas `production_stage` quedaron dadas
+  de baja por la migración `20261113120000`. **Solo el Super Administrador (`is_system`) las ve en la pantalla
   de gestión y las crea/edita/deshabilita/elimina.** Un Administrador de
   empresa conserva la pantalla pero ahí gestiona únicamente las filas de SU
   empresa; al crear, `company_id` siempre queda forzado a la suya (se ignora
@@ -55,8 +57,8 @@
   permitido `manage`): modo de la pantalla de gestión. Para un usuario no
   `is_system` filtra `company_id = <suya>` estrictamente (sin filas globales);
   para `is_system` no cambia nada. **Sin `scope`** el listado sigue incluyendo
-  las globales, porque los selectores de otras pantallas (Caja, Pagos, kanban
-  de etapas, cuentas de pago, documentos, deudas) las necesitan; solo
+  las globales, porque los selectores de otras pantallas (Caja, Pagos, cuentas
+  de pago, documentos, deudas) las necesitan; solo
   `VariableGeneralPage` envía `scope=manage`.
 - **403 `GLOBAL_VARIABLE_FORBIDDEN`**: un usuario no `is_system` que pide
   detalle (`GET /detail/:id`), edita, deshabilita o elimina una fila global

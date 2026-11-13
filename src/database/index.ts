@@ -103,6 +103,18 @@ import {
   QuotationPublicLinkFactory,
   QuotationPublicLinkStatic,
 } from "../api/modules/quotation/model/quotation_public_link.model";
+import {
+  ProductionWorkflowFactory,
+  ProductionWorkflowStatic,
+} from "../api/modules/production_workflow/model/production_workflow.model";
+import {
+  ProductionWorkflowStageFactory,
+  ProductionWorkflowStageStatic,
+} from "../api/modules/production_workflow/model/production_workflow_stage.model";
+import {
+  QuotationItemStageLogFactory,
+  QuotationItemStageLogStatic,
+} from "../api/modules/production_workflow/model/quotation_item_stage_log.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -173,6 +185,10 @@ export class DataBase {
   public password_reset_token: PasswordResetTokenStatic;
   // Enlace público de cada cotización (migración 20261113110000-create-quotation-public-link.js).
   public quotation_public_link: QuotationPublicLinkStatic;
+  // Flujo de producción por empresa (migración 20261113120000-create-production-workflow.js).
+  public production_workflow: ProductionWorkflowStatic;
+  public production_workflow_stage: ProductionWorkflowStageStatic;
+  public quotation_item_stage_log: QuotationItemStageLogStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -256,6 +272,9 @@ export class DataBase {
     this.email_daily_usage = EmailDailyUsageFactory(this.sequelize);
     this.password_reset_token = PasswordResetTokenFactory(this.sequelize);
     this.quotation_public_link = QuotationPublicLinkFactory(this.sequelize);
+    this.production_workflow = ProductionWorkflowFactory(this.sequelize);
+    this.production_workflow_stage = ProductionWorkflowStageFactory(this.sequelize);
+    this.quotation_item_stage_log = QuotationItemStageLogFactory(this.sequelize);
 
     this.associations();
     this.connectDb();
@@ -311,7 +330,7 @@ export class DataBase {
     });
 
     quotationFlowAssociations({
-      variable_general: this.variable_general,
+      production_workflow_stage: this.production_workflow_stage,
       quotation_item: this.quotation_item,
       quotation: this.quotation,
       quotation_payment: this.quotation_payment,

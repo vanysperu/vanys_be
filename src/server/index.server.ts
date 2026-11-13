@@ -51,6 +51,7 @@ import {
 import { router as ApiKeyRoutes } from "../api/modules/api_key/routes/api_key.routes";
 import { router as StatisticsRoutes } from "../api/modules/statistics/routes/statistics.routes";
 import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.routes";
+import { router as ProductionWorkflowRoutes } from "../api/modules/production_workflow/routes/production_workflow.routes";
 import { serveCompanyAssetController } from "../api/modules/uploads/controllers/uploads.controller";
 import path from "path";
 import { securityHeaders } from "../core/middlewares/securityHeaders";
@@ -187,6 +188,7 @@ export default class Server {
     this._router.use("/google-drive", GoogleDriveRoutes);
     this._router.use("/statistics", StatisticsRoutes);
     this._router.use("/uploads", UploadsRoutes);
+    this._router.use("/production-workflow", ProductionWorkflowRoutes);
 
     this.frontend();
   }

@@ -121,7 +121,7 @@ describe("Resetear una cotización", () => {
       const detail = await admin().get(`/quotation/find/${target.quotationId}`);
       stageBefore = detail.body.data.items[0].stage_id;
       const stages = await queryRows<{ id: number }>(
-        "SELECT id FROM general_variable WHERE category = 'production_stage' AND (company_id IS NULL OR company_id = ?) AND id <> ? LIMIT 1",
+        "SELECT id FROM production_workflow_stage WHERE company_id = ? AND active = TRUE AND id <> ? ORDER BY position LIMIT 1",
         [ctx.companyId, stageBefore]
       );
       expect(stages).toHaveLength(1);

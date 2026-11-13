@@ -41,10 +41,8 @@ describe("Editar una cotización", () => {
     const item = before.items[0];
     expect(Number(item.unit_price)).toBe(25);
 
-    const stages = await api.get("/variable_general/list?category=production_stage&ignorePagination=true&admin=true");
-    const ordered = (stages.body.data.data as { id: number; company_id: number | null; ref2: string | null }[])
-      .filter((stage) => stage.company_id === null || stage.company_id === companyId)
-      .sort((left, right) => Number(left.ref2 ?? 0) - Number(right.ref2 ?? 0));
+    const board = await api.get("/production-workflow/board");
+    const ordered = board.body.data.stages as { id: number }[];
     const nextStage = ordered[ordered.findIndex((stage) => stage.id === item.stage_id) + 1];
     const moved = await api.put(`/quotation/item/${item.id}/stage`, { stage_id: nextStage?.id });
     expect(moved.status).toBe(200);

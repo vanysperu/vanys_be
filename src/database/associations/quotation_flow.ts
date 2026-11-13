@@ -1,4 +1,4 @@
-import { VariableGeneralStatic } from "../../api/modules/variable_general/models/variable_general.model";
+import { ProductionWorkflowStageStatic } from "../../api/modules/production_workflow/model/production_workflow_stage.model";
 import { QuotationItemStatic } from "../../api/modules/quotation/model/quotation_item.model";
 import { QuotationStatic } from "../../api/modules/quotation/model/quotation.model";
 import { QuotationPaymentStatic } from "../../api/modules/quotation/model/quotation_payment.model";
@@ -7,7 +7,7 @@ import { QuotationEventStatic } from "../../api/modules/quotation/model/quotatio
 import { UserStatic } from "../../api/modules/users/models/user.model";
 
 export const quotationFlowAssociations = ({
-  variable_general,
+  production_workflow_stage,
   quotation_item,
   quotation,
   quotation_payment,
@@ -15,7 +15,7 @@ export const quotationFlowAssociations = ({
   quotation_event,
   user,
 }: {
-  variable_general: VariableGeneralStatic;
+  production_workflow_stage: ProductionWorkflowStageStatic;
   quotation_item: QuotationItemStatic;
   quotation: QuotationStatic;
   quotation_payment: QuotationPaymentStatic;
@@ -23,10 +23,10 @@ export const quotationFlowAssociations = ({
   quotation_event: QuotationEventStatic;
   user: UserStatic;
 }): void => {
-  // Las etapas de producción NO son un catálogo propio: son filas de
-  // `general_variable` con category="production_stage" (globales o por
-  // empresa, ver Variables Generales) — quotation_item solo guarda el id.
-  quotation_item.belongsTo(variable_general, { foreignKey: "stage_id", targetKey: "id", as: "stage" });
+  // Etapa de producción del producto: columna del flujo de su empresa
+  // (production_workflow_stage, Sprint 2). Antes era una fila de
+  // general_variable (migración 20261113120000-create-production-workflow.js).
+  quotation_item.belongsTo(production_workflow_stage, { foreignKey: "stage_id", targetKey: "id", as: "stage" });
 
   quotation.hasMany(quotation_payment, { foreignKey: "quotation_id", sourceKey: "id", as: "payments" });
   quotation_payment.belongsTo(quotation, { foreignKey: "quotation_id", targetKey: "id" });
