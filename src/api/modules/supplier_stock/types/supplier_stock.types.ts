@@ -93,6 +93,7 @@ export interface StockSearchRow {
   code: string;
   description: string | null;
   products: { id: number; name: string }[];
-  bySource: { sourceId: number; quantity: number | null; quantityText: string | null }[];
+  // sourceName: quien solo consulta (Gestor) no ve la lista de fuentes.
+  bySource: { sourceId: number; sourceName: string; quantity: number | null; quantityText: string | null }[];
   total: number;
 }

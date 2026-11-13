@@ -29,7 +29,7 @@ const UNLINKED = literal(`NOT EXISTS (
 export const searchStockService = async (params: SearchStockParams): Promise<PaginatedResult<StockSearchRow>> => {
   const sources = await DataBase.instance.supplier_stock_source.findAll({
     where: { company_id: params.companyId, active: true, last_import_id: { [Op.ne]: null } },
-    attributes: ["id", "last_import_id"],
+    attributes: ["id", "name", "last_import_id"],
   });
   if (sources.length === 0) return { data: [], meta: buildPaginationMeta(0, params.page, params.limit) };
 
@@ -61,6 +61,7 @@ export const searchStockService = async (params: SearchStockParams): Promise<Pag
       raw: true,
     }) as unknown as Promise<{ code_norm: string; code: string; description: string | null }[]>,
   ]);
+  const sourceNames = new Map(sources.map((source) => [Number(source.id), source.name]));
   const norms = page.map((row) => row.code_norm);
   if (norms.length === 0) return { data: [], meta: buildPaginationMeta(total, params.page, params.limit) };
 
@@ -83,7 +84,7 @@ export const searchStockService = async (params: SearchStockParams): Promise<Pag
         quantityText: current.quantityText ?? item.quantity_text,
       });
     }
-    const bySource = [...bySourceMap.entries()].map(([sourceId, value]) => ({ sourceId, ...value }));
+    const bySource = [...bySourceMap.entries()].map(([sourceId, value]) => ({ sourceId, sourceName: sourceNames.get(sourceId) ?? "", ...value }));
     return {
       code: row.code,
       description: row.description,
