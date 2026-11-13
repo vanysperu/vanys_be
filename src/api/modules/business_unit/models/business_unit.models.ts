@@ -19,6 +19,9 @@ export interface BusinessUnitAttributes {
   closes_at: string | null;
 
   is_deleted?: boolean;
+  // Inventario (Sprint 2, ítem 2): "Usa almacén" y cuándo descuenta una venta (D4).
+  inventory_enabled?: boolean;
+  inventory_exit_on?: "delivered" | "dispatch_guide";
   created_at: Date;
   created_by?: number;
   updated_at?: Date;
@@ -93,6 +96,8 @@ export function BusinessUnitFactory(sequelize: Sequelize): BusinessUnitStatic {
         defaultValue: false,
         allowNull: false,
       },
+      inventory_enabled: { type: DataTypes.BOOLEAN, defaultValue: false, allowNull: false },
+      inventory_exit_on: { type: DataTypes.ENUM("delivered", "dispatch_guide"), defaultValue: "delivered", allowNull: false },
       created_at: {
         type: DataTypes.DATE,
         defaultValue: Sequelize.fn("NOW"),

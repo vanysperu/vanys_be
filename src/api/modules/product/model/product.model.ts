@@ -26,6 +26,10 @@ export interface ProductAttributes {
   // Si es false, el producto se cotiza SIN técnica de personalización (no
   // hay selector de técnica en la cotización ni técnica en el PDF).
   requires_customization: boolean;
+  // Inventario (Sprint 2, ítem 2): intangibles y servicios lo dejan apagado.
+  tracks_stock?: boolean;
+  // Pide fecha de vencimiento en los almacenes que la controlan.
+  is_perishable?: boolean;
   // Pedido mínimo: la menor cantidad que se puede pedir (null = sin mínimo).
   // Informativo: la cotización no lo bloquea (decisión del usuario).
   min_order_quantity: number | null;
@@ -67,6 +71,8 @@ export function ProductFactory(sequelize: Sequelize): ProductStatic {
       price_half_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       price_thousand: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       requires_customization: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      tracks_stock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      is_perishable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       min_order_quantity: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
       category_id: { type: DataTypes.BIGINT, allowNull: true },
       subcategory_id: { type: DataTypes.BIGINT, allowNull: true },

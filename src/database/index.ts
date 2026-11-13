@@ -125,6 +125,24 @@ import {
   SupplierStockSourceFactory,
   SupplierStockSourceStatic,
 } from "../api/modules/supplier_stock/model/supplier_stock.models";
+import {
+  WarehouseFactory,
+  WarehouseStatic,
+  DocumentSeriesFactory,
+  DocumentSeriesStatic,
+  StockLotFactory,
+  StockLotStatic,
+  StockDocumentFactory,
+  StockDocumentStatic,
+  StockDocumentLineFactory,
+  StockDocumentLineStatic,
+  StockMovementFactory,
+  StockMovementStatic,
+  StockBalanceFactory,
+  StockBalanceStatic,
+  StockCostFactory,
+  StockCostStatic,
+} from "../api/modules/inventory/model/inventory.models";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -206,6 +224,15 @@ export class DataBase {
   public supplier_stock_source: SupplierStockSourceStatic;
   public supplier_stock_import: SupplierStockImportStatic;
   public supplier_stock_item: SupplierStockItemStatic;
+  // Inventario (migración 20261114120000-create-inventory.js).
+  public warehouse: WarehouseStatic;
+  public document_series: DocumentSeriesStatic;
+  public stock_lot: StockLotStatic;
+  public stock_document: StockDocumentStatic;
+  public stock_document_line: StockDocumentLineStatic;
+  public stock_movement: StockMovementStatic;
+  public stock_balance: StockBalanceStatic;
+  public stock_cost: StockCostStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -297,6 +324,14 @@ export class DataBase {
     this.supplier_stock_source = SupplierStockSourceFactory(this.sequelize);
     this.supplier_stock_import = SupplierStockImportFactory(this.sequelize);
     this.supplier_stock_item = SupplierStockItemFactory(this.sequelize);
+    this.warehouse = WarehouseFactory(this.sequelize);
+    this.document_series = DocumentSeriesFactory(this.sequelize);
+    this.stock_lot = StockLotFactory(this.sequelize);
+    this.stock_document = StockDocumentFactory(this.sequelize);
+    this.stock_document_line = StockDocumentLineFactory(this.sequelize);
+    this.stock_movement = StockMovementFactory(this.sequelize);
+    this.stock_balance = StockBalanceFactory(this.sequelize);
+    this.stock_cost = StockCostFactory(this.sequelize);
 
     this.associations();
     this.connectDb();
