@@ -68,6 +68,7 @@ export const createPurchaseOrderItemPurchaseValidator = [
     throw new Error("Una compra pagada con plata del trabajador no lleva número de operación: va en su reposición");
   }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
+  body("warehouse_id").optional({ values: "null" }).isInt({ min: 1 }).withMessage("El almacén no es válido"),
   // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
   body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
   // Factura de compra ya registrada a la que se suma esta compra (varias compras, una factura).

@@ -1,3 +1,4 @@
+import { findWarehouseForCaller } from "../../inventory/services/shared/inventory_shared";
 import { Request, Response } from "express";
 import { QuotationNotActiveError } from "../../quotation/services/shared/active_quotation";
 import { IToken } from "../../../interfaces/IToken.interface";
@@ -173,7 +174,9 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_id, warehouse_id } = req.body;
+  // "Ingresar al almacén" (Sprint 2, ítem 2): solo uno que el usuario opera.
+  const warehouseId = Number(warehouse_id) > 0 ? Number((await findWarehouseForCaller(Number(warehouse_id), req.user as IToken, "write")).id) : undefined;
 
   await assertCanTouchPurchaseOrderItem(Number(itemId), user);
 
@@ -198,6 +201,7 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       hasInvoice: has_invoice === true,
       // Factura ya registrada a la que se suma esta compra (solo con has_invoice).
       invoiceId: has_invoice === true && Number(invoice_id) > 0 ? Number(invoice_id) : undefined,
+      warehouseId,
       createdBy: user.userId,
     });
   } catch (err: unknown) {

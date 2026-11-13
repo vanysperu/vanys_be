@@ -52,6 +52,8 @@ export const createProductValidator = [
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por medio millar debe ser un número positivo"),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }).withMessage("El precio por millar debe ser un número positivo"),
   body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
+  body("tracks_stock").optional().isBoolean().withMessage("\"Maneja stock\" debe ser verdadero o falso").toBoolean(),
+  body("is_perishable").optional().isBoolean().withMessage("\"Perecible\" debe ser verdadero o falso").toBoolean(),
   ...productCatalogRules(),
   atLeastOnePriceValidator,
 ];
@@ -89,6 +91,8 @@ export const updateProductValidator = [
   body("price_half_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("price_thousand").optional({ values: "null" }).isFloat({ min: 0, max: 99999999.99 }),
   body("requires_customization").optional().isBoolean().withMessage("\"Requiere personalización\" debe ser verdadero o falso"),
+  body("tracks_stock").optional().isBoolean().withMessage("\"Maneja stock\" debe ser verdadero o falso").toBoolean(),
+  body("is_perishable").optional().isBoolean().withMessage("\"Perecible\" debe ser verdadero o falso").toBoolean(),
   ...productCatalogRules(),
 ];
 

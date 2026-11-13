@@ -5,6 +5,7 @@ import { expireOverdueQuotations } from "../../quotation/services/jobs/expireQuo
 import { retryPendingDriveCopies } from "../../invoice/services/shared/drive_copy";
 import { dispatchPendingEmails } from "../../email/services/outbox/dispatch.service";
 import { refreshDueStockSources } from "../../supplier_stock/services/jobs/refresh_due_sources.job";
+import { notifyExpiringLots } from "../../inventory/services/jobs/expiring_lots.job";
 
 // Corre una tarea sin que su error frene a las demás.
 const safely = async <T>(name: string, task: () => Promise<T>): Promise<T | { error: string }> => {
@@ -27,5 +28,7 @@ export const jobsTickController = asyncHandler(async (_req: Request, res: Respon
   const driveCopies = await safely("drive-retry", retryPendingDriveCopies);
   // Stock de proveedores (Sprint 2, ítem 6): las fuentes cuya lectura venció.
   const supplierStock = await safely("supplier-stock", refreshDueStockSources);
-  ok(res, 200, { emails, expiredQuotations, driveCopies, supplierStock }, "Tareas programadas ejecutadas");
+  // Inventario (Sprint 2, ítem 2): aviso de lotes por vencer (una vez por día).
+  const expiringLots = await safely("expiring-lots", notifyExpiringLots);
+  ok(res, 200, { emails, expiredQuotations, driveCopies, supplierStock, expiringLots }, "Tareas programadas ejecutadas");
 });

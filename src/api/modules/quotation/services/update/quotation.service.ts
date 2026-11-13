@@ -1,3 +1,4 @@
+import { createDeliveryExit } from "../../../inventory/services/integrations/delivery_exit";
 import { QueryTypes, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
@@ -284,6 +285,12 @@ const changeQuotationStatus = async ({
         transaction,
         isAdvance: true,
       });
+    }
+
+    // Inventario (Sprint 2, ítem 2, D4): al marcarla Entregada, sale el stock
+    // del almacén de su tienda (si la tienda lo usa). Misma transacción.
+    if (nextStatus === "delivered") {
+      await createDeliveryExit({ quotation: current, actorId: updatedBy ?? null, transaction });
     }
 
     // Al cerrar la cotización: si se emitió factura, queda registrada (su

@@ -1,3 +1,4 @@
+import { createPurchaseEntry } from "../../../inventory/services/integrations/purchase_entry";
 import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc, todayInBusinessTz } from "../../../../../utils/dateUtils";
@@ -63,6 +64,9 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // Con hasInvoice: factura de compra YA registrada a la que se suma esta
   // compra (una factura puede cubrir varios productos). Sin esto, se crea una nueva.
   invoiceId?: number;
+  // Inventario (Sprint 2, ítem 2): almacén al que ingresa lo comprado. El
+  // controller ya validó que el usuario opera ese almacén.
+  warehouseId?: number;
   createdBy?: number;
 }
 
@@ -113,6 +117,7 @@ const createPurchaseOrderItemPurchase = async ({
   operationNumber,
   hasInvoice = false,
   invoiceId: existingInvoiceId,
+  warehouseId,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -279,6 +284,22 @@ const createPurchaseOrderItemPurchase = async ({
     // Cantidad vigente comprada (compras previas + esta) vs. lo pedido — solo
     // queda "purchased" cuando ya no falta nada (también si se compró de más,
     // confirmado). Mismo cálculo que corregir/anular una compra.
+    if (warehouseId) {
+      const quotationItem = (item as unknown as { quotationItem?: { color?: string | null; product?: { id: number; name: string } } }).quotationItem;
+      if (!quotationItem?.product) throw new Error("El producto de la orden de compra no existe");
+      await createPurchaseEntry({
+        companyId: Number(purchaseOrder.company_id),
+        warehouseId,
+        productId: Number(quotationItem.product.id),
+        color: quotationItem.color ?? null,
+        quantity,
+        amount,
+        note: `Compra de la orden #${item.purchase_order_id}: ${quotationItem.product.name} × ${quantity}`,
+        actorId: createdBy ?? null,
+        transaction,
+      });
+    }
+
     await recalculateItemStatus(itemId, transaction, createdBy, false);
     await recalculatePurchaseOrderStatus(item.purchase_order_id, transaction, createdBy);
 

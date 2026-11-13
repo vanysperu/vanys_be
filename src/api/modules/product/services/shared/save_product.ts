@@ -21,6 +21,9 @@ export interface ProductWriteInput {
   price_half_thousand?: number | null;
   price_thousand?: number | null;
   requires_customization?: boolean;
+  // Inventario (Sprint 2, ítem 2): "Maneja stock" y "Perecible".
+  tracks_stock?: boolean;
+  is_perishable?: boolean;
   // Pedido mínimo (entero ≥ 1); null = sin mínimo.
   min_order_quantity?: number | null;
   category_id?: number | null;
@@ -133,6 +136,10 @@ export async function createProductRecord({
       price_thousand: toNullablePrice(input.price_thousand),
       // Apagado por defecto (decisión del usuario): la mayoría no se personaliza.
       requires_customization: input.requires_customization ?? false,
+      // D14: los productos NUEVOS nacen manejando stock (los existentes
+      // arrancaron apagados en la migración).
+      tracks_stock: input.tracks_stock ?? true,
+      is_perishable: input.is_perishable ?? false,
       min_order_quantity: input.min_order_quantity ?? null,
       category_id: categories.category_id,
       subcategory_id: categories.subcategory_id,
@@ -201,6 +208,8 @@ export async function updateProductRecord({
       price_half_thousand: toNullablePrice(nextPrices.price_half_thousand),
       price_thousand: toNullablePrice(nextPrices.price_thousand),
       requires_customization: input.requires_customization ?? product.requires_customization,
+      tracks_stock: input.tracks_stock ?? product.tracks_stock,
+      is_perishable: input.is_perishable ?? product.is_perishable,
       // undefined = no se mandó (se conserva); null = sin mínimo.
       min_order_quantity: input.min_order_quantity === undefined ? product.min_order_quantity : input.min_order_quantity,
       category_id: categories ? categories.category_id : product.category_id,

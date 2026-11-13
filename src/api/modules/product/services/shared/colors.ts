@@ -1,6 +1,7 @@
 import { Op, Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { nowUtc } from "../../../../../utils/dateUtils";
+import { AppError } from "../../../../../core/errors/AppError";
 
 export const MAX_PRODUCT_COLORS = 30;
 export const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
@@ -30,6 +31,28 @@ export const normalizeColors = (colors: ProductColorInput[]): ProductColorDto[] 
 
 // Reemplaza el conjunto completo de colores del producto (es su detalle: se
 // manda la lista entera, en orden). Va dentro de la transacción del llamador.
+// El stock se lleva por producto + nombre de color (Sprint 2, ítem 2): quitar
+// (o renombrar) un color que tiene stock en algún almacén dejaría ese stock
+// huérfano. Se avisa en vez de permitirlo.
+const assertRemovedColorsHaveNoStock = async (productId: number, nextNames: string[], transaction: Transaction) => {
+  const keep = new Set(nextNames.map((name) => name.toUpperCase()));
+  const current = await DataBase.instance.product_color.findAll({ where: { product_id: productId }, attributes: ["name"], transaction });
+  const removed = current.map((color) => color.name).filter((name) => !keep.has(name.toUpperCase()));
+  if (removed.length === 0) return;
+  const withStock = await DataBase.instance.stock_balance.findOne({
+    where: { product_id: productId, color_key: { [Op.in]: removed }, on_hand: { [Op.ne]: 0 } },
+    attributes: ["color_key"],
+    transaction,
+  });
+  if (!withStock) return;
+  throw new AppError(
+    409,
+    `El color "${withStock.color_key}" tiene stock en un almacén: sácalo o transfiérelo antes de quitarlo`,
+    undefined,
+    "COLOR_HAS_STOCK"
+  );
+};
+
 export async function replaceProductColors({
   productId,
   companyId,
@@ -43,8 +66,9 @@ export async function replaceProductColors({
   actorId: number | null;
   transaction: Transaction;
 }): Promise<void> {
-  await DataBase.instance.product_color.destroy({ where: { product_id: productId }, transaction });
   const normalized = normalizeColors(colors);
+  await assertRemovedColorsHaveNoStock(productId, normalized.map((color) => color.name), transaction);
+  await DataBase.instance.product_color.destroy({ where: { product_id: productId }, transaction });
   if (normalized.length === 0) return;
 
   const now = nowUtc();
