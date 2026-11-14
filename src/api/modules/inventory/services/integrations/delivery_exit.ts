@@ -188,7 +188,7 @@ export const createDeliveryExit = async ({
   });
   if (existing) return null;
 
-  const items = await DataBase.instance.quotation_item.findAll({ where: { quotation_id: quotation.id }, attributes: ["product_id", "color", "quantity"], transaction });
+  const items = await DataBase.instance.quotation_item.findAll({ where: { quotation_id: quotation.id, is_excluded: false }, attributes: ["product_id", "color", "quantity"], transaction });
   return createSaleExit({
     companyId,
     warehouse,

@@ -335,3 +335,9 @@ export const correctQuotationExpenseValidator = [
 
 // GET /quotation/expense/:id/corrections?page=&limit=
 export { correctionHistoryValidator as quotationExpenseCorrectionsValidator };
+
+// PUT /quotation/item/:itemId/excluded — producto no aceptado por el cliente.
+export const itemExclusionValidator = [
+  param("itemId").isInt({ gt: 0 }).withMessage("El producto no es válido").toInt(),
+  body("excluded").isBoolean().withMessage("Indica si el producto queda como no aceptado").toBoolean(),
+];

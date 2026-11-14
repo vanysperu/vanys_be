@@ -1,4 +1,5 @@
 import { DataBase } from "../../../../../database";
+import { AppError } from "../../../../../core/errors/AppError";
 import { assertQuotationIsActive } from "../../../quotation/services/shared/active_quotation";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { QuotationItemModel } from "../../../quotation/model/quotation_item.model";
@@ -88,6 +89,10 @@ const createPurchaseOrder = async ({
       if (!quotationItem) throw new Error(`El item ${item.quotation_item_id} no existe`);
       if (quotationItem.quotation_id !== input.quotation_id) {
         throw new TenantMismatchError(`El item ${item.quotation_item_id} no pertenece a esta cotización`);
+      }
+      // Producto no aceptado por el cliente: no se compra (se reactiva primero).
+      if (quotationItem.is_excluded) {
+        throw new AppError(409, "Uno de los productos está como no aceptado en la cotización", undefined, "ITEM_EXCLUDED");
       }
     }
 

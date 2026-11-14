@@ -555,6 +555,8 @@ export const generateQuotationPdf = async (quotationId: number): Promise<Buffer>
 
   const data: QuotationPdfData = {
     ...plain,
+    // Lo que el cliente no aceptó no sale en su PDF (el total ya no lo suma).
+    items: (plain.items ?? []).filter((item) => !(item as { is_excluded?: boolean }).is_excluded),
     company: company ? company.toJSON() : null,
     paymentAccounts: accountsWithQr,
     logoDataUri,

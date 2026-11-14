@@ -22,7 +22,7 @@ export async function getTopTechniquesService(
      FROM quotation_item qi
      INNER JOIN quotation q ON q.id = qi.quotation_id
      INNER JOIN customization_technique t ON t.id = qi.technique_id
-     WHERE ${QUOTATION_SCOPE_SQL} AND q.status IN (:won) AND ${EMISSION_DATE_SQL} BETWEEN :from AND :to
+     WHERE ${QUOTATION_SCOPE_SQL} AND qi.is_excluded = false AND q.status IN (:won) AND ${EMISSION_DATE_SQL} BETWEEN :from AND :to
      GROUP BY t.id, t.name
      ORDER BY units DESC, t.name ASC
      LIMIT :limit`,

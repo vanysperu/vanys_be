@@ -64,6 +64,7 @@ interface ItemRow {
   quantity: number;
   unit_price: number | string;
   subtotal: number | string;
+  is_excluded?: boolean | number;
   product?: { name: string; sku: string | null } | null;
   technique?: { name: string } | null;
 }
@@ -140,7 +141,9 @@ export async function getPublicQuotationView(code: string): Promise<PublicQuotat
   const subtotal = Number(quotation.subtotal);
   const total = Number(quotation.total);
   const igvTotal = quotation.includes_igv ? total - subtotal : 0;
-  const items = allocateIgvByLine(quotation.items ?? [], igvTotal).map(({ line, amounts }) => ({
+  // Lo que el cliente no aceptó no se le muestra (el total ya no lo suma).
+  const acceptedItems = (quotation.items ?? []).filter((item) => !item.is_excluded);
+  const items = allocateIgvByLine(acceptedItems, igvTotal).map(({ line, amounts }) => ({
     id: Number(line.id),
     productName: line.product?.name ?? "Producto",
     sku: line.product?.sku ?? null,

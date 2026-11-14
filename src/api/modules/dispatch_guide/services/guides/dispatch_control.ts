@@ -27,7 +27,8 @@ export const quotationDispatchBalances = async (
   transaction?: Transaction
 ): Promise<Map<string, DispatchBalance>> => {
   const items = await DataBase.instance.quotation_item.findAll({
-    where: { quotation_id: quotationId },
+    // Lo que el cliente no aceptó no se despacha.
+    where: { quotation_id: quotationId, is_excluded: false },
     attributes: ["product_id", "color", "quantity"],
     transaction,
   });

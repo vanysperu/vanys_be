@@ -18,7 +18,7 @@ export async function getTopProductsService(scope: StatisticsScope, period: Stat
      FROM quotation_item qi
      INNER JOIN quotation q ON q.id = qi.quotation_id
      INNER JOIN product p ON p.id = qi.product_id
-     WHERE ${QUOTATION_SCOPE_SQL} AND q.status IN (:won) AND ${EMISSION_DATE_SQL} BETWEEN :from AND :to
+     WHERE ${QUOTATION_SCOPE_SQL} AND qi.is_excluded = false AND q.status IN (:won) AND ${EMISSION_DATE_SQL} BETWEEN :from AND :to
      GROUP BY p.id, p.name
      ORDER BY amount DESC, p.name ASC
      LIMIT :limit`,

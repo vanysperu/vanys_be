@@ -25,6 +25,7 @@
 | PUT    | /quotation/status/:id            | cambiar estado             | cotizacion      |
 | PUT    | /quotation/:id/items             | editar la cotización (cualquier estado) | cotizacion (`cotizacion.complete.button`) |
 | PUT    | /quotation/item/:itemId/stage    | mover etapa de producción (reglas del flujo de la empresa, ver `production_workflow/README.md`) | cotizacion      |
+| PUT    | /quotation/item/:itemId/excluded | producto no aceptado por el cliente / reactivarlo (`{ excluded }`) | cotizacion (`cotizacion.item.exclude.button`) |
 | POST   | /quotation/:id/payments          | registrar pago             | cotizacion      |
 | POST   | /quotation/:id/expenses          | registrar gasto            | cotizacion      |
 | GET    | /quotation/expense/find/:id      | gasto por id (diálogo de corrección) | cotizacion (`cotizacion.expense.find.endpoint`) |
@@ -303,6 +304,22 @@ cotización vieja recién pasada a Pendiente quedaba al fondo o fuera.
   cargaron; el historial, del más reciente al más antiguo.
 - El PDF formatea `valid_until` (DATEONLY) como texto, sin pasar por un
   `Date` local. Antes salía **un día antes** de lo guardado.
+
+## Productos no aceptados (pedido del usuario, 14-nov)
+- Un producto que el cliente no aceptó se marca con `PUT /quotation/item/:itemId/excluded`
+  (`quotation_item.is_excluded`, migración `20261117100000`) sin editar la cotización. El equipo lo
+  sigue viendo en el detalle (tachado, en "No aceptados por el cliente", con "Reactivar"); el
+  cliente no: no sale en el PDF ni en el enlace público, y **no suma** al subtotal ni al total
+  (tampoco al editar la cotización: conserva la marca).
+- Reglas: la cotización no puede estar cerrada (rechazada, cancelada, vencida, finalizada,
+  `409 QUOTATION_CLOSED`); queda al menos un producto aceptado (`409 LAST_ACCEPTED_ITEM`); no se
+  desactiva un producto con orden de compra (`409 ITEM_HAS_PURCHASE_ORDER`) ni en una guía de
+  remisión no anulada (`409 ITEM_HAS_DISPATCH_GUIDE`); el total nunca queda por debajo de lo cobrado
+  (`400 TOTAL_BELOW_PAID`).
+- Un producto no aceptado no entra en órdenes de compra nuevas (`409 ITEM_EXCLUDED`), no se mueve en
+  la producción, no se despacha (guías y salida de almacén) y no cuenta en Estadísticas.
+- Historial: eventos `item_excluded` / `item_included` con el total antes y después. Botón RBAC
+  `cotizacion.item.exclude.button` (seeder `20261117100100`), para quien puede editar cotizaciones.
 
 ## Campos especiales
 - `quotation_item.product_code` / `color`: variante elegida, opcional. Al crear o

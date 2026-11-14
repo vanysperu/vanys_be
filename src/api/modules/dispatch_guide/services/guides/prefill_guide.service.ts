@@ -60,7 +60,7 @@ const prefillFromQuotation = async (quotationId: number, user: IToken): Promise<
     businessUnitId === null
       ? Promise.resolve(null)
       : DataBase.instance.warehouse.findOne({ where: { business_unit_id: businessUnitId, is_default: true, active: true, is_transit: false } }),
-    DataBase.instance.quotation_item.findAll({ where: { quotation_id: quotation.id }, order: [["id", "asc"]] }),
+    DataBase.instance.quotation_item.findAll({ where: { quotation_id: quotation.id, is_excluded: false }, order: [["id", "asc"]] }),
     quotationDispatchBalances(Number(quotation.id), null),
   ]);
   const products = await DataBase.instance.product.findAll({

@@ -37,6 +37,12 @@ export interface QuotationItemAttributes {
   pricing_mode: QuotationItemPricingMode;
   unit_price: number;
   subtotal: number;
+  // "No aceptado" por el cliente (Sprint 2, 14-nov): el equipo lo ve, el
+  // cliente no (PDF y enlace público) y no suma al total. Opcional en el tipo:
+  // las altas no lo mandan (la base pone false).
+  is_excluded?: boolean;
+  excluded_at?: Date | null;
+  excluded_by?: number | null;
   created_by: number | null;
   created_at: Date;
   updated_by: number | null;
@@ -68,6 +74,9 @@ export function QuotationItemFactory(sequelize: Sequelize): QuotationItemStatic 
       pricing_mode: { type: DataTypes.ENUM(...QUOTATION_ITEM_PRICING_MODES), allowNull: false, defaultValue: "unit" },
       unit_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+      is_excluded: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      excluded_at: { type: DataTypes.DATE, allowNull: true },
+      excluded_by: { type: DataTypes.BIGINT, allowNull: true },
       created_by: { type: DataTypes.BIGINT, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_by: { type: DataTypes.BIGINT, allowNull: true },

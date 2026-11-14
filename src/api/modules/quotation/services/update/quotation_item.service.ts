@@ -28,6 +28,7 @@ const changeItemStage = async ({
 }) => {
   const item = await DataBase.instance.quotation_item.findOne({ where: { id: itemId }, include: [{ association: "product" }] });
   if (!item) throw new AppError(404, "El item no existe");
+  if (item.is_excluded) throw new AppError(409, "El producto está como no aceptado: reactívalo para producirlo", undefined, "ITEM_EXCLUDED");
 
   const quotation = await DataBase.instance.quotation.findOne({ where: { id: item.quotation_id } });
   if (!quotation) throw new AppError(404, "La cotización no existe");

@@ -316,7 +316,8 @@ export async function saveQuotationItems({
       companyId: quotation.company_id,
       transaction,
     });
-    const subtotal = roundMoney(saved.reduce((sum, item) => sum + item.subtotal, 0));
+    // Un producto "no aceptado" por el cliente sigue en la cotización pero no suma.
+    const subtotal = roundMoney(saved.filter((item) => !item.previous?.is_excluded).reduce((sum, item) => sum + item.subtotal, 0));
     const includesIgv = input.includes_igv ?? quotation.includes_igv;
     const igvRate = await getIgvRate(quotation.company_id);
     const total = roundMoney(computeQuotationTotal(subtotal, Boolean(includesIgv), igvRate));

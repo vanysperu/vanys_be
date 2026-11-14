@@ -33,7 +33,10 @@ export type QuotationEventAction =
   | "purchase_invoice_unlinked"
   // Guía de remisión de la cotización registrada o anulada (Sprint 2, ítem 1).
   | "dispatch_guide_registered"
-  | "dispatch_guide_voided";
+  | "dispatch_guide_voided"
+  // Producto no aceptado por el cliente o reactivado (Sprint 2, 14-nov).
+  | "item_excluded"
+  | "item_included";
 
 export interface QuotationEventAttributes {
   id: number;

@@ -5,6 +5,7 @@ import { allValidator } from "../../../../middlewares/error-validator";
 import { paginationValidator } from "../../../validators/pagination.validator";
 import {
   changeItemStageValidator,
+  itemExclusionValidator,
   changeStatusValidator,
   completeQuotationValidator,
   quotationBoardValidator,
@@ -35,6 +36,7 @@ import {
   updateQuotationController,
 } from "../controllers/quotation.controller";
 import { completeQuotationController } from "../controllers/complete.controller";
+import { setItemExclusionController } from "../controllers/item_exclusion.controller";
 import { quotationBoardController } from "../controllers/board.controller";
 import { getQuotationProfitController } from "../controllers/profit.controller";
 import { quotationResetPreviewController } from "../controllers/reset_preview.controller";
@@ -87,6 +89,8 @@ router.post("/create", verifyAccess, createQuotationValidator, allValidator, cre
 router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, updateQuotationController);
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);
 router.put("/item/:itemId/stage", verifyAccess, changeItemStageValidator, allValidator, changeItemStageController);
+// Producto no aceptado por el cliente (o reactivado), sin editar la cotización.
+router.put("/item/:itemId/excluded", verifyAccess, itemExclusionValidator, allValidator, setItemExclusionController);
 // Completar una cotización "Pendiente de cotizar" (llegó desde la web).
 router.put("/:id/items", verifyAccess, completeQuotationValidator, allValidator, completeQuotationController);
 router.post("/:id/payments", verifyAccess, createQuotationPaymentValidator, allValidator, createQuotationPaymentController);
