@@ -70,6 +70,9 @@ export interface CreatePurchaseOrderItemPurchaseInput {
   // Inventario (Sprint 2, ítem 2): almacén al que ingresa lo comprado. El
   // controller ya validó que el usuario opera ese almacén.
   warehouseId?: number;
+  // Con almacén de lotes: lote (opcional) y vencimiento (perecibles).
+  lotCode?: string | null;
+  expiryDate?: string | null;
   createdBy?: number;
 }
 
@@ -122,6 +125,8 @@ const createPurchaseOrderItemPurchase = async ({
   invoiceId: existingInvoiceId,
   invoicePending = false,
   warehouseId,
+  lotCode,
+  expiryDate,
   createdBy,
 }: CreatePurchaseOrderItemPurchaseInput) => {
   const transaction = await DataBase.instance.sequelize.transaction();
@@ -301,6 +306,8 @@ const createPurchaseOrderItemPurchase = async ({
         quantity,
         amount,
         note: `Compra de la orden #${item.purchase_order_id}: ${quotationItem.product.name} × ${quantity}`,
+        lotCode: lotCode ?? null,
+        expiryDate: expiryDate ?? null,
         actorId: createdBy ?? null,
         transaction,
       });

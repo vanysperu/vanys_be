@@ -23,6 +23,7 @@ import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitSco
 import { resolveWriteScope } from "../../../../core/rbac/writeScope";
 import { isOutOfReadScope } from "../../quotation/services/shared/quotation_scope";
 import { findPurchaseById } from "../services/find/purchase_order_item_purchase.service";
+import { getPurchaseWarehouseOptionsService } from "../services/find/warehouse_options.service";
 import { listPurchaseCorrections } from "../services/find/purchase_correction.service";
 import { correctPurchase } from "../services/update/purchase_order_item_purchase.service";
 import { annulPurchase } from "../services/disable/purchase_order_item_purchase.service";
@@ -174,7 +175,7 @@ export const updatePurchaseOrderItemStatusController = asyncHandler(async (req: 
 export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
   const { itemId } = req.params;
-  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_pending, invoice_id, warehouse_id } = req.body;
+  const { quantity, amount, notes, funding_source, paid_by_user_id, allow_exceed, payment_account_id, operation_number, has_invoice, invoice_pending, invoice_id, warehouse_id, lot_code, expiry_date } = req.body;
   // "Ingresar al almacén" (Sprint 2, ítem 2): solo uno que el usuario opera.
   const warehouseId = Number(warehouse_id) > 0 ? Number((await findWarehouseForCaller(Number(warehouse_id), req.user as IToken, "write")).id) : undefined;
 
@@ -204,6 +205,8 @@ export const createPurchaseOrderItemPurchaseController = asyncHandler(async (req
       // Factura ya registrada a la que se suma esta compra (solo con has_invoice).
       invoiceId: has_invoice === true && Number(invoice_id) > 0 ? Number(invoice_id) : undefined,
       warehouseId,
+      lotCode: warehouseId && typeof lot_code === "string" ? lot_code : null,
+      expiryDate: warehouseId && typeof expiry_date === "string" && expiry_date ? expiry_date : null,
       createdBy: user.userId,
     });
   } catch (err: unknown) {
@@ -277,4 +280,13 @@ export const listPurchaseCorrectionsController = asyncHandler(async (req: Reques
   });
 
   ok(res, 200, result, "Historial de correcciones obtenido correctamente");
+});
+
+// GET /purchase-order/item/:itemId/warehouse-options (Sprint 2): almacenes a los
+// que puede ingresar la compra de ese item ("Ingresar al almacén X", plan §8.4).
+export const getPurchaseWarehouseOptionsController = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user as IToken;
+  const itemId = Number(req.params.itemId);
+  await assertCanTouchPurchaseOrderItem(itemId, user);
+  ok(res, 200, await getPurchaseWarehouseOptionsService(itemId, user), "Almacenes obtenidos correctamente");
 });

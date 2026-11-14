@@ -18,6 +18,8 @@ export const createPurchaseEntry = async ({
   quantity,
   amount,
   note,
+  lotCode = null,
+  expiryDate = null,
   actorId,
   transaction,
 }: {
@@ -28,6 +30,10 @@ export const createPurchaseEntry = async ({
   quantity: number;
   amount: number;
   note: string;
+  // Almacén con lotes: código del lote (sin código se genera) y vencimiento
+  // (obligatorio si el almacén controla vencimientos y el producto es perecible).
+  lotCode?: string | null;
+  expiryDate?: string | null;
   actorId: number | null;
   transaction: Transaction;
 }): Promise<number> => {
@@ -80,8 +86,8 @@ export const createPurchaseEntry = async ({
       product_id: productId,
       color_key: colorKeyOf(color),
       lot_id: null,
-      lot_code: null,
-      expiry_date: null,
+      lot_code: lotCode?.trim() ? lotCode.trim().slice(0, 60) : null,
+      expiry_date: expiryDate,
       quantity: String(round3(quantity)),
       received_quantity: null,
       unit_cost: String(unitCost),

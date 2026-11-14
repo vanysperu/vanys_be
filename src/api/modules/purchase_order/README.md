@@ -11,6 +11,7 @@
 | POST   | /purchase-order/create                | create                          | purchase_order |
 | PUT    | /purchase-order/item/:itemId/status   | cambiar estado de un item (pending/not_needed) | purchase_order |
 | POST   | /purchase-order/item/:itemId/purchases | registrar una compra de un item | purchase_order |
+| GET    | /purchase-order/item/:itemId/warehouse-options | almacenes para "Ingresar al almacén" | purchase_order (`purchase_order.item.warehouseOptions.endpoint`) |
 | GET    | /purchase-order/purchase/find/:id      | compra por id (diálogo de corrección) | purchase_order (`purchase_order.purchase.find.endpoint`) |
 | PUT    | /purchase-order/purchase/update/:id    | corregir compra                  | purchase_order (`purchase_order.purchase.update.button`) |
 | PUT    | /purchase-order/purchase/disable/:id   | anular compra (una sola vía)     | purchase_order (`purchase_order.purchase.disable.button`) |
@@ -74,6 +75,16 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   (`POST /invoice/:id/file`). En el frontend la pregunta "¿La compra tiene
   factura?" es obligatoria. Una factura puede cubrir varios productos: con
   `invoice_id` la compra se suma a esa factura ya registrada, en vez de crear otra.
+  Sprint 2 (plan §8.4), "Ingresar al almacén": con `warehouse_id` la compra crea en la misma
+  transacción un ingreso confirmado (motivo compra; costo unitario = monto / cantidad) en ese
+  almacén. Solo un almacén que el usuario opera (un usuario de tienda, los de su tienda; si no,
+  404), de la empresa con inventario y con un producto que maneja stock. En un almacén con lotes
+  acepta `lot_code` (sin él se genera) y `expiry_date` (obligatoria si el almacén controla
+  vencimientos y el producto es perecible: si falta, `400 LOT_EXPIRY_REQUIRED` y no queda nada).
+  `GET .../warehouse-options` dice si se ofrece (`available`, `reason`), los almacenes (los de la
+  tienda de la cotización primero) y cuál preseleccionar (`suggested_warehouse_id`: el
+  predeterminado de la tienda, si la tienda usa almacén). Lo recibe quien registra compras
+  (seeder `20261115110100-seed-purchase-warehouse-options-resource.js`).
   Sprint 2, ítem 3: con `invoice_pending: true` ("Sí, llega después", incompatible
   con `has_invoice: true`) la compra queda `invoice_status = pending` y aparece en la
   bandeja "Compras sin factura" de Facturas; sin ninguno de los dos, `not_required`.

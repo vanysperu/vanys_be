@@ -11,6 +11,7 @@ import {
   annulPurchaseValidator,
   purchaseOrderIdValidator,
   updatePurchaseOrderItemStatusValidator,
+  warehouseOptionsValidator,
 } from "../validators/purchase_order.validator";
 import {
   annulPurchaseController,
@@ -19,6 +20,7 @@ import {
   listPurchaseCorrectionsController,
   createPurchaseOrderController,
   createPurchaseOrderItemPurchaseController,
+  getPurchaseWarehouseOptionsController,
   getPurchaseOrderController,
   listPurchaseOrdersController,
   updatePurchaseOrderItemStatusController,
@@ -48,6 +50,8 @@ router.put(
   allValidator,
   updatePurchaseOrderItemStatusController
 );
+// Almacenes a los que puede ingresar la compra ("Ingresar al almacén").
+router.get("/item/:itemId/warehouse-options", verifyAccess, warehouseOptionsValidator, allValidator, getPurchaseWarehouseOptionsController);
 router.post(
   "/item/:itemId/purchases",
   verifyAccess,

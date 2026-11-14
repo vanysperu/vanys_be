@@ -44,6 +44,9 @@ export const updatePurchaseOrderItemStatusValidator = [
   body("status").isIn(["pending", "not_needed"]).withMessage("Estado inválido"),
 ];
 
+// GET /purchase-order/item/:itemId/warehouse-options
+export const warehouseOptionsValidator = [itemIdParamValidator];
+
 export const createPurchaseOrderItemPurchaseValidator = [
   itemIdParamValidator,
   body("quantity").isInt({ gt: 0 }).withMessage("La cantidad comprada debe ser un número entero positivo"),
@@ -69,6 +72,9 @@ export const createPurchaseOrderItemPurchaseValidator = [
   }),
   body("allow_exceed").optional().isBoolean().withMessage("allow_exceed debe ser verdadero o falso"),
   body("warehouse_id").optional({ values: "null" }).isInt({ min: 1 }).withMessage("El almacén no es válido"),
+  // Ingreso a un almacén con lotes: lote opcional y vencimiento (perecibles).
+  body("lot_code").optional({ values: "falsy" }).isString().isLength({ max: 60 }).withMessage("El lote admite hasta 60 caracteres"),
+  body("expiry_date").optional({ values: "falsy" }).isISO8601({ strict: true }).withMessage("La fecha de vencimiento no es válida"),
   // ¿La compra llevaba factura? (el archivo se sube aparte, POST /invoice/:id/file).
   body("has_invoice").optional().isBoolean().withMessage("has_invoice debe ser verdadero o falso").toBoolean(),
   // "Sí, llega después" (Sprint 2, ítem 3): sin factura todavía, queda en la bandeja.
