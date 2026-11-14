@@ -126,9 +126,48 @@ inventario, plantilla de carga inicial, exportar kardex a Excel/PDF, PLE 12.1/13
 almacén al registrar una compra desde la pantalla (el backend ya acepta `warehouse_id`). La salida al
 emitir la guía (`dispatch_guide`) se conecta en el ítem 1.
 
+## Segunda PC (13-nov-2026)
+
+- El sprint sigue en otra PC (usuario de Windows `workj`), con las mismas rutas
+  (`C:\Extensiones\vn\...`). La base `grulla_s2_dev` se importó del paquete
+  (`base\grulla_s2_dev.sql`, 68 tablas) y se corrió `npm run db:seed-qa`. Ese MySQL tiene
+  además `emove_dev`, `vanys` y `vanys_dev`, que no son del sprint: no se tocan.
+- Playwright necesitó `npx playwright install chromium` (r1248).
+- Al revisar el entorno fallaban 2 pruebas que se habían quedado desactualizadas (no el código):
+  arregladas en `grulla_be` `8bfef21` (`supplier.test.ts` ya no asume una sola
+  funcionalidad) y `grulla_fe` `ec0af1f` (`suppliers.spec.ts` busca "Proveedores" exacto).
+- **Push bloqueado:** en esta PC Git usa la cuenta de GitHub `carupano2026`, que no tiene
+  permiso de escritura en `vanysperu/vanys_be` ni `vanys_fe` (403). Los commits quedan locales
+  hasta que el usuario dé acceso a esa cuenta o inicie sesión con la correcta.
+
+| 13-nov | grulla_be | `36fe12c` | Ítem 3 backend: `purchase_order_item_purchase.invoice_status` (linked/pending/not_required, con backfill: 144 linked), datos opcionales de la factura (proveedor, serie-número, fecha, moneda, total) y aviso de factura repetida, "Sí, llega después" (`invoice_pending`), `GET /invoice/pending-purchases`, `POST /invoice/link-purchases` (una factura para varias compras, nueva o ya registrada, archivo en el mismo paso, una transacción), `PUT /invoice/:id/remove-purchase`, `PUT /invoice/:id/details`, eventos en el historial, RBAC 315–318, suite `purchase-invoice-pending` (11) |
+| 13-nov | grulla_be | `81127a1` | El detalle de la cotización trae `purchase_invoice_status` (Gastos → Vincular factura) |
+| 13-nov | grulla_fe | `6140b47` | Ítem 3 frontend: tres respuestas al registrar la compra, Facturas → "Compras sin factura" (contador, filtros, selección múltiple, "Registrar factura"), "Vincular factura" en la orden y en Gastos, diálogo de la factura (datos, quitar y agregar compras), número y proveedor en la tabla, e2e `purchase-invoices` |
+
+**Ítem 3 terminado.** jest `purchase-invoice-pending` (11) en verde, más 117 de regresión
+(facturas, compras, correcciones, reset, inventario, RBAC, proveedores, flow-guards) y
+`quotation-edit`; e2e `purchase-invoices` (el Gestor registra con "llega después" y crea una
+sola factura para dos compras desde la bandeja) y 43 de regresión (`navigation-smoke`,
+`flow-guards`, `payments`, `inventory`, `quotation-form-fields`, `edit-forms-prefill`,
+`suppliers`) en verde; `tsc` y `npm run build` de ambos repos en verde; migración y seeder
+probados de ida, vuelta e ida.
+
+Decisiones tomadas al implementar (revisar si no convencen):
+- **El Gestor ve Facturas:** para que resuelva sus compras pendientes desde la bandeja (lo pide el
+  criterio de "terminado"), quien registra compras recibe la vista Facturas y su listado, siempre
+  limitados a su tienda. Antes solo los administradores veían Facturas.
+- **Archivo en el mismo paso:** el vínculo va en una transacción; el archivo se guarda enseguida
+  con las reglas de siempre. Si el archivo falla (p. ej. Drive sin conectar), la factura queda
+  registrada sin archivo en "Faltan subir" y se avisa: el vínculo no se pierde.
+- **Proveedor:** las compras no guardan proveedor; el filtro de la bandeja es por fecha, tienda,
+  cotización, producto o cliente. El proveedor es dato de la factura (filtro y búsqueda en Facturas).
+- **Quitar compra:** la compra vuelve a "pendiente"; si la factura se queda sin compras y no tiene
+  archivo, se elimina (misma regla que al anular).
+- "Corregir compra" sigue igual (sacar la factura ahí la deja en "no lleva factura").
+
 ## En curso
 
-- Siguiente: ítem 3 (compras sin factura) y luego ítem 1 (GRE, al final).
+- Siguiente: el selector "Ingresar al almacén" en la pantalla de compras y luego ítem 1 (GRE, al final).
 
 ## Pendiente del usuario
 
