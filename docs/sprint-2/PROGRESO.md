@@ -176,23 +176,51 @@ tienda solo ve y usa los almacenes de su tienda (otro responde 404); un perecibl
 que controla vencimientos exige la fecha (si falta, no queda ni la compra ni el ingreso). Quien
 registra compras puede ingresar al almacén sin tener el módulo Inventario (como pide el plan §8.4).
 
-## Sesión automática (desde el 13-nov-2026 de noche)
+## Ítem 1 — guía de remisión, MODO MANUAL (14-nov)
 
-El usuario dejó a Claude trabajando solo mientras duerme: la tarea programada de Windows
-"Claude Sprint 2 automatico" corre `C:\Extensiones\vn\automatico\correr-claude.ps1` cada 30 min
-(retoma la misma sesión; si el límite está agotado, termina y reintenta en la siguiente). Reglas e
-instrucciones: `automatico\prompt-inicio.md`. Registros: `automatico\logs\`. Para detenerla: crear
-el archivo `automatico\DETENER` o deshabilitar la tarea.
+Una sesión automática nocturna (tarea programada) se probó unos minutos el 13-nov y el usuario la
+detuvo: se borraron la tarea y la carpeta `automatico`. Lo que alcanzó a dejar (migración, seeder,
+modelos y catálogos de vehículos/conductores) se revisó, se corrigió (la tienda no tiene columna
+`name`: se usa `business_code`) y se completó en esta sesión.
+
+| Fecha | Repo | Commit | Qué |
+|---|---|---|---|
+| 14-nov | grulla_be | `3896df9` | Ítem 1 backend: tablas `dispatch_guide*`, vehículos, conductores, `company_sunat_settings` (solo `emission_mode`), funcionalidad `dispatch_guide`, RBAC 320–341; borrador desde cotización Lista/Entregada, transferencia (04) o de cero, con precarga; control de lo despachado; registrar la guía emitida (todos los faltantes juntos, número T### único también con registros simultáneos, PDF en el mismo paso, salida de almacén D4, historial); anular devuelve la salida; `createSaleExit` y `cancelStockDocument` reutilizables; suite `dispatch-guide` |
+| 14-nov | grulla_fe | `a7316b0` | Logística → Guías (lista, armar, registrar con PDF, detalle con visor, descartar, anular), Vehículos y Conductores; "Armar guía de remisión" en el detalle de la cotización; eventos en el historial; e2e `dispatch-guides` |
+| 14-nov | grulla_be | `22acdeb` | Prueba de la guía desde una transferencia |
+| 14-nov | grulla_fe | `fe2c5d1` | "Guía de remisión" en el detalle de una transferencia de almacén |
+
+**Modo manual terminado.** jest `dispatch-guide` (11) en verde, más 60 de regresión (inventario,
+compras al almacén, cotizaciones, reset, proveedores, RBAC, flow-guards); e2e `dispatch-guides`,
+`inventory`, `navigation-smoke`, `quotation-share`, `purchase-invoices`, `purchase-warehouse` y
+`flow-guards` en verde; `tsc` y `npm run build` en verde; migración y seeder de ida y vuelta.
+Cubre del "terminado cuando" del plan §9: "el modo manual registra el número y el PDF" y "dos
+emisiones simultáneas no duplican números". Lo demás (CDR, QR, rechazo de SUNAT) es de la emisión
+directa.
+
+Notas:
+- `platform.spec` ("la vista de Empresas se ve bien") falla por datos: el aviso de la campana del
+  cupo de correos (las pruebas mandan muchos correos de prueba en el día) tapa el encabezado en la
+  captura. No es del ítem 1.
+- Para el release: la migración `20261116100000` agrega la columna `stock_document.dispatch_guide_id`.
 
 ## Para revisar con el usuario
 
-- (vacío)
+- Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde
+  una transferencia; el resto se elige a mano (02, 07, 17...).
+- Quién hace qué: operar guías (armar, registrar, PDF, descartar) = quien ve cotizaciones, Gestor
+  incluido (en su tienda); vehículos, conductores y anular una guía registrada = administradores.
+- El tipo de documento del destinatario se deduce del número (11 dígitos RUC, 8 DNI); si no, se
+  elige en el formulario.
+- La guía registrada se anula en el sistema, pero la baja en SUNAT se hace en SOL (se avisa).
+- Envío de la guía por correo/WhatsApp y el PDF propio con QR quedan para la emisión directa: en
+  modo manual el PDF lo da SUNAT.
 
 ## En curso
 
-- Ítem 1 (GRE), MODO MANUAL (plan §9, opción C). Nada se envía a SUNAT. Todavía no empezado:
-  primer paso = diseño de tablas (migración `dispatch_guide*`, catálogos de vehículos y
-  conductores, `company_sunat_settings` solo con `emission_mode`) y módulo backend.
+- Siguiente: la prueba técnica con SUNAT (plan §9.3) y la emisión directa. **No se empieza sin el
+  usuario:** necesita su autorización, sus credenciales API de SOL y el certificado (CDT), y cada
+  guía aceptada es un documento real (solo traslados que de verdad ocurren).
 
 ## Pendiente del usuario
 
