@@ -30,7 +30,10 @@ export type QuotationEventAction =
   // Factura de una compra vinculada o quitada sin pasar por "Corregir compra"
   // (Sprint 2, ítem 3): no mueve dinero, no es una corrección.
   | "purchase_invoice_linked"
-  | "purchase_invoice_unlinked";
+  | "purchase_invoice_unlinked"
+  // Guía de remisión de la cotización registrada o anulada (Sprint 2, ítem 1).
+  | "dispatch_guide_registered"
+  | "dispatch_guide_voided";
 
 export interface QuotationEventAttributes {
   id: number;

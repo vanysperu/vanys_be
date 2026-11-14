@@ -143,6 +143,24 @@ import {
   StockCostFactory,
   StockCostStatic,
 } from "../api/modules/inventory/model/inventory.models";
+import {
+  CompanySunatSettingsFactory,
+  CompanySunatSettingsStatic,
+  TransportVehicleFactory,
+  TransportVehicleStatic,
+  TransportDriverFactory,
+  TransportDriverStatic,
+  DispatchGuideFactory,
+  DispatchGuideStatic,
+  DispatchGuideLineFactory,
+  DispatchGuideLineStatic,
+  DispatchGuideTransportFactory,
+  DispatchGuideTransportStatic,
+  DispatchGuideRelatedDocumentFactory,
+  DispatchGuideRelatedDocumentStatic,
+  DispatchGuideFileFactory,
+  DispatchGuideFileStatic,
+} from "../api/modules/dispatch_guide/model/dispatch_guide.models";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -233,6 +251,15 @@ export class DataBase {
   public stock_movement: StockMovementStatic;
   public stock_balance: StockBalanceStatic;
   public stock_cost: StockCostStatic;
+  // Guía de remisión (migración 20261116100000-create-dispatch-guide.js).
+  public company_sunat_settings: CompanySunatSettingsStatic;
+  public transport_vehicle: TransportVehicleStatic;
+  public transport_driver: TransportDriverStatic;
+  public dispatch_guide: DispatchGuideStatic;
+  public dispatch_guide_line: DispatchGuideLineStatic;
+  public dispatch_guide_transport: DispatchGuideTransportStatic;
+  public dispatch_guide_related_document: DispatchGuideRelatedDocumentStatic;
+  public dispatch_guide_file: DispatchGuideFileStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -332,6 +359,14 @@ export class DataBase {
     this.stock_movement = StockMovementFactory(this.sequelize);
     this.stock_balance = StockBalanceFactory(this.sequelize);
     this.stock_cost = StockCostFactory(this.sequelize);
+    this.company_sunat_settings = CompanySunatSettingsFactory(this.sequelize);
+    this.transport_vehicle = TransportVehicleFactory(this.sequelize);
+    this.transport_driver = TransportDriverFactory(this.sequelize);
+    this.dispatch_guide = DispatchGuideFactory(this.sequelize);
+    this.dispatch_guide_line = DispatchGuideLineFactory(this.sequelize);
+    this.dispatch_guide_transport = DispatchGuideTransportFactory(this.sequelize);
+    this.dispatch_guide_related_document = DispatchGuideRelatedDocumentFactory(this.sequelize);
+    this.dispatch_guide_file = DispatchGuideFileFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

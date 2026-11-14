@@ -1,6 +1,6 @@
 // Funcionalidades que se pueden contratar por empresa. Cada ítem del sprint que
 // necesite una agrega su código acá (almacén, guías...).
-export const FEATURE_CODES = ["supplier_stock", "inventory"] as const;
+export const FEATURE_CODES = ["supplier_stock", "inventory", "dispatch_guide"] as const;
 export type FeatureCode = (typeof FEATURE_CODES)[number];
 
 export interface FeatureDefinition {

@@ -12,6 +12,11 @@ export const FEATURE_CATALOG: readonly FeatureDefinition[] = [
     label: "Almacenes e inventario",
     description: "Almacenes por tienda, ingresos, salidas, transferencias, lotes y kardex.",
   },
+  {
+    code: "dispatch_guide",
+    label: "Guías de remisión",
+    description: "Arma la guía de remisión desde una cotización o una transferencia y registra su número y su PDF de SUNAT.",
+  },
 ];
 
 export const isFeatureCode = (value: string): value is FeatureCode =>

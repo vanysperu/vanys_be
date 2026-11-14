@@ -113,8 +113,11 @@ responde 409 `COLOR_HAS_STOCK`. Las claves de saldo no usan NULL
 ## Pendiente (siguiente sprint, plan §8)
 Stock mínimo con aviso, reservas por cotización, tomas de inventario,
 ubicaciones, plantilla de carga inicial, exportar el kardex a Excel/PDF y los
-formatos PLE 12.1/13.1. La salida al emitir la guía (D4, `dispatch_guide`) se
-conecta con el ítem 1 (GRE).
+formatos PLE 12.1/13.1.
+
+La salida al emitir la guía (D4, `dispatch_guide`) ya está conectada: al registrar una guía de
+venta de la cotización sale el stock (`createSaleExit`, con `stock_document.dispatch_guide_id`) y al
+anular la guía se anula esa salida (`cancelStockDocument`). Ver el README de `dispatch_guide`.
 
 ## Pruebas
 `tests/inventory.test.ts` (D5, D14, costo promedio, dos salidas simultáneas,

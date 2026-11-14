@@ -130,6 +130,9 @@ export interface StockDocumentAttributes extends AuditAttributes {
   supplier_id: number | null;
   client_id: number | null;
   quotation_id: number | null;
+  // Salida generada por una guía de remisión (D4). Opcional en el tipo: los
+  // documentos que no vienen de una guía no lo mandan.
+  dispatch_guide_id?: number | null;
   // Anulación de un documento confirmado: el documento inverso apunta al original.
   reversal_of_id: number | null;
   notes: string | null;
@@ -159,6 +162,7 @@ export const StockDocumentFactory = (sequelize: Sequelize): StockDocumentStatic 
     supplier_id: { type: DataTypes.BIGINT, allowNull: true },
     client_id: { type: DataTypes.BIGINT, allowNull: true },
     quotation_id: { type: DataTypes.BIGINT, allowNull: true },
+    dispatch_guide_id: { type: DataTypes.BIGINT, allowNull: true },
     reversal_of_id: { type: DataTypes.BIGINT, allowNull: true },
     notes: { type: DataTypes.STRING(500), allowNull: true },
     posted_at: { type: DataTypes.DATE, allowNull: true },

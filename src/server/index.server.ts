@@ -56,6 +56,7 @@ import { router as CompanyFeatureRoutes } from "../api/modules/company_feature/r
 import { router as SupplierRoutes } from "../api/modules/supplier/routes/supplier.routes";
 import { router as SupplierStockRoutes } from "../api/modules/supplier_stock/routes/supplier_stock.routes";
 import { router as InventoryRoutes } from "../api/modules/inventory/routes/inventory.routes";
+import { router as DispatchGuideRoutes } from "../api/modules/dispatch_guide/routes/dispatch_guide.routes";
 import { serveCompanyAssetController } from "../api/modules/uploads/controllers/uploads.controller";
 import path from "path";
 import { securityHeaders } from "../core/middlewares/securityHeaders";
@@ -196,6 +197,7 @@ export default class Server {
     this._router.use("/company-feature", CompanyFeatureRoutes);
     this._router.use("/supplier-stock", SupplierStockRoutes);
     this._router.use("/inventory", InventoryRoutes);
+    this._router.use("/dispatch-guide", DispatchGuideRoutes);
     this._router.use("/supplier", SupplierRoutes);
 
     this.frontend();
