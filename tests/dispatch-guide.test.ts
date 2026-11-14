@@ -262,6 +262,55 @@ describe("Guías de remisión (modo manual)", () => {
     expect(list.body.data.data.map((row: { id: number }) => row.id)).toEqual([registeredId]);
   });
 
+  it("desde una transferencia: motivo 04, la empresa como destinataria y una sola guía por transferencia", async () => {
+    const storeB = await authedRequest(superToken).post("/business-unit/create", { company_id: ctx.companyId, business_code: `QG-${stamp}` });
+    const target = await admin().post("/inventory/warehouses", {
+      business_unit_id: storeB.body.data.id,
+      code: "SUC",
+      name: "Sucursal",
+      address: "Av. Brasil 900, Breña",
+      ubigeo: "150105",
+      sunat_establishment_code: "0002",
+      allow_negative_stock: false,
+      track_lots: false,
+      track_expiry: false,
+      expiry_alert_days: 30,
+      block_expired: true,
+      is_default: true,
+    });
+    const transfer = await admin().post("/inventory/documents", {
+      doc_type: "transfer",
+      warehouse_id: warehouseId,
+      target_warehouse_id: target.body.data.id,
+      reason_code: "transfer",
+      document_date: "2026-11-14",
+      lines: [{ product_id: productId, quantity: 1 }],
+    });
+    expect(transfer.status).toBe(201);
+    const transferId = transfer.body.data.id as number;
+
+    const prefill = await admin().get(`/dispatch-guide/prefill?transferId=${transferId}`);
+    expect(prefill.status).toBe(200);
+    expect(prefill.body.data).toMatchObject({
+      reason_code: "04",
+      origin_establishment_code: "0001",
+      destination_establishment_code: "0002",
+      destination_ubigeo: "150105",
+      recipient_doc_type: "6",
+    });
+    const { lines, ...rest } = prefill.body.data as { lines: GuideLine[] } & Record<string, unknown>;
+    const created = await admin().post("/dispatch-guide/guides", {
+      ...rest,
+      lines: lines.map((line) => ({ product_id: line.product_id, description: line.description, quantity: line.quantity })),
+    });
+    expect(created.status).toBe(201);
+    expect((created.body.data as Guide).reason_code).toBe("04");
+
+    const second = await admin().post("/dispatch-guide/guides", { stock_document_id: transferId, reason_code: "04", transport_mode: "private", lines: [lineOf(1)] });
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe("TRANSFER_HAS_GUIDE");
+  }, 60_000);
+
   it("anular la guía registrada la deja anulada, devuelve el stock y libera lo despachado", async () => {
     const byGestor = await gestor().post(`/dispatch-guide/guides/${registeredId}/void`, { reason: "Se emitió con el peso errado" });
     expect(byGestor.status).toBe(403);
