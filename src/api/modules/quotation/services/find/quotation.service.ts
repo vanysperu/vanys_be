@@ -4,7 +4,7 @@ import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
 import { QuotationItemAttributes } from "../../model/quotation_item.model";
-import { FundingSource } from "../../../purchase_order/model/purchase_order_item_purchase.model";
+import { FundingSource, PurchaseInvoiceStatus } from "../../../purchase_order/model/purchase_order_item_purchase.model";
 import { EmployeeDebtStatus } from "../../../employee_debt/model/employee_debt.model";
 import { loadProductVariants, variantsOf } from "../shared/item_variant";
 import { loadCorrectionCounts } from "../../../money_correction/services/shared/corrections_count";
@@ -193,6 +193,8 @@ export type QuotationExpenseListItem = QuotationExpenseAttributes & {
   purchase_id: number | null;
   // Quién puso la plata de la compra (null = gasto que no es compra).
   purchase_funding_source: FundingSource | null;
+  // Factura de la compra (Sprint 2, ítem 3): pending = llega después.
+  purchase_invoice_status: PurchaseInvoiceStatus | null;
   // Gasto manual con plata de un trabajador: a quién se le debe y cómo va.
   paid_by_user_name: string | null;
   debt_status: EmployeeDebtStatus | null;
@@ -240,7 +242,7 @@ const getQuotationDetailById = async (id: number) => {
       ? Promise.resolve([])
       : DataBase.instance.purchase_order_item_purchase.findAll({
           where: { quotation_expense_id: expenseIds },
-          attributes: ["id", "quotation_expense_id", "funding_source"],
+          attributes: ["id", "quotation_expense_id", "funding_source", "invoice_status"],
         }),
     loadCorrectionCounts("quotation_expense", expenseIds),
     loadProductVariants(items.map((item) => Number(item.product_id))),
@@ -252,6 +254,7 @@ const getQuotationDetailById = async (id: number) => {
     ...expense,
     purchase_id: purchaseByExpense.get(Number(expense.id))?.id ?? null,
     purchase_funding_source: purchaseByExpense.get(Number(expense.id))?.funding_source ?? null,
+    purchase_invoice_status: purchaseByExpense.get(Number(expense.id))?.invoice_status ?? null,
     paid_by_user_name: expenseDebts.get(Number(expense.id))?.user_name ?? null,
     debt_status: expenseDebts.get(Number(expense.id))?.status ?? null,
     corrections_count: correctionCounts.get(Number(expense.id)) ?? 0,
