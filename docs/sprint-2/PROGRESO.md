@@ -176,9 +176,23 @@ tienda solo ve y usa los almacenes de su tienda (otro responde 404); un perecibl
 que controla vencimientos exige la fecha (si falta, no queda ni la compra ni el ingreso). Quien
 registra compras puede ingresar al almacén sin tener el módulo Inventario (como pide el plan §8.4).
 
+## Sesión automática (desde el 13-nov-2026 de noche)
+
+El usuario dejó a Claude trabajando solo mientras duerme: la tarea programada de Windows
+"Claude Sprint 2 automatico" corre `C:\Extensiones\vn\automatico\correr-claude.ps1` cada 30 min
+(retoma la misma sesión; si el límite está agotado, termina y reintenta en la siguiente). Reglas e
+instrucciones: `automatico\prompt-inicio.md`. Registros: `automatico\logs\`. Para detenerla: crear
+el archivo `automatico\DETENER` o deshabilitar la tarea.
+
+## Para revisar con el usuario
+
+- (vacío)
+
 ## En curso
 
-- Siguiente: ítem 1 (GRE): primero el modo manual; nada se envía a SUNAT sin consultar al usuario.
+- Ítem 1 (GRE), MODO MANUAL (plan §9, opción C). Nada se envía a SUNAT. Todavía no empezado:
+  primer paso = diseño de tablas (migración `dispatch_guide*`, catálogos de vehículos y
+  conductores, `company_sunat_settings` solo con `emission_mode`) y módulo backend.
 
 ## Pendiente del usuario
 
