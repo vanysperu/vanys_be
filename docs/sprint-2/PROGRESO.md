@@ -165,9 +165,20 @@ Decisiones tomadas al implementar (revisar si no convencen):
   archivo, se elimina (misma regla que al anular).
 - "Corregir compra" sigue igual (sacar la factura ahí la deja en "no lleva factura").
 
+| 13-nov | grulla_be | `a0599b2` | "Ingresar al almacén": `GET /purchase-order/item/:itemId/warehouse-options` (si se ofrece, almacenes que el usuario opera con los de la tienda de la cotización primero, y el sugerido), la compra acepta `lot_code`/`expiry_date` para almacenes con lotes, RBAC 319, suite `purchase-warehouse-entry` (5) |
+| 13-nov | grulla_fe | `bf13155` | Selector "Ingresar al almacén" en el formulario de compra (preseleccionado el predeterminado de la tienda si la tienda usa almacén; "No ingresar"; lote y vencimiento en almacenes con lotes), e2e `purchase-warehouse` |
+
+**Selector "Ingresar al almacén" terminado** (pendiente del ítem 2). jest `purchase-warehouse-entry` (5),
+`inventory`, `purchase-invoice-pending`, `expense-funding`, `flow-guards` y `rbac` en verde (61); e2e
+`purchase-warehouse`, `purchase-invoices`, `inventory` y `flow-guards` en verde; `npm run build` en verde.
+Reglas: solo se ofrece si la empresa tiene inventario y el producto maneja stock; un usuario de
+tienda solo ve y usa los almacenes de su tienda (otro responde 404); un perecible en un almacén
+que controla vencimientos exige la fecha (si falta, no queda ni la compra ni el ingreso). Quien
+registra compras puede ingresar al almacén sin tener el módulo Inventario (como pide el plan §8.4).
+
 ## En curso
 
-- Siguiente: el selector "Ingresar al almacén" en la pantalla de compras y luego ítem 1 (GRE, al final).
+- Siguiente: ítem 1 (GRE): primero el modo manual; nada se envía a SUNAT sin consultar al usuario.
 
 ## Pendiente del usuario
 
