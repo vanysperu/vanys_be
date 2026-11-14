@@ -204,6 +204,43 @@ Notas:
   captura. No es del ítem 1.
 - Para el release: la migración `20261116100000` agrega la columna `stock_document.dispatch_guide_id`.
 
+## Agregado al sprint (14-nov): productos no aceptados
+
+Pedido del usuario: en una cotización a veces el cliente acepta unos productos y otros no. Cada
+producto se marca "no aceptado" (o se reactiva) sin editar la cotización: el equipo lo sigue viendo
+con su historial; el cliente no (PDF y enlace público) y no suma al total.
+
+| Fecha | Repo | Commit | Qué |
+|---|---|---|---|
+| 14-nov | grulla_be | `8dfd865` | `quotation_item.is_excluded`, `PUT /quotation/item/:itemId/excluded`, total sin los no aceptados (también al editar), fuera del PDF/enlace público, de órdenes de compra, producción, guías, salida de almacén y Estadísticas; reglas (cotización abierta, uno aceptado mínimo, sin orden de compra ni guía, total ≥ cobrado); RBAC 342; suite `quotation-item-exclusion` (7) |
+| 14-nov | grulla_fe | `fd58d4c` | Botón por producto con confirmación, sección "No aceptados por el cliente" con "Reactivar", fuera de producción y de órdenes de compra; el formulario de editar los marca y no los suma; e2e `quotation-item-exclusion` |
+| 14-nov | grulla_fe | `08e65a1` | Recarga sola si la app quedó con el JS anterior tras un despliegue (`vite:preloadError`, máx. una vez por minuto) |
+
+## Release 1.7.0 / 0.7.0 (14-nov) — listo para subir, sin SUNAT
+
+Guía para subirlo: [RELEASE-SPRINT-2.md](RELEASE-SPRINT-2.md). La emisión directa a SUNAT no va (falta
+el RUC y la facturación); la guía de remisión en modo manual va, apagada por empresa.
+
+Validación:
+- **jest completo:** 67/67 suites, 667 pruebas en verde (1 omitida a propósito).
+- **e2e completo:** 126 en verde, 9 fallan y ninguna por el sprint:
+  - por datos de la base de pruebas: "Ana Acme" fuera del selector de 100 usuarios
+    (`employee-debts` ×2, `quotations`, `requested-changes`), "Acme Corp QA" fuera del de 100
+    empresas (`roles`), y el aviso del cupo de correos tapa la captura del encabezado
+    (`platform`, `roles`);
+  - desactualizadas desde antes del sprint (fallan igual en `main`): la captura de Caja (de octubre,
+    anterior a los botones de cierres/deudas/transferir) y `document-settings` (busca `#account-ref1`,
+    que ya no existía en `main`).
+- **Ensayo de la actualización de producción** (base temporal, ya borrada): copia de la base del
+  sprint → vuelta atrás de los 10 seeders y las 10 migraciones del sprint (48 tablas, como producción)
+  → `db:upgrade-production` lista 10 + 10 pendientes → el build de producción arrancó, respondió
+  `/api/health` y aplicó solo las 10 migraciones y 10 seeders → columnas, índices, claves foráneas y
+  permisos (250 recursos, 2113 asignaciones) idénticos a la base del sprint.
+  Nota: la vuelta atrás de `20261114100000` falla si ya hay el mismo código de producto con dos
+  proveedores (lo permite D6): para volver atrás en producción se restaura el respaldo.
+- **`npm run release`:** ver la fila de abajo.
+- Plantilla de variables de producción con `APP_PUBLIC_URL`, `EMAIL_*` y el cron cada 10 minutos.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde
@@ -218,9 +255,9 @@ Notas:
 
 ## En curso
 
-- Siguiente: la prueba técnica con SUNAT (plan §9.3) y la emisión directa. **No se empieza sin el
-  usuario:** necesita su autorización, sus credenciales API de SOL y el certificado (CDT), y cada
-  guía aceptada es un documento real (solo traslados que de verdad ocurren).
+- Release listo para subir (ver arriba). Lo que sigue lo decide el usuario: subirlo a Hostinger con
+  [RELEASE-SPRINT-2.md](RELEASE-SPRINT-2.md), y más adelante la emisión directa de la guía a SUNAT
+  (necesita su RUC, credenciales y autorización).
 
 ## Pendiente del usuario
 
