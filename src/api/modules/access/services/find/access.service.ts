@@ -8,6 +8,7 @@ import { ResourceModel } from "../../../resource/models/resource.model";
 import { RolesResourcesModel } from "../../../roles_resources/models/roles_resources.model";
 import { getIgvRate } from "../../../quotation/services/shared/tax_config";
 import { listEnabledFeatures } from "../../../company_feature/services/shared/feature_store";
+import { FEATURE_CATALOG } from "../../../company_feature/services/shared/feature_catalog";
 import { isSystemOnlyModule, isSystemOnlyResource } from "../../../../../core/rbac/systemOnlyModules";
 
 const getUserRoles = async (userId: number) => {
@@ -124,10 +125,22 @@ export const getMyAccess = async (
   // filas viejas en roles_resources. La excepción ("Ver todas las tiendas")
   // sigue llegando como botón, pero sin arrastrar su módulo al menú.
   const moduleCodeById = new Map<number, string>(modules.map((module: ModuleModel) => [module.id, module.code]));
-  const grantedResources = resources.filter(
-    (resource: ResourceModel) =>
-      grantedIds.has(resource.id) && (isSystem || !isSystemOnlyResource(moduleCodeById.get(resource.module_id), resource.code))
+  // Funcionalidades por empresa (Empresas → Funcionalidades): el módulo de una
+  // funcionalidad apagada no llega al menú ni a los botones de la empresa,
+  // aunque su rol lo tenga (el código del módulo es el de la funcionalidad).
+  // Los endpoints ya la bloquean (requireCompanyFeature); esto evita mostrar
+  // pantallas que después responden "Tu empresa no tiene esta función".
+  // El Super Administrador lo ve todo para poder configurarlo.
+  const lockedFeatureModules = new Set<string>(
+    isSystem ? [] : FEATURE_CATALOG.map((feature) => feature.code).filter((code) => !features.includes(code))
   );
+  const isVisibleResource = (resource: ResourceModel): boolean => {
+    const moduleCode = moduleCodeById.get(resource.module_id);
+    if (isSystem) return true;
+    if (moduleCode && lockedFeatureModules.has(moduleCode)) return false;
+    return !isSystemOnlyResource(moduleCode, resource.code);
+  };
+  const grantedResources = resources.filter((resource: ResourceModel) => grantedIds.has(resource.id) && isVisibleResource(resource));
 
   const grantedModuleIds = new Set(
     grantedResources

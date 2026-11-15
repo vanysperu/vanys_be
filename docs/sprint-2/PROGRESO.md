@@ -240,6 +240,12 @@ Validación:
   proveedores (lo permite D6): para volver atrás en producción se restaura el respaldo.
 - **`npm run release`:** ver la fila de abajo.
 - Plantilla de variables de producción con `APP_PUBLIC_URL`, `EMAIL_*` y el cron cada 10 minutos.
+- **Corrección antes de subir (14-nov, `8a5ad41`):** el menú de una empresa mostraba Inventario,
+  Guías de remisión y Stock de proveedores aunque la funcionalidad estuviera apagada (los endpoints ya
+  respondían 403). `/access/me` ya no trae esos módulos ni sus botones si la empresa no los tiene; el
+  Super Administrador los sigue viendo. Suites de funcionalidades/acceso 49/49; e2e de esas pantallas
+  33 en verde (2 de `platform`: la captura ya conocida y una intermitente que pasa al repetirla).
+  Paquete rearmado (sigue siendo 1.7.0).
 
 ## Notificaciones al teléfono — 1.8.0 / 0.8.0 (14-nov, rama `feature/notificaciones-push`)
 
