@@ -241,6 +241,28 @@ Validación:
 - **`npm run release`:** ver la fila de abajo.
 - Plantilla de variables de producción con `APP_PUBLIC_URL`, `EMAIL_*` y el cron cada 10 minutos.
 
+## Notificaciones al teléfono — 1.8.0 / 0.8.0 (14-nov, rama `feature/notificaciones-push`)
+
+Pedido del usuario: con la app instalada en el teléfono, que llegue un aviso cuando entra un pedido
+"Pendiente de cotizar" desde la web. Aprobó `web-push` 3.6.7 y eligió subir 1.7.0 primero y esto
+después, en su propia rama.
+
+| Fecha | Repo | Commit | Qué |
+|---|---|---|---|
+| 14-nov | grulla_be | `e2fa4a1` | Módulo `push_notification` (tabla `push_subscription`, `/push/status|subscribe|unsubscribe|test` de autoservicio), aviso tras el commit del pedido web a quien completa cotizaciones en esa tienda + admins de la empresa, claves VAPID (`npm run push:keys`, `npm run release` las genera); suite `push-notification` (6) |
+| 14-nov | grulla_fe | `ecbd285` | Menú de perfil → "Notificaciones" (activar/desactivar/probar en este teléfono; iPhone sin instalar explica cómo), service worker muestra el aviso y lo abre al tocarlo, `/cotizaciones?abrir=<id>`, "Salir" apaga los avisos del teléfono; e2e `push-notifications` (3) |
+
+Validación:
+- jest `push-notification` + `web-quote-request`: 12/12; type-check de los dos repos y build en verde.
+- e2e `push-notifications`, `install-app`, `login`: 16/16.
+- Build de producción con el service worker real (prueba temporal, no se subió): un aviso entregado
+  al service worker se muestra como "Nuevo pedido para cotizar" con el enlace a la cotización; si el
+  navegador rechaza la suscripción, el mensaje sale en español y el botón no se queda colgado.
+- **No se pudo probar acá** la entrega real por Google/Apple: ningún navegador automatizado trae el
+  servicio push. Se confirma en un teléfono después de subir, con "Enviar prueba".
+- Al subir 1.8.0: el `.env` de producción necesita `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
+  (generarlas UNA vez y no cambiarlas). La migración `20261118100000` crea `push_subscription`.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde
@@ -255,9 +277,11 @@ Validación:
 
 ## En curso
 
-- Release listo para subir (ver arriba). Lo que sigue lo decide el usuario: subirlo a Hostinger con
-  [RELEASE-SPRINT-2.md](RELEASE-SPRINT-2.md), y más adelante la emisión directa de la guía a SUNAT
-  (necesita su RUC, credenciales y autorización).
+- Release 1.7.0 listo para subir ([RELEASE-SPRINT-2.md](RELEASE-SPRINT-2.md)) + un solo cron cada
+  10 minutos a `/api/internal/jobs/tick`.
+- Notificaciones al teléfono (1.8.0) terminadas en `feature/notificaciones-push`: se suben después de
+  1.7.0; falta probar un aviso real en un teléfono.
+- Más adelante, la emisión directa de la guía a SUNAT (necesita su RUC, credenciales y autorización).
 
 ## Pendiente del usuario
 
