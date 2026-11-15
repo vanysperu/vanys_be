@@ -23,6 +23,12 @@ function routeToRegExp(route: string) {
 const SELF_SERVICE_ROUTES: { route: string; verb: string }[] = [
   { route: "/user/change/password", verb: "PATCH" },
   { route: "/user/user-account", verb: "GET" },
+  // Notificaciones al teléfono: activar/desactivar en el propio teléfono y la
+  // prueba van a los dispositivos del propio usuario (push_notification/README.md).
+  { route: "/push/status", verb: "GET" },
+  { route: "/push/subscribe", verb: "POST" },
+  { route: "/push/unsubscribe", verb: "POST" },
+  { route: "/push/test", verb: "POST" },
 ];
 
 // Misma regla que verifyAccess, para una acción SECUNDARIA dentro de otro

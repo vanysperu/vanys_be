@@ -161,6 +161,7 @@ import {
   DispatchGuideFileFactory,
   DispatchGuideFileStatic,
 } from "../api/modules/dispatch_guide/model/dispatch_guide.models";
+import { PushSubscriptionFactory, PushSubscriptionStatic } from "../api/modules/push_notification/model/push_subscription.model";
 
 export class DataBase {
   private static _instance: DataBase;
@@ -260,6 +261,8 @@ export class DataBase {
   public dispatch_guide_transport: DispatchGuideTransportStatic;
   public dispatch_guide_related_document: DispatchGuideRelatedDocumentStatic;
   public dispatch_guide_file: DispatchGuideFileStatic;
+  // Notificaciones al teléfono (migración 20261118100000-create-push-subscription.js).
+  public push_subscription: PushSubscriptionStatic;
 
   constructor() {
     this.sequelize = new Sequelize(
@@ -367,6 +370,7 @@ export class DataBase {
     this.dispatch_guide_transport = DispatchGuideTransportFactory(this.sequelize);
     this.dispatch_guide_related_document = DispatchGuideRelatedDocumentFactory(this.sequelize);
     this.dispatch_guide_file = DispatchGuideFileFactory(this.sequelize);
+    this.push_subscription = PushSubscriptionFactory(this.sequelize);
 
     this.associations();
     this.connectDb();

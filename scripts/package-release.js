@@ -189,7 +189,7 @@ const smokeTestPackage = async () => {
   }
 };
 
-const renderEnvFile = ({ jwtSecret, cronSecret, driveTokenKey }) =>
+const renderEnvFile = ({ jwtSecret, cronSecret, driveTokenKey, vapidKeys }) =>
   [
     "# =====================================================================",
     "# Variables de entorno de Vanys en producción",
@@ -245,6 +245,12 @@ const renderEnvFile = ({ jwtSecret, cronSecret, driveTokenKey }) =>
     "GOOGLE_DRIVE_REDIRECT_URI=https://<dominio>/api/google-drive/callback",
     "# Cifra los permisos de Drive guardados. Si cambia, hay que reconectar los Drives.",
     `GOOGLE_DRIVE_TOKEN_KEY=${driveTokenKey}`,
+    "",
+    "# Notificaciones al teléfono (Web Push). Se generan UNA vez: si ya hay unas en",
+    "# Hostinger, déjalas (cambiarlas obliga a cada usuario a reactivarlas).",
+    `VAPID_PUBLIC_KEY=${vapidKeys.publicKey}`,
+    `VAPID_PRIVATE_KEY=${vapidKeys.privateKey}`,
+    "VAPID_SUBJECT=mailto:hola@vanysperu.com",
     "",
   ].join("\n");
 
@@ -319,6 +325,7 @@ async function main() {
       jwtSecret: crypto.randomBytes(48).toString("hex"),
       cronSecret: crypto.randomBytes(32).toString("hex"),
       driveTokenKey: crypto.randomBytes(32).toString("base64"),
+      vapidKeys: require("web-push").generateVAPIDKeys(),
     })
   );
   fs.writeFileSync(path.join(OUTPUT_DIR, "CREDENCIALES-INICIALES.txt"), renderCredentials({ adminEmail, adminPassword }));

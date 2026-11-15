@@ -1065,6 +1065,10 @@ sistema.
   Excel de stock de proveedores, siempre dentro de un `worker_thread`;
   **xml-crypto**, **node-forge**, **fflate** y **qrcode** para la guía de
   remisión electrónica (se instalan cuando se llegue a ese ítem).
+- **web-push 3.6.7** (fijada, con `@types/web-push` 3.6.4 en desarrollo),
+  aprobada por el usuario el 14-nov-2026 para las notificaciones al teléfono
+  (Web Push estándar, sin servicios de terceros). No subir a la 4.x sin
+  probarla: salió el 6-nov-2026.
 - Todo código nuevo (variables, campos, tablas, endpoints) va en inglés,
   con comentarios en español — ver sección 9.
 - Al crear cualquier tabla nueva: incluir `company_id` (y `business_unit_id`

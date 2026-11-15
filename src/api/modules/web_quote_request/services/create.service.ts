@@ -11,6 +11,7 @@ import { suggestDraftPricing } from "./shared/draft_pricing";
 import { describeBelowMinimum, isBelowMinOrder, minOrderOf } from "./shared/min_order";
 import { describeMissingItems, notifyMissingProducts } from "./shared/notify_missing_products";
 import { resolveWebClient } from "./shared/resolve_client";
+import { notifyQuoteRequestPush } from "../../push_notification/services/notify_quote_request";
 import { loadWebCatalog, resolveWebItems } from "./shared/resolve_items";
 
 // Crea una cotización "Pendiente de cotizar" con lo que eligió el cliente en
@@ -71,6 +72,18 @@ export async function createWebQuoteRequestService(
       },
       { transaction }
     );
+
+    // Aviso al teléfono de quienes completan cotizaciones (pedido del usuario,
+    // 14-nov-2026): recién cuando el pedido quedó guardado, y sin frenarlo.
+    transaction.afterCommit(() => {
+      void notifyQuoteRequestPush({
+        quotationId: Number(quotation.id),
+        companyId,
+        businessUnitId: businessUnitId ?? null,
+        clientName: client.name,
+        itemsCount: input.items.length,
+      });
+    });
 
     const stages = await getOrderedProductionStages(companyId, transaction);
     const firstStageId = stages[0]?.id ?? null;
