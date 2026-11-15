@@ -56,6 +56,17 @@ describe("Proveedores, funcionalidades por empresa y códigos por proveedor", ()
     expect(me.body.data.features).toEqual(["supplier_stock"]);
     const otherMe = await authedRequest(other.admin.token).get("/access/me");
     expect(otherMe.body.data.features).toEqual([]);
+
+    // El menú solo trae los módulos de las funcionalidades prendidas (antes se
+    // veían Inventario/Logística/Stock con la funcionalidad apagada).
+    const featureModules = ["supplier_stock", "inventory", "dispatch_guide"];
+    const visibleFeatureModules = (modules: string[]) => modules.filter((code) => featureModules.includes(code));
+    expect(visibleFeatureModules(me.body.data.modules)).toEqual(["supplier_stock"]);
+    expect(me.body.data.buttons.some((code: string) => code.startsWith("inventory.") || code.startsWith("dispatch_guide."))).toBe(false);
+    expect(visibleFeatureModules(otherMe.body.data.modules)).toEqual([]);
+    // El Super Administrador los sigue viendo todos (los configura).
+    const superMe = await authedRequest(superToken).get("/access/me");
+    expect(visibleFeatureModules(superMe.body.data.modules).sort()).toEqual([...featureModules].sort());
   });
 
   it("crea, lista, edita y deshabilita proveedores; el nombre se repite solo entre empresas", async () => {
