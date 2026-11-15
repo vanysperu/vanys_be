@@ -258,6 +258,12 @@ después, en su propia rama.
 | 14-nov | grulla_be | `e2fa4a1` | Módulo `push_notification` (tabla `push_subscription`, `/push/status|subscribe|unsubscribe|test` de autoservicio), aviso tras el commit del pedido web a quien completa cotizaciones en esa tienda + admins de la empresa, claves VAPID (`npm run push:keys`, `npm run release` las genera); suite `push-notification` (6) |
 | 14-nov | grulla_fe | `ecbd285` | Menú de perfil → "Notificaciones" (activar/desactivar/probar en este teléfono; iPhone sin instalar explica cómo), service worker muestra el aviso y lo abre al tocarlo, `/cotizaciones?abrir=<id>`, "Salir" apaga los avisos del teléfono; e2e `push-notifications` (3) |
 
+- **Ubigeo por nombre (14-nov, a pedido del usuario):** en la guía de remisión y en el almacén el
+  distrito se elige escribiendo su nombre (tabla oficial INEI 2025, 1 891 distritos, 24 KB comprimida
+  y solo se baja al abrir esos formularios) y se rellena solo cuando la dirección lo trae. Ante la
+  duda (nombre repetido) ofrece opciones y no rellena. El detalle de la guía muestra el distrito en
+  palabras. Pruebas: `ubigeo` (19, lógica) y `dispatch-guides` (5). Va en 1.8.0, no en el paquete 1.7.0.
+
 Validación:
 - jest `push-notification` + `web-quote-request`: 12/12; type-check de los dos repos y build en verde.
 - e2e `push-notifications`, `install-app`, `login`: 16/16.

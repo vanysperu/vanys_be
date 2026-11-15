@@ -35,6 +35,16 @@ la prende el Super Administrador). Sin ella todo el módulo responde `403 FEATUR
 | GET/POST | /dispatch-guide/drivers | listar / crear (201) | `dispatch_guide.drivers.*` |
 | PUT  | /dispatch-guide/drivers/:id(/disable) | editar / deshabilitar-habilitar | `dispatch_guide.drivers.*` |
 
+## Ubigeo (distrito) sin buscar el código
+SUNAT pide el ubigeo (6 dígitos) del punto de partida y del de llegada. En el formulario se elige
+el **distrito por nombre** (escribiendo unas letras; busca también por provincia o por código) y el
+sistema guarda el código. Si la dirección ya trae el distrito ("Av. Larco 345, San Isidro") se
+rellena solo, con la nota "Detectado de la dirección, verifícalo". Ante la duda (nombre repetido en
+varias provincias, p. ej. Miraflores o San Miguel) **no** rellena: ofrece las opciones, el distrito
+más grande primero. La tabla es la oficial del INEI 2025 (1 891 distritos) y vive en el frontend
+(`grulla_fe/src/lib/ubigeo`): las direcciones no salen del sistema. El backend sigue validando solo
+el formato (6 dígitos) al guardar y al registrar la guía.
+
 ## Vistas de frontend vinculadas
 - `dispatch_guide.guides.view` → `/logistica/guias`
 - `dispatch_guide.vehicles.view` → `/logistica/vehiculos`
