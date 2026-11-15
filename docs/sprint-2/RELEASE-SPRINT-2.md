@@ -1,6 +1,7 @@
 # Release del Sprint 2 — cómo subirlo a producción
 
-> Versión **1.7.0** (backend) / **0.7.0** (frontend). Sale de la rama `feature/sprint-2`.
+> Versión **1.8.0** (backend) / **0.8.0** (frontend), rama `feature/notificaciones-push` (incluye todo
+> lo de la 1.7.0). La 1.7.0 sola, sin notificaciones, sale de `feature/sprint-2`.
 > Lo validado antes de subir está en la sección 6. Lo de SUNAT (emisión directa de la guía) **no**
 > va en esta versión.
 
@@ -17,6 +18,9 @@
 | Stock de proveedores* | Lee los Excel de stock de las importadoras (enlace o archivo) |
 | Almacenes e inventario* | Almacenes por tienda, ingresos, salidas, transferencias, lotes, kardex; descuenta al entregar o al emitir la guía |
 | Compras sin factura | "Sí, llega después", bandeja "Compras sin factura" en Facturas, una factura para varias compras; "Ingresar al almacén" al registrar una compra |
+| Notificaciones al teléfono (1.8.0) | Aviso en el teléfono cuando entra un pedido "Pendiente de cotizar" desde la web; cada persona lo activa en su teléfono (su nombre → Notificaciones) |
+| Distrito en lugar de ubigeo (1.8.0) | En la guía y el almacén se elige el distrito por nombre y se guarda el código; se rellena solo si la dirección lo trae |
+| Guías en la cotización (1.8.0) | Franja "Guías de remisión" en el detalle de la cotización con las guías ya armadas |
 | Guía de remisión, modo manual* | Se arma en el sistema, se emite en SUNAT (SEE-SOL/App Emprender) y se registra aquí su número y PDF. Nada se envía a SUNAT |
 
 \* Funcionalidades **por empresa**: nacen **apagadas**. Las prende el Super Administrador en
@@ -47,6 +51,13 @@ Agregar (no reemplazar las que ya están):
 | `EMAIL_FROM_ADDRESS` | `no-reply@<tu dominio>` (dominio verificado en Brevo) | Solo con Brevo |
 | `EMAIL_FROM_NAME` | `Vanys` | No |
 | `EMAIL_DAILY_LIMIT` | `300` (plan gratis de Brevo) | No |
+| `VAPID_PUBLIC_KEY` | la que trae `variables-entorno.env` | Sí para las notificaciones (1.8.0) |
+| `VAPID_PRIVATE_KEY` | la que trae `variables-entorno.env` (es secreta) | Sí para las notificaciones (1.8.0) |
+| `VAPID_SUBJECT` | `mailto:hola@vanysperu.com` | No (ese es el valor por defecto) |
+
+**Las dos claves VAPID se ponen UNA sola vez y no se cambian nunca**: cada `npm run release` genera
+unas nuevas en el `.env` de salida; las de Hostinger son las primeras que se cargaron. Si se cambian,
+los teléfonos que ya activaron los avisos dejan de recibirlos hasta volver a activarlos.
 
 **No cambiar** `SECRET_HIDDEN_KEY` ni `GOOGLE_DRIVE_TOKEN_KEY` (el `variables-entorno.env` que genera
 `npm run release` trae unas nuevas al azar: ignóralas; solo copia las variables nuevas de arriba).
@@ -74,7 +85,7 @@ también, no pasa nada: las tareas no se duplican).
    candado para que no corran dos veces. Alternativa a mano desde la PC: `npm run db:upgrade-production`
    (primero sin `--aplicar` para ver lo pendiente).
 
-Migraciones: `20261113100000` correo y enlaces · `20261113110000` enlace público · `20261113120000`
+Migraciones (1.8.0 suma `20261118100000` push_subscription): `20261113100000` correo y enlaces · `20261113110000` enlace público · `20261113120000`
 flujo de producción · `20261114100000` funcionalidades y proveedores · `20261114110000` stock de
 proveedores · `20261114110100` códigos normalizados · `20261114120000` inventario · `20261115100000`
 compras sin factura · `20261116100000` guías de remisión · `20261117100000` productos no aceptados.
