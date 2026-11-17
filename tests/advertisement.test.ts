@@ -256,6 +256,27 @@ describe("Anuncios de la web", () => {
     expect(external.body.code).toBe("INVALID_IMAGE_PATH");
   });
 
+  // Un PNG válido (firma real) rellenado hasta el peso pedido: el cargador revisa el peso y la firma.
+  const pngOfSize = (megabytes: number) => Buffer.concat([PNG_1X1, Buffer.alloc(Math.round(megabytes * 1024 * 1024) - PNG_1X1.length)]);
+  const uploadTo = (path: string, megabytes: number) =>
+    request(BASE_URL)
+      .post(path)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .attach("file", pngOfSize(megabytes), { filename: "pesada.png", contentType: "image/png" });
+
+  it("la imagen de un anuncio admite hasta 3 MB; las demás imágenes de empresa siguen en 2 MB", async () => {
+    // Anuncio: 2.5 MB entra (antes el tope era 2 MB), 3.5 MB no.
+    expect((await uploadTo("/api/advertisement/image", 2.5)).status).toBe(201);
+    const tooBig = await uploadTo("/api/advertisement/image", 3.5);
+    expect(tooBig.status).toBe(400);
+    expect(tooBig.body.message).toBe("La imagen supera el máximo de 3 MB");
+
+    // Foto de producto: el tope no cambió, 2.5 MB sigue rechazándose.
+    const product = await uploadTo("/api/product/image", 2.5);
+    expect(product.status).toBe(400);
+    expect(product.body.message).toBe("La imagen supera el máximo de 2 MB");
+  });
+
   it("el Super Administrador ve la empresa de cada anuncio y puede filtrar por ella", async () => {
     const res = await superApi().get(`/advertisement/list?companyId=${companyId}&status=active`);
     expect(res.status).toBe(200);

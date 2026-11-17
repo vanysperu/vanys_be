@@ -3,7 +3,7 @@ import { IToken } from "../../../interfaces/IToken.interface";
 import { AppError } from "../../../../core/errors/AppError";
 import { ok } from "../../../../core/utils/response";
 import { resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
-import { hasValidImageSignature, uploadCompanyImage } from "../../../../middlewares/upload-image";
+import { hasValidImageSignature, uploadAdvertisementImage } from "../../../../middlewares/upload-image";
 import { createCompanyAsset } from "../../uploads/services/create/company_asset.service";
 
 // Guarda la imagen en la base (company_asset, mismas reglas que la foto de un
@@ -24,7 +24,7 @@ const storeAdvertisementImage = async (
 // se puede await-ear: por eso next(new AppError(...)) explícito (igual que la
 // foto de un producto).
 export const uploadAdvertisementImageController = (req: Request, res: Response, next: NextFunction) => {
-  uploadCompanyImage(req, res, (err: unknown) => {
+  uploadAdvertisementImage(req, res, (err: unknown) => {
     if (err) return next(new AppError(400, err instanceof Error ? err.message : "No se pudo subir la imagen"));
     if (!req.file) return next(new AppError(400, "No se recibió ninguna imagen"));
     if (!hasValidImageSignature(req.file.buffer, req.file.mimetype)) {

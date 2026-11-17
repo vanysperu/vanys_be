@@ -66,7 +66,7 @@ Administrador) o de la empresa. El panel de Anuncios también las crea
   pasarlo a otra zona lo deja al final de la nueva. Crear, mover y eliminar
   bloquean la fila de la empresa para no chocar entre sí.
 - **Imagen**: siempre subida al sistema por su empresa (PNG, JPG o WEBP, máx.
-  2 MB), nunca un enlace externo (`400 INVALID_IMAGE_PATH`). Cambiarla borra la
+  3 MB; las fotos de productos, logos y QR siguen en 2 MB), nunca un enlace externo (`400 INVALID_IMAGE_PATH`). Cambiarla borra la
   anterior. La limpieza de imágenes cuenta las de anuncios como "en uso"
   (también las de los apagados).
 - `link_url`: opcional, solo `http://` o `https://` (la web lo pone en un href).

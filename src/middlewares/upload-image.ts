@@ -1,3 +1,4 @@
+import type { RequestHandler } from "express";
 import multer from "multer";
 import { resolveUploadsDir } from "../config/paths";
 
@@ -24,7 +25,12 @@ export const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/webp": ".webp",
 };
 const ALLOWED_MIME_TYPES = Object.keys(EXTENSION_BY_MIME_TYPE);
-const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB — de sobra para un logo o un QR.
+const MB = 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 2 * MB; // 2MB — de sobra para un logo, un QR o la foto de un producto.
+// Las imágenes de los anuncios de la web son banners grandes: pueden pesar más.
+// (Pedido del usuario, 17-nov-2026; si cambia, cambiar también ADVERTISEMENT_IMAGE_MAX_MB
+// en grulla_fe/src/modules/advertisements.)
+export const ADVERTISEMENT_IMAGE_MAX_BYTES = 3 * MB;
 
 // Firma real del archivo (primeros bytes). El MIME que llega en el request
 // es solo lo que el cliente dice que es; esto confirma que el contenido
@@ -50,16 +56,32 @@ const SIGNATURE_CHECK_BY_MIME_TYPE: Record<string, (bytes: Buffer) => boolean> =
 export const hasValidImageSignature = (bytes: Buffer, mimeType: string): boolean =>
   SIGNATURE_CHECK_BY_MIME_TYPE[mimeType]?.(bytes) ?? false;
 
-export const uploadCompanyImage = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
-  fileFilter: (_req, file, callback) => {
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      return callback(new Error("Solo se permiten imágenes PNG, JPG o WEBP"));
-    }
-    callback(null, true);
-  },
-}).single("file");
+// Mismo cargador para todas las imágenes de empresa; solo cambia el tope de
+// peso. Al pasarse del tope, multer responde "File too large": se traduce al
+// español con el máximo real.
+const createImageUploader = (maxBytes: number): RequestHandler => {
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxBytes, files: 1 },
+    fileFilter: (_req, file, callback) => {
+      if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        return callback(new Error("Solo se permiten imágenes PNG, JPG o WEBP"));
+      }
+      callback(null, true);
+    },
+  }).single("file");
+
+  return (req, res, next) =>
+    upload(req, res, (error: unknown) => {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return next(new Error(`La imagen supera el máximo de ${maxBytes / MB} MB`));
+      }
+      next(error);
+    });
+};
+
+export const uploadCompanyImage = createImageUploader(MAX_FILE_SIZE_BYTES);
+export const uploadAdvertisementImage = createImageUploader(ADVERTISEMENT_IMAGE_MAX_BYTES);
 
 // Ruta pública (sin token) donde queda expuesta la imagen — se arma acá para
 // no repetir la misma concatenación en cada controller que necesite

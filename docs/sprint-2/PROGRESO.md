@@ -264,6 +264,12 @@ después, en su propia rama.
   duda (nombre repetido) ofrece opciones y no rellena. El detalle de la guía muestra el distrito en
   palabras. Pruebas: `ubigeo` (19, lógica) y `dispatch-guides` (5). Va en 1.8.0, no en el paquete 1.7.0.
 
+- **1.8.1 (17-nov, a pedido del usuario): imagen de anuncios hasta 3 MB** (antes 2 MB). Solo anuncios:
+  fotos de producto, logo y QR siguen en 2 MB. El cargador de imágenes del servidor ahora recibe el tope
+  (`createImageUploader`) y el aviso de "muy pesada" sale en español con el máximo real; en pantalla el
+  validador y `ImageUploadField` aceptan un `maxSizeMb` opcional (por defecto 2). Pruebas: `advertisement`
+  (anuncio 2.5 MB entra, 3.5 MB no; producto 2.5 MB sigue rechazado) y e2e `advertisement-image-size` (2).
+
 Validación:
 - jest `push-notification` + `web-quote-request`: 12/12; type-check de los dos repos y build en verde.
 - e2e `push-notifications`, `install-app`, `login`: 16/16.
