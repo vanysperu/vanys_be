@@ -4,6 +4,7 @@ import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { QuotationAttributes } from "../../model/quotation.model";
 import { QuotationExpenseAttributes } from "../../model/quotation_expense.model";
 import { QuotationItemAttributes } from "../../model/quotation_item.model";
+import { QuotationPaymentAttributes } from "../../model/quotation_payment.model";
 import { FundingSource, PurchaseInvoiceStatus } from "../../../purchase_order/model/purchase_order_item_purchase.model";
 import { EmployeeDebtStatus } from "../../../employee_debt/model/employee_debt.model";
 import { loadProductVariants, variantsOf } from "../shared/item_variant";
@@ -201,15 +202,23 @@ export type QuotationExpenseListItem = QuotationExpenseAttributes & {
   corrections_count: number;
 };
 
+// Pago tal como lo muestra la pestaña Pagos: con `is_deleted` (los anulados se
+// ven tachados y no suman) y cuántas correcciones tiene (badge "Corregido").
+export type QuotationPaymentListItem = QuotationPaymentAttributes & {
+  corrections_count: number;
+};
+
 type QuotationDetailJson = QuotationAttributes & {
+  payments?: QuotationPaymentAttributes[];
   expenses?: QuotationExpenseAttributes[];
   items?: (QuotationItemAttributes & { product?: object | null })[];
 };
 
 /**
  * Detalle de la cotización para la pantalla (GET /quotation/find/:id): el de
- * getQuotationById más, en cada gasto, purchase_id y corrections_count. Dos
- * consultas por IN sobre los ids de los gastos (nunca una por gasto). El PDF
+ * getQuotationById más, en cada gasto, purchase_id y corrections_count, y en
+ * cada pago su corrections_count. Consultas por IN sobre los ids de los gastos
+ * y de los pagos (nunca una por fila). El PDF
  * sigue usando getQuotationById (no necesita esto).
  */
 // Deudas vigentes de los gastos manuales, en UNA consulta.
@@ -234,10 +243,12 @@ const getQuotationDetailById = async (id: number) => {
   const plain = quotation.toJSON() as unknown as QuotationDetailJson;
   const expenses = plain.expenses ?? [];
   const expenseIds = expenses.map((expense) => Number(expense.id));
+  const payments = plain.payments ?? [];
+  const paymentIds = payments.map((payment) => Number(payment.id));
 
   const items = plain.items ?? [];
 
-  const [purchases, correctionCounts, variantsByProduct, expenseDebts] = await Promise.all([
+  const [purchases, correctionCounts, paymentCorrectionCounts, variantsByProduct, expenseDebts] = await Promise.all([
     expenseIds.length === 0
       ? Promise.resolve([])
       : DataBase.instance.purchase_order_item_purchase.findAll({
@@ -245,6 +256,7 @@ const getQuotationDetailById = async (id: number) => {
           attributes: ["id", "quotation_expense_id", "funding_source", "invoice_status"],
         }),
     loadCorrectionCounts("quotation_expense", expenseIds),
+    loadCorrectionCounts("quotation_payment", paymentIds),
     loadProductVariants(items.map((item) => Number(item.product_id))),
     loadExpenseDebts(expenseIds),
   ]);
@@ -266,7 +278,12 @@ const getQuotationDetailById = async (id: number) => {
     item.product ? { ...item, product: { ...item.product, ...variantsOf(variantsByProduct, Number(item.product_id)) } } : item
   );
 
-  return { ...plain, items: enrichedItems, expenses: enrichedExpenses };
+  const enrichedPayments: QuotationPaymentListItem[] = payments.map((payment) => ({
+    ...payment,
+    corrections_count: paymentCorrectionCounts.get(Number(payment.id)) ?? 0,
+  }));
+
+  return { ...plain, items: enrichedItems, payments: enrichedPayments, expenses: enrichedExpenses };
 };
 
 export { getQuotationsList, getQuotationById, getQuotationDetailById };

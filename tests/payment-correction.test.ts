@@ -153,6 +153,12 @@ describe("Corrección de pagos", () => {
     expect(entry?.reason).toBe("El cliente depositó menos de lo anotado");
     expect(entry?.created_by).toBe(userId);
 
+    // La pestaña Pagos de la cotización también muestra el badge "Corregido".
+    const detail = await api().get(`/quotation/find/${quotationId}`);
+    const detailPayment = (detail.body.data.payments as PaymentRow[]).find((item) => item.id === paymentId);
+    expect(detailPayment?.corrections_count).toBe(1);
+    expect(detailPayment?.is_deleted).toBe(false);
+
     // Mismo historial desde el endpoint genérico de Caja.
     const generic = await api().get(`/cash-movement/${paymentId}/corrections?source=quotation_payment`);
     expect(generic.status).toBe(200);
@@ -180,6 +186,8 @@ describe("Corrección de pagos", () => {
     expect(over.status).toBe(400);
     expect(over.body.code).toBe("PAYMENT_EXCEEDS_BALANCE");
     expect(over.body.message).toMatch(/sobre-pagada/i);
+    // Pista para no "parchar" con otro pago o un ingreso manual en Caja.
+    expect(over.body.message).toMatch(/corrígelo o anúlalo en la pestaña Pagos/);
     expect(await totalPaid(quotationId)).toBe(100);
 
     // Crear otro pago que se pasa del saldo tiene el mismo código.
@@ -200,6 +208,10 @@ describe("Corrección de pagos", () => {
     const { quotationId, paymentId } = await paidQuotation(80);
     expect((await api().put(`/payment/disable/${paymentId}`)).status).toBe(200);
     expect(await totalPaid(quotationId)).toBe(0);
+    // El detalle sigue trayendo el pago anulado, marcado (la pestaña lo tacha).
+    const detail = await api().get(`/quotation/find/${quotationId}`);
+    const annulled = (detail.body.data.payments as PaymentRow[]).find((item) => item.id === paymentId);
+    expect(annulled?.is_deleted).toBe(true);
 
     const res = await correct(paymentId, { amount: 90 });
     expect(res.status).toBe(409);

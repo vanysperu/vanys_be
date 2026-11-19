@@ -23,6 +23,9 @@ ni anular.
 ## Vistas de frontend vinculadas
 - payment.list (`/pagos`) — lista TODOS los pagos de la empresa (no solo los
   de una cotización puntual), con edición y anulación.
+- Pestaña Pagos del detalle de una cotización (vista `cotizacion`): desde el
+  19-nov usa los mismos tres botones de abajo para corregir, anular/restaurar
+  y ver el historial de cada pago, y muestra los anulados tachados.
 
 ## Botones/acciones vinculadas
 - payment.update.button (editar monto/método/fecha/N° de operación/notas)

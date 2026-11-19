@@ -19,7 +19,10 @@ export class PaymentExceedsBalanceError extends AppError {
   constructor(remaining: number) {
     super(
       400,
-      `Con este monto la cotización queda sobre-pagada — el saldo pendiente es S/ ${remaining.toFixed(2)}`,
+      // La pista final evita el "parche" de partir el pago en uno más chico +
+      // un ingreso manual en Caja (pasó con la cotización #37, 19-nov).
+      `Con este monto la cotización queda sobre-pagada — el saldo pendiente es S/ ${remaining.toFixed(2)}. ` +
+        "Si un pago ya registrado está mal, corrígelo o anúlalo en la pestaña Pagos de la cotización.",
       undefined,
       "PAYMENT_EXCEEDS_BALANCE"
     );

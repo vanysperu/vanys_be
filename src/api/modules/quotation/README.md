@@ -44,8 +44,9 @@ Botones (pestaña "Gastos" del detalle y Caja): `cotizacion.expense.update.butto
 - Cada corrección: una transacción con el gasto bloqueado; UPDATE en el lugar + fila inmutable en `money_correction` (fuente `quotation_expense`, con `payment_account_name`) + evento `expense_updated` + log. Anular/restaurar: evento `expense_disabled` / `expense_restored` + log.
 - Cierre mensual de caja (fase 2): crear un gasto con `spent_at` en un mes cerrado → 409 `CASH_PERIOD_CLOSED`. Corregir o anular/restaurar un gasto de un mes cerrado es un **ajuste** (en el lugar + patas `hold`/`posting` + `money_correction.kind = 'adjustment'`; requiere `cash_closing.adjust.button`, si no 403 `CASH_PERIOD_ADJUST_FORBIDDEN`). `PUT /quotation/expense/disable/:id` acepta `{ reason?: string }` (5–500), obligatorio solo si es ajuste (400 `ADJUSTMENT_REASON_REQUIRED`). Mover `spent_at` a un mes cerrado → 409. Descripción/categoría → sin patas. Respuestas con `kind` y `adjusted_period`. Detalle: `cash_movement/README.md`.
 - Un gasto anulado (`is_deleted`) no suma en Caja, Estadísticas, márgenes ni en el total de la pestaña Gastos; el detalle (`GET /quotation/find/:id`) lo sigue devolviendo (tachado), con `purchase_id` y `corrections_count`.
+- Pagos en el detalle (pedido del usuario, 19-nov): cada pago trae `is_deleted` y `corrections_count` (una consulta por IN). La pestaña Pagos muestra el anulado tachado y "Anulado" (no suma: `total_paid` ya lo excluye) y, con los botones del módulo [`payment`](../payment/README.md) (`payment.update.button`, `payment.disable.button`, `payment.corrections.button`), corrige, anula/restaura y abre el historial ahí mismo, con las mismas reglas que `/pagos` (mes cerrado = ajuste con motivo). Antes solo se veían, y un pago mal registrado se "parchaba" con otro pago o un ingreso manual en Caja.
 - Escritura con `resolveWriteScope`: fuera de alcance → 404. Al REGISTRAR pagos, adelantos o gastos, un usuario ligado a una tienda (aunque tenga "ver todas las tiendas") solo lo hace en cotizaciones de su tienda: si la ve pero no es suya → 403 `STORE_WRITE_SCOPE`.
-- `PAYMENT_EXCEEDS_BALANCE` (sobre-pago) llega con su código: el controller ya no lo re-envuelve.
+- `PAYMENT_EXCEEDS_BALANCE` (sobre-pago) llega con su código: el controller ya no lo re-envuelve. El mensaje termina con la pista "Si un pago ya registrado está mal, corrígelo o anúlalo en la pestaña Pagos de la cotización."
 - Una compra anulada no bloquea rechazar/cancelar la cotización (`assertNoMoneyInvolved`). Los gastos manuales siguen sin bloquearla (fuera de alcance, decisión 6).
 
 `/internal/jobs/expire-quotations` no lo usa ningún usuario: lo llama cada
@@ -307,8 +308,10 @@ cotización vieja recién pasada a Pendiente quedaba al fondo o fuera.
 
 ## Productos no aceptados (pedido del usuario, 14-nov)
 - Un producto que el cliente no aceptó se marca con `PUT /quotation/item/:itemId/excluded`
-  (`quotation_item.is_excluded`, migración `20261117100000`) sin editar la cotización. El equipo lo
-  sigue viendo en el detalle (tachado, en "No aceptados por el cliente", con "Reactivar"); el
+  (`quotation_item.is_excluded`, migración `20261117100000`) sin editar la cotización, con el botón
+  «No aceptado» (con texto, no solo ícono, desde el 19-nov) de cada fila de la pestaña Productos. El
+  formulario de editar avisa que no se quite el producto sino que se use ese botón. El equipo lo
+  sigue viendo en el detalle (en rojo y tachado, en "No aceptados por el cliente", con "Reactivar"); el
   cliente no: no sale en el PDF ni en el enlace público, y **no suma** al subtotal ni al total
   (tampoco al editar la cotización: conserva la marca).
 - Reglas: la cotización no puede estar cerrada (rechazada, cancelada, vencida, finalizada,

@@ -270,6 +270,20 @@ después, en su propia rama.
   validador y `ImageUploadField` aceptan un `maxSizeMb` opcional (por defecto 2). Pruebas: `advertisement`
   (anuncio 2.5 MB entra, 3.5 MB no; producto 2.5 MB sigue rechazado) y e2e `advertisement-image-size` (2).
 
+- **1.8.2 (19-nov, a pedido del usuario): corregir pagos desde la cotización y "No aceptado" visible.**
+  Origen: en la cotización #37 una devolución de proveedor (S/ 38) se registró como pago del cliente y el
+  pago final se partió en otro pago + un ingreso manual en Caja (arreglado a mano en producción; respaldo
+  en `cargas\arreglo-cotizacion-37-2026-11-19`). La pestaña Pagos de la cotización ahora corrige, anula /
+  restaura y abre el historial de cada pago (mismos botones RBAC y reglas que `/pagos`, mes cerrado =
+  ajuste) y muestra los anulados tachados con "Anulado" (antes parecían vigentes); el detalle trae
+  `corrections_count` de cada pago. El aviso de sobre-pago sugiere corregir o anular el pago mal
+  registrado. "Corregir compra" recuerda que una devolución del proveedor se refleja bajando el monto. El
+  botón «No aceptado» de cada producto tiene texto (antes un ícono que nadie encontraba), los no aceptados
+  se ven en rojo y "Editar cotización" avisa que no se quite el producto. Pruebas: jest
+  `payment-correction`, `payment`, `quotation-item-exclusion`, `business-logic-guards`,
+  `cash-movement-correction` (45/45); e2e `payments`, `quotation-item-exclusion` y nuevo
+  `quotation-payments-tab` (8/8).
+
 Validación:
 - jest `push-notification` + `web-quote-request`: 12/12; type-check de los dos repos y build en verde.
 - e2e `push-notifications`, `install-app`, `login`: 16/16.
