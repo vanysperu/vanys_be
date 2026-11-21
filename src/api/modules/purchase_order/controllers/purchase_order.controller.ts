@@ -25,6 +25,7 @@ import { isOutOfReadScope } from "../../quotation/services/shared/quotation_scop
 import { findPurchaseById } from "../services/find/purchase_order_item_purchase.service";
 import { getPurchaseWarehouseOptionsService } from "../services/find/warehouse_options.service";
 import { listPurchaseCorrections } from "../services/find/purchase_correction.service";
+import { purchaseOrderFiltersFromRequest } from "./list_filters";
 import { correctPurchase } from "../services/update/purchase_order_item_purchase.service";
 import { annulPurchase } from "../services/disable/purchase_order_item_purchase.service";
 import { toggleReasonOf } from "../../cash_movement/validators/adjustment_reason.validator";
@@ -66,36 +67,11 @@ export const createPurchaseOrderController = asyncHandler(async (req: Request, r
 });
 
 export const listPurchaseOrdersController = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user as IToken;
-  const { isSystem, companyId, userId } = user;
-  const { status, assignedToMe, quotationId, clientName, assigneeName, assignedTo: assignedToParam, dateFrom, dateTo } = req.query;
   const { page, limit, orderBy, orderDir } = parsePaginationParams(req.query);
-
-  // "assignedToMe=1": cualquier usuario ve SUS propias órdenes sin
-  // necesitar el módulo completo de compras — es lo que alimenta el
-  // widget del Inicio, no requiere ser admin.
-  // "assignedTo=<id>": filtro por persona desde la lista (selector de
-  // trabajador); "assignedToMe" tiene prioridad.
-  const assignedTo = assignedToMe ? userId : Number(assignedToParam) > 0 ? Number(assignedToParam) : undefined;
-
-  // Filtro por columna de la tabla (cliente/asignado a) resuelto ahora
-  // directo en la query (WHERE real), ya no en memoria sobre la página
-  // traída — así `meta.total` refleja el conteo real filtrado.
-  const resp = await getPurchaseOrdersList({
-    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
-    businessUnitId: resolveBusinessUnitFilter(user),
-    assignedTo,
-    status: (status as string) || undefined,
-    clientName: (clientName as string) || undefined,
-    assigneeName: (assigneeName as string) || undefined,
-    quotationId: quotationId ? Number(quotationId) : undefined,
-    dateFrom,
-    dateTo,
-    page,
-    limit,
-    orderBy,
-    orderDir,
-  });
+  // Mismos filtros que la exportación a Excel (controllers/list_filters.ts).
+  // Filtro por columna (cliente/asignado a) resuelto directo en la query
+  // (WHERE real): `meta.total` refleja el conteo real filtrado.
+  const resp = await getPurchaseOrdersList({ ...purchaseOrderFiltersFromRequest(req), page, limit, orderBy, orderDir });
 
   const message = resp.data.length === 0 ? "No se encontraron órdenes de compra" : "Lista obtenida correctamente";
   ok(res, 200, resp, message);

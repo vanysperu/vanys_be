@@ -40,6 +40,7 @@ import { postDocumentController } from "../controllers/post_document.controller"
 import { cancelDocumentController } from "../controllers/cancel_document.controller";
 import { dispatchTransferController } from "../controllers/dispatch_transfer.controller";
 import { receiveTransferController } from "../controllers/receive_transfer.controller";
+import { exportStockController } from "../controllers/export_stock.controller";
 
 export const router: Router = Router();
 
@@ -57,6 +58,8 @@ router.put("/products/tracks-stock", ...guard, tracksStockValidator, allValidato
 
 // Consultas.
 router.get("/stock", ...guard, paginationValidator, listStockValidator, allValidator, listStockController);
+// Stock en Excel con los mismos filtros (21-nov).
+router.get("/stock/export", ...guard, listStockValidator, allValidator, exportStockController);
 router.get("/stock/by-products", ...guard, stockByProductsValidator, allValidator, stockByProductsController);
 router.get("/kardex", ...guard, paginationValidator, kardexValidator, allValidator, kardexController);
 router.get("/lots/suggest", ...guard, suggestLotsValidator, allValidator, suggestLotsController);

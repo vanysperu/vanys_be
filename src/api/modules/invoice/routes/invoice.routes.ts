@@ -21,6 +21,7 @@ import { linkPurchasesController } from "../controllers/link_purchases.controlle
 import { removeInvoicePurchaseController } from "../controllers/remove_purchase.controller";
 import { updateInvoiceDetailsController } from "../controllers/update_details.controller";
 import { optionalInvoiceFile } from "../controllers/optional_file";
+import { exportInvoicesController } from "../controllers/export.controller";
 
 // Facturas (módulo RBAC `invoice`, ver README.md). Las facturas se crean al
 // registrar una compra o al cerrar una cotización; acá se listan, se les sube
@@ -28,6 +29,8 @@ import { optionalInvoiceFile } from "../controllers/optional_file";
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, listInvoicesValidator, allValidator, listInvoicesController);
+// Facturas en Excel con los mismos filtros del listado (21-nov).
+router.get("/export", verifyAccess, listInvoicesValidator, allValidator, exportInvoicesController);
 // Facturas de compra a las que se puede sumar una compra nueva (una factura
 // puede cubrir varios productos).
 router.get("/purchase-candidates", verifyAccess, purchaseCandidatesValidator, allValidator, listPurchaseCandidatesController);

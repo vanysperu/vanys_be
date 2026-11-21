@@ -20,6 +20,7 @@ import { resolvePaymentAccountId } from "../../variable_general/services/shared/
 import { toNullableText } from "../../money_correction/services/shared/correction_diff";
 import { resolveListCompanyFilter, resolveTargetCompanyId } from "../../../../core/rbac/companyScope";
 import { toggleReasonOf } from "../validators/adjustment_reason.validator";
+import { cashMovementFiltersFromRequest } from "./list_filters";
 
 export const createCashMovementController = asyncHandler(async (req: Request, res: Response) => {
   const user = req.user as IToken;
@@ -81,29 +82,10 @@ export const createCashMovementController = asyncHandler(async (req: Request, re
 });
 
 export const listCashMovementsController = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user as IToken;
-  const { direction, category, quotationId, purchaseOrderId, dateFrom, dateTo, source, paymentAccountId } = req.query;
   const page = Number(req.query.page) || 1;
   const limit = Math.min(Number(req.query.limit) || 20, 100);
-
-  const resp = await getCashMovementsList({
-    // El Super Administrador puede acotar a una empresa (?companyId): sin eso,
-    // sus totales mezclan la plata de todas.
-    companyId: resolveListCompanyFilter(user, req.query.companyId),
-    businessUnitId: resolveBusinessUnitFilter(user),
-    direction: direction === "income" || direction === "expense" ? direction : undefined,
-    category: (category as string) || undefined,
-    // Incluye "transfer" (transferencias entre cuentas).
-    source: CASH_FLOW_SOURCES.find((value) => value === source),
-    paymentAccountId:
-      paymentAccountId === "cash" ? "cash" : Number(paymentAccountId) > 0 ? Number(paymentAccountId) : undefined,
-    quotationId: quotationId ? Number(quotationId) : undefined,
-    purchaseOrderId: purchaseOrderId ? Number(purchaseOrderId) : undefined,
-    dateFrom: (dateFrom as string) || undefined,
-    dateTo: (dateTo as string) || undefined,
-    page,
-    limit,
-  });
+  // Mismos filtros que la exportación a Excel (controllers/list_filters.ts).
+  const resp = await getCashMovementsList({ ...cashMovementFiltersFromRequest(req), page, limit });
 
   const message = resp.data.length === 0 ? "No se encontraron movimientos" : "Lista de movimientos obtenida correctamente";
   ok(res, 200, resp, message);

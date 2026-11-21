@@ -25,10 +25,13 @@ import {
   listPurchaseOrdersController,
   updatePurchaseOrderItemStatusController,
 } from "../controllers/purchase_order.controller";
+import { exportPurchaseOrdersController } from "../controllers/export.controller";
 
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listPurchaseOrdersController);
+// Órdenes de compra en Excel con los mismos filtros del listado (21-nov).
+router.get("/export", verifyAccess, allValidator, exportPurchaseOrdersController);
 // Compras: corregir / anular / historial. Rutas que empiezan con "purchase",
 // así no las tapa ninguna "/:param/...".
 router.get("/purchase/find/:id", verifyAccess, purchaseIdValidator, allValidator, findPurchaseController);

@@ -39,6 +39,7 @@ import { DataBase } from "../../../../database";
 import { resolvePaymentAccountId } from "../../variable_general/services/shared/payment_account.service";
 import { parsePaginationParams } from "../../../../core/validators/pagination.validator";
 import { resolveBusinessUnitFilter } from "../../../../core/rbac/businessUnitScope";
+import { quotationListFiltersFromRequest } from "./list_filters";
 
 // Mismo 409 para todo lo que exige una cotización aceptada (pagos, gastos,
 // compras y producción), así el frontend lo reconoce por un solo `code`.
@@ -81,33 +82,9 @@ export const createQuotationController = asyncHandler(async (req: Request, res: 
 });
 
 export const listQuotationsController = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user as IToken;
-  const { isSystem, companyId } = user;
-  const queryParams = req.query;
-  const { page, limit, orderBy, orderDir } = parsePaginationParams(queryParams);
-  const status = (queryParams.status as string) || undefined;
-  const clientId = queryParams.clientId ? Number(queryParams.clientId) : undefined;
-  const createdBy = Number(queryParams.createdBy) > 0 ? Number(queryParams.createdBy) : undefined;
-
-  // Tienda: si el caller está limitado a una, manda esa (nunca la del query).
-  // Si no, puede filtrar por cualquiera — el filtro de empresa sigue
-  // aplicando, así que una tienda ajena simplemente no trae resultados.
-  const scopedBusinessUnitId = resolveBusinessUnitFilter(user);
-  const requestedBusinessUnitId = Number(queryParams.businessUnitId) > 0 ? Number(queryParams.businessUnitId) : undefined;
-
-  const resp = await getQuotationsList({
-    page,
-    limit,
-    orderBy,
-    orderDir,
-    companyId: resolveListCompanyFilter(req.user as IToken, req.query.companyId),
-    businessUnitId: scopedBusinessUnitId ?? requestedBusinessUnitId,
-    status,
-    clientId,
-    createdBy,
-    dateFrom: queryParams.dateFrom,
-    dateTo: queryParams.dateTo,
-  });
+  const { page, limit, orderBy, orderDir } = parsePaginationParams(req.query);
+  // Mismos filtros que la exportación a Excel (controllers/list_filters.ts).
+  const resp = await getQuotationsList({ page, limit, orderBy, orderDir, ...quotationListFiltersFromRequest(req) });
   const message = resp.data.length === 0 ? "No se encontraron cotizaciones" : "Lista de cotizaciones obtenida correctamente";
 
   ok(res, 200, resp, message);

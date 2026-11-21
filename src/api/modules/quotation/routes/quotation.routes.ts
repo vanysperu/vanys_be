@@ -40,6 +40,7 @@ import {
 import { completeQuotationController } from "../controllers/complete.controller";
 import { setItemExclusionController } from "../controllers/item_exclusion.controller";
 import { forceQuotationStatusController } from "../controllers/force_status.controller";
+import { exportQuotationsController } from "../controllers/export.controller";
 import { listMockupsController } from "../controllers/mockup/list_mockups.controller";
 import { uploadMockupController } from "../controllers/mockup/upload_mockup.controller";
 import { getMockupFileController } from "../controllers/mockup/get_mockup_file.controller";
@@ -65,6 +66,8 @@ import {
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listQuotationsController);
+// Reporte en Excel con los mismos filtros del listado (21-nov).
+router.get("/export", verifyAccess, allValidator, exportQuotationsController);
 router.get("/board", verifyAccess, quotationBoardValidator, allValidator, quotationBoardController);
 // Gastos manuales: corregir / anular-restaurar / historial. Rutas de 3
 // segmentos que empiezan con "expense", así no las tapa ninguna "/:id/...".

@@ -15,10 +15,13 @@ import {
   listPaymentsController,
   updatePaymentController,
 } from "../controllers/payment.controller";
+import { exportPaymentsController } from "../controllers/export.controller";
 
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listPaymentsController);
+// Pagos en Excel con los mismos filtros del listado (21-nov).
+router.get("/export", verifyAccess, allValidator, exportPaymentsController);
 // Un pago por id (lo usa el diálogo de corrección). Va antes de /:id/corrections.
 router.get("/find/:id", verifyAccess, findPaymentValidator, allValidator, findPaymentController);
 router.put("/update/:id", verifyAccess, updatePaymentValidator, allValidator, updatePaymentController);
