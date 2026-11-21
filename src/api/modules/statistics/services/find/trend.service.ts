@@ -16,6 +16,8 @@ import {
   EXPENSE_PAID_BY_COMPANY_SQL,
   REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
   REIMBURSEMENT_SCOPE_SQL,
+  LOAN_PAYMENT_FROM_SQL,
+  LOAN_PAYMENT_SCOPE_SQL,
 } from "../../../cash_movement/services/shared/cash_flow.sql";
 
 interface BucketRow {
@@ -34,7 +36,7 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
     fmt: BUCKET_SQL_FORMAT[period.granularity],
   };
 
-  const [quotations, payments, quotationExpenses, reimbursements, manualCash, legs] = await Promise.all([
+  const [quotations, payments, quotationExpenses, reimbursements, manualCash, legs, loanInterest] = await Promise.all([
     selectRows<BucketRow>(
       `SELECT DATE_FORMAT(${EMISSION_DATE_SQL}, :fmt) AS bucket,
               COALESCE(SUM(q.total), 0) AS quoted,
@@ -90,6 +92,14 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
        GROUP BY bucket`,
       replacements
     ),
+    // Préstamos (21-nov): solo el INTERÉS cobrado es ingreso (el capital no).
+    selectRows<BucketRow>(
+      `SELECT DATE_FORMAT(lp.paid_at, :fmt) AS bucket, COALESCE(SUM(lp.interest_part), 0) AS amount
+       FROM ${LOAN_PAYMENT_FROM_SQL}
+       WHERE ${LOAN_PAYMENT_SCOPE_SQL} AND lp.paid_at BETWEEN :from AND :to
+       GROUP BY bucket`,
+      replacements
+    ),
   ]);
 
   const byBucket = (rows: BucketRow[]) => new Map(rows.map((row) => [row.bucket, row]));
@@ -99,13 +109,17 @@ export async function getTrendService(scope: StatisticsScope, period: Statistics
   const reimbursementMap = byBucket(reimbursements);
   const manualMap = byBucket(manualCash);
   const legMap = byBucket(legs);
+  const loanInterestMap = byBucket(loanInterest);
 
   return buildBuckets(period).map((bucket) => ({
     bucket,
     quoted: toMoney(quotationMap.get(bucket)?.quoted),
     won: toMoney(quotationMap.get(bucket)?.won),
     income: toMoney(
-      toMoney(paymentMap.get(bucket)?.amount) + toMoney(manualMap.get(bucket)?.income) + toMoney(legMap.get(bucket)?.income)
+      toMoney(paymentMap.get(bucket)?.amount) +
+        toMoney(manualMap.get(bucket)?.income) +
+        toMoney(legMap.get(bucket)?.income) +
+        toMoney(loanInterestMap.get(bucket)?.amount)
     ),
     expenses: toMoney(
       toMoney(expenseMap.get(bucket)?.amount) +

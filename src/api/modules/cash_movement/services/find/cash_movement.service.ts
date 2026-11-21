@@ -12,6 +12,9 @@ import {
   EXPENSE_PAID_BY_COMPANY_SQL,
   REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
   REIMBURSEMENT_SCOPE_SQL,
+  LOAN_PAYMENT_FROM_SQL,
+  LOAN_PAYMENT_SCOPE_SQL,
+  LOAN_SCOPE_SQL,
 } from "../shared/cash_flow.sql";
 import { correctionsCountSql } from "../../../money_correction/services/shared/corrections_count";
 import { parseMoneyCorrectionValues } from "../../../money_correction/services/find/money_correction.service";
@@ -69,9 +72,13 @@ export const CASH_MOVEMENT_SOURCES: CashMovementSource[] = [
 // NO son ingreso ni egreso de la empresa: van a `transfers` en el resumen.
 // Se mantiene aparte de CashMovementSource porque las transferencias no tienen
 // historial en money_correction ni patas de ajuste (ver cash_transfer/README).
-export type CashFlowSource = CashMovementSource | "transfer";
+// "loan" (21-nov): préstamos a personas y sus cobros. Como una transferencia,
+// el capital mueve el saldo de la cuenta pero no es ingreso ni egreso (va a
+// `transfers` en el resumen); el interés cobrado sí es ingreso. Sin historial
+// en money_correction: se corrige desde Préstamos.
+export type CashFlowSource = CashMovementSource | "transfer" | "loan";
 
-export const CASH_FLOW_SOURCES: CashFlowSource[] = [...CASH_MOVEMENT_SOURCES, "transfer"];
+export const CASH_FLOW_SOURCES: CashFlowSource[] = [...CASH_MOVEMENT_SOURCES, "transfer", "loan"];
 
 // Solo en filas de transferencia: las dos puntas.
 export interface CashTransferLegInfo {
@@ -141,6 +148,16 @@ export interface CashMovementListItem {
   adjustment: CashRowAdjustmentInfo | null;
   // Solo en filas source = "transfer": de qué cuenta a qué cuenta.
   transfer: CashTransferLegInfo | null;
+  // Solo en filas source = "loan": de qué préstamo y qué parte es.
+  loan: CashLoanLegInfo | null;
+}
+
+// Fila de un préstamo en Caja (21-nov): la salida del préstamo, o el capital
+// o el interés de un cobro (un cobro con interés se lista como dos filas).
+export interface CashLoanLegInfo {
+  loan_id: number;
+  borrower_name: string;
+  part: "disbursement" | "principal" | "interest";
 }
 
 export interface CashAccountSummary {
@@ -283,6 +300,7 @@ const toItem = (source: CashMovementSource, prefix: string, row: RawRow): CashMo
   period_status: "no_ledger",
   adjustment: null,
   transfer: null,
+  loan: null,
 });
 
 const selectRows = async <T = RawRow>(sql: string, filter: CashFlowFilter): Promise<T[]> =>
@@ -553,6 +571,7 @@ const toAdjustmentItem = (row: RawAdjustmentRow): CashMovementListItem => {
       created_by_name: row.created_by_name,
     },
     transfer: null,
+    loan: null,
   };
 };
 
@@ -697,6 +716,107 @@ const getTransferMovements = async (filter: CashFlowFilter): Promise<CashMovemen
   });
 };
 
+interface RawLoanLegRow {
+  id: number;
+  loan_id: number;
+  borrower_name: string;
+  amount: string;
+  occurred_at: string;
+  business_unit_id: number | null;
+  company_id: number;
+  payment_account_id: number | null;
+  payment_account_name: string | null;
+  operation_number: string | null;
+  created_at: Date;
+}
+
+const LOAN_LEG_TEXT: Record<CashLoanLegInfo["part"], string> = {
+  disbursement: "Préstamo a",
+  principal: "Cobro de préstamo (capital) —",
+  interest: "Interés de préstamo —",
+};
+
+const toLoanLeg = (row: RawLoanLegRow, part: CashLoanLegInfo["part"]): CashMovementListItem => {
+  const accountId = nullableNumber(row.payment_account_id);
+  const direction: CashMovementDirection = part === "disbursement" ? "expense" : "income";
+  return {
+    ...toItem("manual", "loan", {
+      id: row.id,
+      direction,
+      category: null,
+      amount: row.amount,
+      description: `${LOAN_LEG_TEXT[part]} ${row.borrower_name}`,
+      occurred_at: toDateOnlyString(row.occurred_at),
+      quotation_id: null,
+      purchase_order_id: null,
+      business_unit_id: row.business_unit_id,
+      company_id: row.company_id,
+      moves_cash: 1,
+      payment_account_id: accountId,
+      payment_account_name: accountId === null ? CASH_ACCOUNT_NAME : (row.payment_account_name ?? "Cuenta"),
+      operation_number: row.operation_number,
+      created_at: row.created_at,
+    }),
+    // Un cobro puede dar dos filas (capital e interés): el id lleva la parte.
+    id: part === "disbursement" ? `loan-${row.id}` : `loanpay-${row.id}-${part}`,
+    source: "loan",
+    loan: { loan_id: Number(row.loan_id), borrower_name: row.borrower_name, part },
+  };
+};
+
+// 8.º lector: préstamos (salida del día del préstamo) y sus cobros (capital
+// e interés por separado). Sin categoría, cotización ni orden: con esos
+// filtros no entra ninguno.
+const getLoanMovements = async (filter: CashFlowFilter): Promise<CashMovementListItem[]> => {
+  const cannotMatch =
+    filter.category !== undefined || filter.quotationId !== undefined || filter.purchaseOrderId !== undefined;
+  if (cannotMatch) return [];
+  const wants = (direction: CashMovementDirection) => filter.direction === undefined || filter.direction === direction;
+
+  const [loans, payments] = await Promise.all([
+    wants("expense")
+      ? selectRows<RawLoanLegRow>(
+          `
+            SELECT l.id, l.id AS loan_id, l.borrower_name, l.principal AS amount, l.loaned_at AS occurred_at,
+                   l.business_unit_id, l.company_id, l.payment_account_id, pa.name AS payment_account_name,
+                   l.operation_number, l.created_at
+            FROM loan l
+            LEFT JOIN general_variable pa ON pa.id = l.payment_account_id
+            WHERE ${LOAN_SCOPE_SQL}
+              AND (:dateFrom IS NULL OR l.loaned_at >= :dateFrom)
+              AND (:dateTo IS NULL OR l.loaned_at <= :dateTo)
+              ${accountCondition("l.payment_account_id", filter)}
+          `,
+          filter
+        )
+      : Promise.resolve([]),
+    wants("income")
+      ? selectRows<RawLoanLegRow & { principal_part: string; interest_part: string }>(
+          `
+            SELECT lp.id, lp.loan_id, l.borrower_name, lp.amount, lp.principal_part, lp.interest_part,
+                   lp.paid_at AS occurred_at, l.business_unit_id, l.company_id, lp.payment_account_id,
+                   pa.name AS payment_account_name, lp.operation_number, lp.created_at
+            FROM ${LOAN_PAYMENT_FROM_SQL}
+            LEFT JOIN general_variable pa ON pa.id = lp.payment_account_id
+            WHERE ${LOAN_PAYMENT_SCOPE_SQL}
+              AND (:dateFrom IS NULL OR lp.paid_at >= :dateFrom)
+              AND (:dateTo IS NULL OR lp.paid_at <= :dateTo)
+              ${accountCondition("lp.payment_account_id", filter)}
+          `,
+          filter
+        )
+      : Promise.resolve([]),
+  ]);
+
+  return [
+    ...loans.map((row) => toLoanLeg(row, "disbursement")),
+    ...payments.flatMap((row) => [
+      ...(Number(row.principal_part) > 0 ? [toLoanLeg({ ...row, amount: row.principal_part }, "principal")] : []),
+      ...(Number(row.interest_part) > 0 ? [toLoanLeg({ ...row, amount: row.interest_part }, "interest")] : []),
+    ]),
+  ];
+};
+
 const SOURCE_LOADERS: Record<CashFlowSource, (filter: CashFlowFilter) => Promise<CashMovementListItem[]>> = {
   manual: getManualMovements,
   quotation_payment: getQuotationPaymentMovements,
@@ -704,6 +824,7 @@ const SOURCE_LOADERS: Record<CashFlowSource, (filter: CashFlowFilter) => Promise
   employee_debt: getManualDebtMovements,
   employee_debt_payment: getReimbursementMovements,
   transfer: getTransferMovements,
+  loan: getLoanMovements,
 };
 
 // Todas las filas filtradas (las 6 fuentes, o la pedida, + las patas de
@@ -711,7 +832,7 @@ const SOURCE_LOADERS: Record<CashFlowSource, (filter: CashFlowFilter) => Promise
 // transferencia: con ?source=transfer no se cargan.
 const loadCashFlowRows = async (filter: CashFlowFilter): Promise<CashMovementListItem[]> => {
   const sources: CashFlowSource[] = filter.source ? [filter.source] : CASH_FLOW_SOURCES;
-  const withAdjustments = filter.source !== "transfer";
+  const withAdjustments = filter.source !== "transfer" && filter.source !== "loan";
   const loaders = [...sources.map((source) => SOURCE_LOADERS[source]), ...(withAdjustments ? [getAdjustmentEntries] : [])];
   const results = await Promise.all(loaders.map((loader) => loader(filter)));
   return results.flat();
@@ -754,7 +875,10 @@ const buildSummary = (rows: CashMovementListItem[]): CashMovementSummary => {
       transfers: 0,
       adjustments: 0,
     };
-    if (row.source === "transfer") {
+    // Capital de un préstamo (lo prestado y lo devuelto): como una transferencia,
+    // mueve el saldo pero no es ingreso ni egreso. El interés cae abajo como ingreso.
+    const isLoanCapital = row.source === "loan" && row.loan?.part !== "interest";
+    if (row.source === "transfer" || isLoanCapital) {
       const effect = netCents(row.direction, cents);
       transferCents += effect;
       accounts.set(key, { ...current, transfers: current.transfers + effect });

@@ -7,6 +7,8 @@ import {
   EXPENSE_PAID_BY_COMPANY_SQL,
   REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
   REIMBURSEMENT_SCOPE_SQL,
+  LOAN_PAYMENT_FROM_SQL,
+  LOAN_PAYMENT_SCOPE_SQL,
 } from "../../../cash_movement/services/shared/cash_flow.sql";
 
 interface SumRow {
@@ -50,7 +52,7 @@ const ranked = (items: CategoryAmount[]): CategoryAmount[] =>
 export async function getCashByCategoryService(scope: StatisticsScope, period: StatisticsPeriod): Promise<CashByCategory> {
   const replacements = { ...scopeReplacements(scope), from: period.date_from, to: period.date_to };
 
-  const [[payments], [expenses], [reimbursements], manual, [legs]] = await Promise.all([
+  const [[payments], [expenses], [reimbursements], manual, [legs], [loanInterest]] = await Promise.all([
     selectRows<SumRow>(
       `SELECT COALESCE(SUM(qp.amount), 0) AS amount
        FROM quotation_payment qp
@@ -90,6 +92,13 @@ export async function getCashByCategoryService(scope: StatisticsScope, period: S
        WHERE ${ADJUSTMENT_ENTRY_SCOPE_SQL} AND e.entry_date BETWEEN :from AND :to`,
       replacements
     ),
+    // Préstamos (21-nov): solo el INTERÉS cobrado es ingreso (el capital no).
+    selectRows<SumRow>(
+      `SELECT COALESCE(SUM(lp.interest_part), 0) AS amount
+       FROM ${LOAN_PAYMENT_FROM_SQL}
+       WHERE ${LOAN_PAYMENT_SCOPE_SQL} AND lp.paid_at BETWEEN :from AND :to`,
+      replacements
+    ),
   ]);
 
   // Nombre de cada categoría manual (catálogo "Tipos de movimiento"): la de la
@@ -119,6 +128,7 @@ export async function getCashByCategoryService(scope: StatisticsScope, period: S
     income: ranked([
       { key: "client_payments", label: "Pagos de clientes", amount: toMoney(payments?.amount) },
       ...manualOf("income", "Otros ingresos"),
+      { key: "loan_interest", label: "Intereses de préstamos", amount: toMoney(loanInterest?.amount) },
       { key: "closed_months", label: CLOSED_MONTHS_LABEL, amount: toMoney(legs?.income) },
     ]),
     expenses: ranked([

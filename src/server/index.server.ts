@@ -54,6 +54,7 @@ import { router as UploadsRoutes } from "../api/modules/uploads/routes/uploads.r
 import { router as ProductionWorkflowRoutes } from "../api/modules/production_workflow/routes/production_workflow.routes";
 import { router as CompanyFeatureRoutes } from "../api/modules/company_feature/routes/company_feature.routes";
 import { router as SupplierRoutes } from "../api/modules/supplier/routes/supplier.routes";
+import { router as LoanRoutes } from "../api/modules/loan/routes/loan.routes";
 import { router as SupplierStockRoutes } from "../api/modules/supplier_stock/routes/supplier_stock.routes";
 import { router as InventoryRoutes } from "../api/modules/inventory/routes/inventory.routes";
 import { router as DispatchGuideRoutes } from "../api/modules/dispatch_guide/routes/dispatch_guide.routes";
@@ -201,6 +202,8 @@ export default class Server {
     this._router.use("/dispatch-guide", DispatchGuideRoutes);
     this._router.use("/push", PushNotificationRoutes);
     this._router.use("/supplier", SupplierRoutes);
+    // Préstamos a personas (21-nov).
+    this._router.use("/loan", LoanRoutes);
 
     this.frontend();
   }

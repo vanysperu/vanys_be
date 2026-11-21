@@ -17,6 +17,8 @@ import {
   EXPENSE_PAID_BY_COMPANY_SQL,
   REIMBURSEMENT_ALLOCATIONS_FROM_SQL,
   REIMBURSEMENT_SCOPE_SQL,
+  LOAN_PAYMENT_FROM_SQL,
+  LOAN_PAYMENT_SCOPE_SQL,
 } from "../../../cash_movement/services/shared/cash_flow.sql";
 
 interface QuotationTotalsRow {
@@ -65,7 +67,8 @@ const ADJUSTMENT_LEGS_SQL = `SELECT
 export async function getKpisService(scope: StatisticsScope, from: string, to: string): Promise<KpiValues> {
   const replacements = { ...scopeReplacements(scope), from, to };
 
-  const [[quotations], [linkedExpenses], [collected], [quotationExpenses], [reimbursements], [manualCash], [legs]] = await Promise.all([
+  const [[quotations], [linkedExpenses], [collected], [quotationExpenses], [reimbursements], [manualCash], [legs], [loanInterest]] =
+    await Promise.all([
     // Cotizaciones emitidas en el rango, por resultado.
     selectRows<QuotationTotalsRow>(
       `SELECT COUNT(*) AS quoted_count,
@@ -122,6 +125,13 @@ export async function getKpisService(scope: StatisticsScope, from: string, to: s
     ),
     // Cierre de caja: patas de ajuste (ver ADJUSTMENT_LEGS_SQL).
     selectRows<AdjustmentLegsRow>(ADJUSTMENT_LEGS_SQL, replacements),
+    // Préstamos (21-nov): solo el INTERÉS cobrado es ingreso (el capital no).
+    selectRows<SumRow>(
+      `SELECT COALESCE(SUM(lp.interest_part), 0) AS total
+       FROM ${LOAN_PAYMENT_FROM_SQL}
+       WHERE ${LOAN_PAYMENT_SCOPE_SQL} AND lp.paid_at BETWEEN :from AND :to`,
+      replacements
+    ),
   ]);
 
   const wonCount = toCount(quotations?.won_count);
@@ -129,7 +139,7 @@ export async function getKpisService(scope: StatisticsScope, from: string, to: s
   const wonSubtotal = toMoney(quotations?.won_subtotal);
   const lostCount = toCount(quotations?.lost_count);
   const collectedAmount = toMoney(toMoney(collected?.total) + toMoney(legs?.collected));
-  const otherIncome = toMoney(toMoney(manualCash?.income) + toMoney(legs?.other_income));
+  const otherIncome = toMoney(toMoney(manualCash?.income) + toMoney(legs?.other_income) + toMoney(loanInterest?.total));
   const expenses = toMoney(
     toMoney(quotationExpenses?.total) +
       toMoney(reimbursements?.total) +

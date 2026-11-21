@@ -44,3 +44,13 @@ export const ADJUSTMENT_ENTRY_FROM_SQL = `cash_adjustment_entry e
 // asignación), así Caja filtrada por tienda sigue cuadrando.
 export const ADJUSTMENT_ENTRY_SCOPE_SQL = `(:companyId IS NULL OR e.company_id = :companyId)
   AND (:businessUnitId IS NULL OR e.business_unit_id = :businessUnitId)`;
+
+// Préstamos a personas (módulo loan, 21-nov). Préstamo `l` y sus cobros `lp`.
+// El capital (lo prestado y lo devuelto) mueve el saldo de la cuenta pero NO
+// es ingreso ni egreso; el INTERÉS cobrado sí es ingreso. Caja y Estadísticas
+// usan estos mismos filtros, para que sus totales cuadren.
+export const LOAN_SCOPE_SQL = `l.active = 1
+  AND (:companyId IS NULL OR l.company_id = :companyId)
+  AND (:businessUnitId IS NULL OR l.business_unit_id = :businessUnitId)`;
+export const LOAN_PAYMENT_FROM_SQL = "loan_payment lp INNER JOIN loan l ON l.id = lp.loan_id";
+export const LOAN_PAYMENT_SCOPE_SQL = `lp.active = 1 AND ${LOAN_SCOPE_SQL}`;

@@ -12,6 +12,7 @@ const SOURCE_LABEL: Record<CashFlowSource, string> = {
   employee_debt: "Deuda con personal",
   employee_debt_payment: "Reposición a personal",
   transfer: "Transferencia entre cuentas",
+  loan: "Préstamo",
 };
 
 /**
