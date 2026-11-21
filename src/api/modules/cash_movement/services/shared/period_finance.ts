@@ -40,7 +40,23 @@ interface PurchaseBucketRow extends BucketRow {
 const MONTH_FORMAT = "%Y-%m";
 
 // IGV contenido en un monto que ya lo incluye: 118 con 18% -> 18.
-const igvInsideAmount = (amount: number, rate: number): number => (rate > 0 ? (amount * rate) / (1 + rate) : 0);
+export const igvInsideAmount = (amount: number, rate: number): number => (rate > 0 ? (amount * rate) / (1 + rate) : 0);
+
+// Fragmentos fijos del cálculo del IGV (texto del código, nunca valores del
+// usuario). Los usan el resumen del mes y el detalle "¿cómo se calculó?"
+// (igv_breakdown.service.ts), para que los dos números nunca se separen.
+// Débito: cada pago lleva la misma proporción de IGV que su cotización.
+export const IGV_SALES_FROM_SQL = "quotation_payment qp INNER JOIN quotation q ON q.id = qp.quotation_id";
+export const IGV_SALES_WHERE_SQL = `qp.is_deleted = false AND q.includes_igv = true AND q.total > 0
+         AND ${MONEY_SCOPE_SQL} AND qp.paid_at BETWEEN :from AND :to`;
+export const IGV_SALES_AMOUNT_SQL = "qp.amount * (q.total - q.subtotal) / q.total";
+// Crédito: compras con factura (una factura puede cubrir varias), su gasto
+// vivo por fecha de compra; el monto pagado ya incluye el IGV.
+export const IGV_PURCHASES_FROM_SQL = `invoice_purchase ip
+       INNER JOIN purchase_order_item_purchase pop ON pop.id = ip.purchase_id
+       INNER JOIN quotation_expense qe ON qe.id = pop.quotation_expense_id
+       INNER JOIN quotation q ON q.id = qe.quotation_id`;
+export const IGV_PURCHASES_WHERE_SQL = `${EXPENSE_ACTIVE_SQL} AND ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to`;
 
 /**
  * Resultado e IGV de varios meses de una vez (Caja pide uno; Cierres, una
@@ -63,11 +79,9 @@ export async function getPeriodFinances(scope: StatisticsScope, periods: string[
     getTrendService(scope, { date_from: from, date_to: to, previous_from: from, previous_to: to, granularity: "month" }),
     selectRows<BucketRow>(
       `SELECT DATE_FORMAT(qp.paid_at, :fmt) AS bucket,
-              COALESCE(SUM(qp.amount * (q.total - q.subtotal) / q.total), 0) AS amount
-       FROM quotation_payment qp
-       INNER JOIN quotation q ON q.id = qp.quotation_id
-       WHERE qp.is_deleted = false AND q.includes_igv = true AND q.total > 0
-         AND ${MONEY_SCOPE_SQL} AND qp.paid_at BETWEEN :from AND :to
+              COALESCE(SUM(${IGV_SALES_AMOUNT_SQL}), 0) AS amount
+       FROM ${IGV_SALES_FROM_SQL}
+       WHERE ${IGV_SALES_WHERE_SQL}
        GROUP BY bucket`,
       replacements
     ),
@@ -75,11 +89,8 @@ export async function getPeriodFinances(scope: StatisticsScope, periods: string[
     // su gasto vivo, por fecha de compra.
     selectRows<PurchaseBucketRow>(
       `SELECT DATE_FORMAT(qe.spent_at, :fmt) AS bucket, q.company_id, COALESCE(SUM(qe.amount), 0) AS amount
-       FROM invoice_purchase ip
-       INNER JOIN purchase_order_item_purchase pop ON pop.id = ip.purchase_id
-       INNER JOIN quotation_expense qe ON qe.id = pop.quotation_expense_id
-       INNER JOIN quotation q ON q.id = qe.quotation_id
-       WHERE ${EXPENSE_ACTIVE_SQL} AND ${MONEY_SCOPE_SQL} AND qe.spent_at BETWEEN :from AND :to
+       FROM ${IGV_PURCHASES_FROM_SQL}
+       WHERE ${IGV_PURCHASES_WHERE_SQL}
        GROUP BY bucket, q.company_id`,
       replacements
     ),

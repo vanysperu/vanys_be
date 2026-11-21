@@ -17,12 +17,15 @@ import {
   updateCashMovementController,
 } from "../controllers/cash_movement.controller";
 import { monthSummaryController } from "../controllers/month_summary.controller";
+import { igvBreakdownController } from "../controllers/igv_breakdown.controller";
 
 export const router: Router = Router();
 
 router.get("/list", verifyAccess, paginationValidator, allValidator, listCashMovementsController);
 // Resultado del mes, IGV estimado y neto después del IGV.
 router.get("/month-summary", verifyAccess, monthSummaryValidator, allValidator, monthSummaryController);
+// Detalle del IGV del mes: qué cobros y qué compras lo forman (21-nov).
+router.get("/igv-breakdown", verifyAccess, monthSummaryValidator, allValidator, igvBreakdownController);
 router.post("/create", verifyAccess, createCashMovementValidator, allValidator, createCashMovementController);
 router.put("/disable/:id", verifyAccess, disableCashMovementValidator, allValidator, disableCashMovementController);
 // Corrección de un movimiento manual + su historial inmutable.
