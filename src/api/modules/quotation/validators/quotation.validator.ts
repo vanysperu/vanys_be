@@ -191,6 +191,9 @@ export const completeQuotationValidator = [
 
 export const getQuotationValidator = [paramQuotationIdValidator];
 
+// Mockups (21-nov): el id del diseño; que exista y sea visible lo revisa el service.
+export const mockupIdValidator = [param("mockupId").isInt({ gt: 0 }).withMessage("El diseño no es válido").toInt()];
+
 // Resetear exige motivo: es irreversible y es el único rastro que queda.
 export const resetQuotationValidator = [paramQuotationIdValidator, correctionReasonRule()];
 

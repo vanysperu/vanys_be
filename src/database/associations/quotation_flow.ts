@@ -4,6 +4,7 @@ import { QuotationStatic } from "../../api/modules/quotation/model/quotation.mod
 import { QuotationPaymentStatic } from "../../api/modules/quotation/model/quotation_payment.model";
 import { QuotationExpenseStatic } from "../../api/modules/quotation/model/quotation_expense.model";
 import { QuotationEventStatic } from "../../api/modules/quotation/model/quotation_event.model";
+import { QuotationMockupStatic } from "../../api/modules/quotation/model/quotation_mockup.model";
 import { UserStatic } from "../../api/modules/users/models/user.model";
 
 export const quotationFlowAssociations = ({
@@ -13,6 +14,7 @@ export const quotationFlowAssociations = ({
   quotation_payment,
   quotation_expense,
   quotation_event,
+  quotation_mockup,
   user,
 }: {
   production_workflow_stage: ProductionWorkflowStageStatic;
@@ -21,6 +23,7 @@ export const quotationFlowAssociations = ({
   quotation_payment: QuotationPaymentStatic;
   quotation_expense: QuotationExpenseStatic;
   quotation_event: QuotationEventStatic;
+  quotation_mockup: QuotationMockupStatic;
   user: UserStatic;
 }): void => {
   // Etapa de producción del producto: columna del flujo de su empresa
@@ -42,4 +45,7 @@ export const quotationFlowAssociations = ({
   quotation_event.belongsTo(user, { foreignKey: "created_by", targetKey: "id", as: "actor" });
   quotation_payment.belongsTo(user, { foreignKey: "created_by", targetKey: "id", as: "actor" });
   quotation_expense.belongsTo(user, { foreignKey: "created_by", targetKey: "id", as: "actor" });
+
+  // Mockups (21-nov): quién lo subió, sin una consulta por fila.
+  quotation_mockup.belongsTo(user, { foreignKey: "created_by", targetKey: "id", as: "actor" });
 };

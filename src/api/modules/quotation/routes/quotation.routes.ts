@@ -8,6 +8,7 @@ import {
   itemExclusionValidator,
   changeStatusValidator,
   forceStatusValidator,
+  mockupIdValidator,
   completeQuotationValidator,
   quotationBoardValidator,
   createQuotationExpenseValidator,
@@ -39,6 +40,10 @@ import {
 import { completeQuotationController } from "../controllers/complete.controller";
 import { setItemExclusionController } from "../controllers/item_exclusion.controller";
 import { forceQuotationStatusController } from "../controllers/force_status.controller";
+import { listMockupsController } from "../controllers/mockup/list_mockups.controller";
+import { uploadMockupController } from "../controllers/mockup/upload_mockup.controller";
+import { getMockupFileController } from "../controllers/mockup/get_mockup_file.controller";
+import { disableMockupController } from "../controllers/mockup/disable_mockup.controller";
 import { quotationBoardController } from "../controllers/board.controller";
 import { getQuotationProfitController } from "../controllers/profit.controller";
 import { quotationResetPreviewController } from "../controllers/reset_preview.controller";
@@ -92,6 +97,11 @@ router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, 
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);
 // Cambio de estado a mano (cualquier estado): solo administradores (21-nov).
 router.put("/force-status/:id", verifyAccess, forceStatusValidator, allValidator, forceQuotationStatusController);
+// Mockups (diseños) de la cotización, solo para el equipo (21-nov).
+router.get("/:id/mockups", verifyAccess, getQuotationValidator, allValidator, listMockupsController);
+router.post("/:id/mockups", verifyAccess, getQuotationValidator, allValidator, uploadMockupController);
+router.get("/mockup/:mockupId/file", verifyAccess, mockupIdValidator, allValidator, getMockupFileController);
+router.patch("/mockup/:mockupId/disable", verifyAccess, mockupIdValidator, allValidator, disableMockupController);
 router.put("/item/:itemId/stage", verifyAccess, changeItemStageValidator, allValidator, changeItemStageController);
 // Producto no aceptado por el cliente (o reactivado), sin editar la cotización.
 router.put("/item/:itemId/excluded", verifyAccess, itemExclusionValidator, allValidator, setItemExclusionController);

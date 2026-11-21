@@ -33,6 +33,7 @@ import {
 } from "../api/modules/customization_technique/model/customization_technique.model";
 import { QuotationFactory, QuotationStatic } from "../api/modules/quotation/model/quotation.model";
 import { QuotationItemFactory, QuotationItemStatic } from "../api/modules/quotation/model/quotation_item.model";
+import { QuotationMockupFactory, QuotationMockupStatic } from "../api/modules/quotation/model/quotation_mockup.model";
 import { quotationAssociations } from "./associations/quotation";
 import { QuotationPaymentFactory, QuotationPaymentStatic } from "../api/modules/quotation/model/quotation_payment.model";
 import { QuotationExpenseFactory, QuotationExpenseStatic } from "../api/modules/quotation/model/quotation_expense.model";
@@ -191,6 +192,7 @@ export class DataBase {
   public customization_technique: CustomizationTechniqueStatic;
   public quotation: QuotationStatic;
   public quotation_item: QuotationItemStatic;
+  public quotation_mockup: QuotationMockupStatic;
   public quotation_payment: QuotationPaymentStatic;
   public quotation_expense: QuotationExpenseStatic;
   public quotation_event: QuotationEventStatic;
@@ -313,6 +315,7 @@ export class DataBase {
     this.customization_technique = CustomizationTechniqueFactory(this.sequelize);
     this.quotation = QuotationFactory(this.sequelize);
     this.quotation_item = QuotationItemFactory(this.sequelize);
+    this.quotation_mockup = QuotationMockupFactory(this.sequelize);
     this.quotation_payment = QuotationPaymentFactory(this.sequelize);
     this.quotation_expense = QuotationExpenseFactory(this.sequelize);
     this.quotation_event = QuotationEventFactory(this.sequelize);
@@ -432,6 +435,7 @@ export class DataBase {
       quotation_payment: this.quotation_payment,
       quotation_expense: this.quotation_expense,
       quotation_event: this.quotation_event,
+      quotation_mockup: this.quotation_mockup,
       user: this.user,
     });
 
