@@ -23,6 +23,13 @@ export const QUOTATION_ITEM_PRICING_MODES: QuotationItemPricingMode[] = [
   "custom",
 ];
 
+// Descuento por producto (pedido del usuario, 21-nov): "20%" sobre el precio
+// unitario, o "que quede en S/ X" por unidad. `unit_price` es SIEMPRE el
+// precio final; `list_unit_price` el de antes del descuento.
+export type QuotationItemDiscountType = "percent" | "final_price";
+
+export const QUOTATION_ITEM_DISCOUNT_TYPES: QuotationItemDiscountType[] = ["percent", "final_price"];
+
 export interface QuotationItemAttributes {
   id: number;
   quotation_id: number;
@@ -36,6 +43,11 @@ export interface QuotationItemAttributes {
   quantity: number;
   pricing_mode: QuotationItemPricingMode;
   unit_price: number;
+  // Descuento (opcionales en el tipo: las filas viejas y las altas sin
+  // descuento los dejan en null).
+  discount_type?: QuotationItemDiscountType | null;
+  discount_value?: number | null;
+  list_unit_price?: number | null;
   subtotal: number;
   // "No aceptado" por el cliente (Sprint 2, 14-nov): el equipo lo ve, el
   // cliente no (PDF y enlace público) y no suma al total. Opcional en el tipo:
@@ -73,6 +85,9 @@ export function QuotationItemFactory(sequelize: Sequelize): QuotationItemStatic 
       quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
       pricing_mode: { type: DataTypes.ENUM(...QUOTATION_ITEM_PRICING_MODES), allowNull: false, defaultValue: "unit" },
       unit_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+      discount_type: { type: DataTypes.ENUM(...QUOTATION_ITEM_DISCOUNT_TYPES), allowNull: true },
+      discount_value: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+      list_unit_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
       subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
       is_excluded: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       excluded_at: { type: DataTypes.DATE, allowNull: true },

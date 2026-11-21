@@ -4,7 +4,8 @@ import { AppError } from "../../../../../core/errors/AppError";
 import { nowUtc } from "../../../../../utils/dateUtils";
 import { roundMoney } from "../../../../../utils/numbers";
 import { computeQuotationTotal } from "../../model/quotation.model";
-import { QuotationItemModel } from "../../model/quotation_item.model";
+import { QuotationItemDiscountType, QuotationItemModel } from "../../model/quotation_item.model";
+import { applyItemDiscount } from "../shared/item_discount";
 import { CreateQuotationItemInput, priceQuotationItems } from "../create/quotation.service";
 import { loadProductVariants, resolveItemVariant, variantsOf } from "../shared/item_variant";
 import { getOrderedProductionStages } from "../shared/production_stages";
@@ -39,10 +40,17 @@ interface SavedItem {
   quantity: number;
   pricing_mode: QuotationItemModel["pricing_mode"];
   unit_price: number;
+  discount_type: QuotationItemDiscountType | null;
+  discount_value: number | null;
+  list_unit_price: number | null;
   subtotal: number;
 }
 
 const samePrice = (left: number | null | undefined, right: number | null | undefined) => Number(left ?? 0) === Number(right ?? 0);
+
+// Precio por unidad pactado ANTES del descuento (21-nov): el descuento se
+// puede cambiar sin recotizar el producto contra el catálogo actual.
+const agreedListPrice = (previous: QuotationItemModel): number => Number(previous.list_unit_price ?? previous.unit_price);
 
 // Un item conserva su precio pactado si no cambió lo que lo define: el catálogo
 // pudo cambiar después de cotizar y editar otra línea no debe recotizar esta.
@@ -51,9 +59,9 @@ const keepsAgreedPrice = (item: SavedQuotationItemInput, previous: QuotationItem
   if (Number(previous.technique_id ?? 0) !== Number(item.technique_id ?? 0)) return false;
   if (previous.pricing_mode !== item.pricing_mode) return false;
   if (item.pricing_mode !== "custom") return true;
-  // El formulario carga un item personalizado con todo el precio en
-  // `custom_price` y la técnica en 0 (ver toCompleteFormValues).
-  return samePrice(item.custom_price, previous.unit_price) && samePrice(item.custom_technique_price, 0);
+  // El formulario carga un item personalizado con todo el precio (antes del
+  // descuento) en `custom_price` y la técnica en 0 (ver toCompleteFormValues).
+  return samePrice(item.custom_price, agreedListPrice(previous)) && samePrice(item.custom_technique_price, 0);
 };
 
 const hasSameVariant = (item: SavedQuotationItemInput, previous: QuotationItemModel) =>
@@ -128,6 +136,9 @@ async function priceSavedItems({
         quantity: pricedItem.quantity,
         pricing_mode: pricedItem.pricing_mode,
         unit_price: pricedItem.unit_price,
+        discount_type: pricedItem.discount_type,
+        discount_value: pricedItem.discount_value,
+        list_unit_price: pricedItem.list_unit_price,
         subtotal: pricedItem.subtotal,
       };
     }
@@ -142,7 +153,14 @@ async function priceSavedItems({
           requestedColor: item.color,
           variants: variantsOf(variants, Number(kept.product_id)),
         });
-    const unitPrice = Number(kept.unit_price);
+    // Precio pactado de lista + el descuento que venga ahora (puede ser
+    // nuevo, cambiado o quitado).
+    const discounted = applyItemDiscount(
+      agreedListPrice(kept),
+      item,
+      productNames.get(Number(kept.product_id)) ?? "el producto"
+    );
+    const unitPrice = discounted.unit_price;
     const quantity = Number(item.quantity);
     return {
       input: item,
@@ -153,6 +171,9 @@ async function priceSavedItems({
       quantity,
       pricing_mode: kept.pricing_mode,
       unit_price: unitPrice,
+      discount_type: discounted.discount_type,
+      discount_value: discounted.discount_value,
+      list_unit_price: discounted.list_unit_price,
       subtotal: roundMoney(unitPrice * quantity),
     };
   });
@@ -168,7 +189,10 @@ const isModified = (item: SavedItem) => {
     previous.color !== item.color ||
     Number(previous.quantity) !== item.quantity ||
     previous.pricing_mode !== item.pricing_mode ||
-    !samePrice(previous.unit_price, item.unit_price)
+    !samePrice(previous.unit_price, item.unit_price) ||
+    (previous.discount_type ?? null) !== item.discount_type ||
+    !samePrice(previous.discount_value, item.discount_value) ||
+    !samePrice(previous.list_unit_price, item.list_unit_price)
   );
 };
 
@@ -209,12 +233,18 @@ async function applyItemChanges({
         quantity: item.quantity,
         pricing_mode: item.pricing_mode,
         unit_price: item.unit_price,
+        discount_type: item.discount_type,
+        discount_value: item.discount_value,
+        list_unit_price: item.list_unit_price,
         subtotal: item.subtotal,
         updated_by: updatedBy,
         updated_at: now,
       })),
       {
         updateOnDuplicate: [
+          "discount_type",
+          "discount_value",
+          "list_unit_price",
           "product_id",
           "technique_id",
           "product_code",
@@ -246,6 +276,9 @@ async function applyItemChanges({
         quantity: item.quantity,
         pricing_mode: item.pricing_mode,
         unit_price: item.unit_price,
+        discount_type: item.discount_type,
+        discount_value: item.discount_value,
+        list_unit_price: item.list_unit_price,
         subtotal: item.subtotal,
         created_by: updatedBy,
         created_at: now,

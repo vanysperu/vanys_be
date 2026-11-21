@@ -28,8 +28,30 @@ interface QuotationPdfItem {
   product_code?: string | null;
   quantity: number;
   unit_price: number;
+  // Descuento por producto (21-nov): precio antes del descuento y cómo se hizo.
+  discount_type?: "percent" | "final_price" | null;
+  discount_value?: number | string | null;
+  list_unit_price?: number | string | null;
   subtotal: number;
 }
+
+// "−20%" o "−S/ 5.00" (por unidad) para la columna "Desc." del PDF.
+const discountLabel = (item: QuotationPdfItem): string => {
+  if (item.list_unit_price === null || item.list_unit_price === undefined) return "—";
+  if (item.discount_type === "percent") return `−${Number(item.discount_value)}%`;
+  return `−${money(Number(item.list_unit_price) - Number(item.unit_price))}`;
+};
+
+// Cuánto se descontó en total (precio de lista − precio final) × cantidad,
+// en la misma base que "P. unit." (sin IGV cuando la cotización lo suma aparte).
+const totalDiscount = (items: QuotationPdfItem[]): number =>
+  items.reduce(
+    (sum, item) =>
+      item.list_unit_price === null || item.list_unit_price === undefined
+        ? sum
+        : sum + (Number(item.list_unit_price) - Number(item.unit_price)) * Number(item.quantity),
+    0
+  );
 
 interface QuotationPdfData {
   id: number;
@@ -148,6 +170,9 @@ const styles = StyleSheet.create({
   // pantalla (QuotationDetailDialog.tsx).
   colQty: { flex: 0.7, textAlign: "right" },
   colPrice: { flex: 1.1, textAlign: "right" },
+  // Solo cuando algún producto lleva descuento (21-nov).
+  colListPrice: { flex: 1.1, textAlign: "right", color: "#5B6072" },
+  colDiscount: { flex: 0.9, textAlign: "right", color: "#1F8A5F" },
   colSubtotal: { flex: 1.1, textAlign: "right" },
   colIgv: { flex: 1, textAlign: "right" },
   colTotal: { flex: 1.2, textAlign: "right", fontWeight: 700 },
@@ -213,6 +238,9 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
   // Si ningún item lleva técnica (productos sin personalización), la columna
   // "Técnica" se omite entera; si se mezclan, los que no llevan muestran "—".
   const showTechnique = data.items.some((item) => Boolean(item.technique));
+  // Columnas "P. lista" y "Desc." solo si algún producto lleva descuento.
+  const showDiscount = data.items.some((item) => item.list_unit_price !== null && item.list_unit_price !== undefined);
+  const discountTotal = showDiscount ? totalDiscount(data.items) : 0;
   // Helper para no repetir `[styles.sectionTitle, { color: data.brandColor }]`
   // en cada uno de los ~8 títulos de sección del documento.
   const sectionTitle = (label: string) =>
@@ -348,6 +376,12 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
             // (pedido explícito del usuario: "no va a salir ni en los pdf").
             showTechnique ? createElement(Text, { style: [styles.th, styles.colTechnique] }, "Técnica") : null,
             createElement(Text, { style: [styles.th, styles.colQty] }, "Cant."),
+            ...(showDiscount
+              ? [
+                  createElement(Text, { style: [styles.th, styles.colListPrice], key: "h-list" }, "P. lista"),
+                  createElement(Text, { style: [styles.th, styles.colDiscount], key: "h-discount" }, "Desc."),
+                ]
+              : []),
             createElement(Text, { style: [styles.th, styles.colPrice] }, "P. unit."),
             // Mismas columnas que el detalle en pantalla (pedido explícito
             // del usuario: que se vea claro cuánto se paga por cada producto
@@ -380,6 +414,16 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
                   ? createElement(Text, { style: [styles.td, styles.colTechnique] }, item.technique?.name ?? "—")
                   : null,
                 createElement(Text, { style: [styles.td, styles.colQty] }, String(item.quantity)),
+                ...(showDiscount
+                  ? [
+                      createElement(
+                        Text,
+                        { style: [styles.td, styles.colListPrice], key: "list" },
+                        money(Number(item.list_unit_price ?? item.unit_price))
+                      ),
+                      createElement(Text, { style: [styles.td, styles.colDiscount], key: "discount" }, discountLabel(item)),
+                    ]
+                  : []),
                 createElement(Text, { style: [styles.td, styles.colPrice] }, money(item.unit_price)),
                 ...(data.includes_igv
                   ? [
@@ -394,6 +438,14 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
         createElement(
           View,
           { style: styles.totalsBox },
+          // Lo que el cliente ahorra con los descuentos (ya restado en cada línea).
+          showDiscount &&
+            createElement(
+              View,
+              { style: styles.totalsRow },
+              createElement(Text, { style: styles.totalsLabel }, data.includes_igv ? "Descuento (sin IGV)" : "Descuento"),
+              createElement(Text, { style: [styles.totalsValue, { color: "#1F8A5F" }] }, `−${money(discountTotal)}`),
+            ),
           data.includes_igv &&
             createElement(
               View,

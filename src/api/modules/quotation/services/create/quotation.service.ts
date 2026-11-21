@@ -1,10 +1,11 @@
+import { applyItemDiscount } from "../shared/item_discount";
 import { Transaction } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { addDaysToDateOnly, nowUtc, toBusinessDateOnly } from "../../../../../utils/dateUtils";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { getOrderedProductionStages } from "../shared/production_stages";
 import { computeQuotationTotal } from "../../model/quotation.model";
-import { QuotationItemPricingMode } from "../../model/quotation_item.model";
+import { QuotationItemDiscountType, QuotationItemPricingMode } from "../../model/quotation_item.model";
 import { loadProductVariants, resolveItemVariant, variantsOf } from "../shared/item_variant";
 import { ProductModel } from "../../../product/model/product.model";
 import { CustomizationTechniqueModel } from "../../../customization_technique/model/customization_technique.model";
@@ -57,6 +58,10 @@ export interface CreateQuotationItemInput {
   // "cuando se le da personalizado debe darte para colocar el precio del
   // producto y de la técnica").
   custom_technique_price?: number | null;
+  // Descuento opcional (21-nov): "percent" (ej. 20) o "final_price" (precio
+  // unitario final). Ver services/shared/item_discount.ts.
+  discount_type?: QuotationItemDiscountType | null;
+  discount_value?: number | null;
 }
 
 export interface CreateQuotationInput {
@@ -232,10 +237,13 @@ const computeDefaultValidUntil = async (createdAt: Date, companyId: number): Pro
   return addDaysToDateOnly(toBusinessDateOnly(createdAt), days);
 };
 
-export interface PricedQuotationItem extends CreateQuotationItemInput {
+export interface PricedQuotationItem extends Omit<CreateQuotationItemInput, "discount_type" | "discount_value"> {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  discount_type: QuotationItemDiscountType | null;
+  discount_value: number | null;
+  list_unit_price: number | null;
 }
 
 // Valida y cotiza los items de una cotización con las reglas completas
@@ -282,7 +290,10 @@ const priceQuotationItems = async ({
     // que ve el cliente en el PDF — si se redondeara solo al final, un
     // precio con técnica porcentual (ej. 12.345) mostraría 12.35 pero
     // multiplicaría por 12.345 y el total no cerraría a mano.
-    const unitPrice = roundMoney(resolveUnitPrice(basePrice, technique, item.pricing_mode, item.custom_technique_price));
+    const listUnitPrice = roundMoney(resolveUnitPrice(basePrice, technique, item.pricing_mode, item.custom_technique_price));
+    // Descuento opcional (21-nov) sobre el precio unitario ya redondeado.
+    const discounted = applyItemDiscount(listUnitPrice, item, product.name);
+    const unitPrice = discounted.unit_price;
     const subtotal = roundMoney(computeItemSubtotal(unitPrice, quantity));
 
     const variant = resolveItemVariant({
@@ -292,7 +303,7 @@ const priceQuotationItems = async ({
       variants: variantsOf(variantsByProduct, Number(item.product_id)),
     });
 
-    return { ...item, ...variant, quantity, unit_price: unitPrice, subtotal };
+    return { ...item, ...variant, ...discounted, quantity, unit_price: unitPrice, subtotal };
   });
 
   const subtotal = roundMoney(pricedItems.reduce((sum, item) => sum + item.subtotal, 0));
@@ -386,6 +397,9 @@ const createQuotation = async ({ input, createdBy }: { input: CreateQuotationInp
         quantity: item.quantity,
         pricing_mode: item.pricing_mode,
         unit_price: item.unit_price,
+        discount_type: item.discount_type,
+        discount_value: item.discount_value,
+        list_unit_price: item.list_unit_price,
         subtotal: item.subtotal,
         created_by: createdBy,
         created_at: nowUtc(),

@@ -9,7 +9,7 @@ import {
 import { DataBase } from "../../../../database";
 import { optionalAdjustmentReasonRule } from "../../cash_movement/validators/adjustment_reason.validator";
 import { QUOTATION_STATUSES } from "../model/quotation.model";
-import { QUOTATION_ITEM_PRICING_MODES } from "../model/quotation_item.model";
+import { QUOTATION_ITEM_DISCOUNT_TYPES, QUOTATION_ITEM_PRICING_MODES } from "../model/quotation_item.model";
 
 // Reglas de los items, compartidas por crear y por "completar" una
 // cotización que llegó desde la web (PUT /quotation/:id/items).
@@ -53,6 +53,24 @@ const quotationItemsRules = [
     .optional({ values: "null" })
     .isFloat({ min: 0, max: 99999999.99 })
     .withMessage("El precio personalizado de la técnica debe ser un número positivo"),
+  // Descuento opcional por producto (21-nov): "percent" (0 < % < 100) o
+  // "final_price" (precio unitario final). Que el precio final sea menor al
+  // de lista lo valida el service (necesita el precio).
+  body("items.*.discount_type")
+    .optional({ values: "null" })
+    .isIn(QUOTATION_ITEM_DISCOUNT_TYPES)
+    .withMessage("El tipo de descuento no es válido"),
+  body("items.*.discount_value")
+    .optional({ values: "null" })
+    .isFloat({ gt: 0, max: 99999999.99 })
+    .withMessage("El descuento debe ser un número mayor a 0"),
+  body("items").custom((items: Array<{ discount_type?: string | null; discount_value?: number | null }>) => {
+    const missingValue = items.find((item) => item.discount_type && item.discount_value == null);
+    if (missingValue) throw new Error("Indica el valor del descuento");
+    const tooHigh = items.find((item) => item.discount_type === "percent" && Number(item.discount_value) >= 100);
+    if (tooHigh) throw new Error("El descuento por porcentaje debe ser menor a 100%");
+    return true;
+  }),
   // "custom" además necesita un precio propio del item; los demás modos lo
   // resuelven desde el catálogo del producto.
   body("items").custom((items: Array<{ pricing_mode?: string; custom_price?: number | null }>) => {
