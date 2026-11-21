@@ -339,6 +339,10 @@ cerrar la sesión de admin.qa):
 - **PDF de la cotización:** mismo texto y mismos trazos (streams de dibujo comparados) antes y después de
   pasar fuentes/encabezado a `core/pdf`, en 3 cotizaciones reales.
 - type-check de los dos repos y build de producción del frontend en verde.
+- **e2e existentes de las pantallas tocadas** (17 archivos): 72/77 en verde. `quotation-item-exclusion` se
+  actualizó (el último «No aceptado» ahora se ve deshabilitado con el motivo) y pasa. Las otras 4 ya fallaban
+  antes: la captura de Caja (desactualizada), `employee-debts` ×2 y `quotations` ("Ana Acme" fuera del
+  selector de 100 usuarios).
 
 Notas para el usuario:
 - «No aceptado» ya estaba (1.8.2): se ocultaba si la cotización tenía un solo producto, estaba cerrada o el
