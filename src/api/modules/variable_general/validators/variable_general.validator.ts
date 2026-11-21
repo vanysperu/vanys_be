@@ -99,6 +99,14 @@ export const createVariableGeneralValidator = [
     .bail()
     .isLength({ max: 255 })
     .withMessage("Máximo 255 caracteres"),
+  // CCI de una cuenta bancaria (21-nov); su formato lo valida el service.
+  body("ref3")
+    .optional({ values: "null" })
+    .isString()
+    .withMessage("El CCI debe ser un texto válido.")
+    .bail()
+    .isLength({ max: 40 })
+    .withMessage("Máximo 40 caracteres"),
   showInQuotationRule(),
 ];
 
@@ -154,5 +162,13 @@ export const updateVariableGeneralValidator = [
     .bail()
     .isLength({ max: 255 })
     .withMessage("Máximo 255 caracteres"),
+  // CCI de una cuenta bancaria (21-nov); su formato lo valida el service.
+  body("ref3")
+    .optional({ values: "null" })
+    .isString()
+    .withMessage("El CCI debe ser un texto válido.")
+    .bail()
+    .isLength({ max: 40 })
+    .withMessage("Máximo 40 caracteres"),
   showInQuotationRule(),
 ];

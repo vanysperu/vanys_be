@@ -1,7 +1,11 @@
 import { DataBase } from "../../../../../database";
 import { VariableGeneralPartialAttributes } from "../../models/variable_general.model";
 import { AppError } from "../../../../../core/errors/AppError";
-import { assertPaymentAccountNumber, PAYMENT_ACCOUNT_CATEGORY } from "../shared/payment_account.service";
+import {
+  assertPaymentAccountNumber,
+  normalizePaymentAccountCci,
+  PAYMENT_ACCOUNT_CATEGORY,
+} from "../shared/payment_account.service";
 import { loadManageableVariable } from "../shared/variable_scope.service";
 import { assertCompanyAssetUsable } from "../../../uploads/services/find/company_asset.service";
 import { purgeUnusedCompanyAssets } from "../../../uploads/services/delete/company_asset.service";
@@ -42,6 +46,17 @@ export async function updateVariableGeneralById(
   if (current.category === PAYMENT_ACCOUNT_CATEGORY && changesAccountNumber) {
     assertPaymentAccountNumber(nextAccountType, nextAccountNumber);
   }
+
+  // CCI (solo cuentas bancarias): undefined = no cambia; vacío/null = se quita.
+  // Si la cuenta deja de ser bancaria, el CCI que tenía se borra.
+  const nextRef3 =
+    current.category !== PAYMENT_ACCOUNT_CATEGORY
+      ? payload.ref3
+      : payload.ref3 !== undefined
+        ? normalizePaymentAccountCci(nextAccountType, payload.ref3)
+        : nextAccountType === "bank"
+          ? undefined
+          : null;
 
   // Si cambia ref2 (QR de una cuenta de pago), el nuevo tiene que ser una
   // imagen vigente de la empresa y la imagen anterior se borra en la misma
@@ -85,6 +100,7 @@ export async function updateVariableGeneralById(
         description: payload.description,
         ref1: payload.ref1,
         ref2: payload.ref2,
+        ref3: nextRef3,
         show_in_quotation: payload.show_in_quotation,
       },
       { where, transaction }

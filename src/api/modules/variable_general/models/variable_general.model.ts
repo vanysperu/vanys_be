@@ -9,6 +9,8 @@ export interface VariableGeneralAttributes {
   description: string;
   ref1: string;
   ref2: string;
+  // Cuenta de pago bancaria: CCI (código interbancario, 20 dígitos). Ver migración 20261121100300.
+  ref3?: string | null;
   // Solo cuentas de pago: false = cuenta interna, no sale en el PDF de la
   // cotización. Se sigue usando para registrar pagos, gastos y Caja.
   show_in_quotation: boolean;
@@ -76,6 +78,10 @@ export function VariableGeneralFactory(sequelize: Sequelize): VariableGeneralSta
         allowNull: true,
       },
       ref2: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      ref3: {
         type: DataTypes.STRING(255),
         allowNull: true,
       },

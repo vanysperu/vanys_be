@@ -78,7 +78,7 @@ interface QuotationPdfData {
   // Cada cuenta trae su QR ya resuelto como data URI (ver
   // generateQuotationPdf): las imágenes se leen de la base, que es async, y
   // el documento se arma de forma síncrona.
-  paymentAccounts: (Pick<VariableGeneralAttributes, "id" | "prefix_id" | "name" | "ref1" | "ref2"> & {
+  paymentAccounts: (Pick<VariableGeneralAttributes, "id" | "prefix_id" | "name" | "ref1" | "ref2" | "ref3"> & {
     qrDataUri: string | null;
   })[];
   logoDataUri: string | null;
@@ -445,7 +445,17 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
               View,
               { style: { flexShrink: 1 } },
               createElement(Text, { style: { fontSize: 9.5, fontWeight: 700 } }, account.name),
-              account.ref1 && createElement(Text, { style: styles.small }, account.ref1),
+              // Cuenta bancaria: el número del banco y el CCI (pedido del usuario, 21-nov:
+              // "en Perú tienes dos números de cuenta"). Yape/Plin: el celular.
+              account.ref1 &&
+                createElement(
+                  Text,
+                  { style: styles.small },
+                  account.prefix_id === "bank" ? `Cta.: ${account.ref1}` : account.ref1,
+                ),
+              account.prefix_id === "bank" && account.ref3
+                ? createElement(Text, { style: styles.small }, `CCI: ${account.ref3}`)
+                : null,
             ),
           );
         };

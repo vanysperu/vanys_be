@@ -25,6 +25,28 @@ export const assertPaymentAccountNumber = (type: string | null | undefined, numb
   );
 };
 
+// CCI (código de cuenta interbancario): 20 dígitos. Se acepta con espacios o
+// guiones (como lo copia la gente del banco) y se guarda solo con los dígitos.
+const CCI_DIGITS = 20;
+const CCI_REGEX = /^\d{20}$/;
+
+/**
+ * Normaliza y valida el CCI de una cuenta de pago (pedido del usuario, 21-nov:
+ * "en Perú tienes dos números de cuenta"). Vacío = sin CCI (null). Solo una
+ * cuenta bancaria lleva CCI; Yape y Plin no.
+ */
+export const normalizePaymentAccountCci = (type: string | null | undefined, value: string | null | undefined): string | null => {
+  const digits = (value ?? "").replace(/[\s-]/g, "");
+  if (digits === "") return null;
+  if (type !== "bank") {
+    throw new AppError(400, "Solo una cuenta bancaria lleva CCI", undefined, "INVALID_PAYMENT_ACCOUNT_CCI");
+  }
+  if (!CCI_REGEX.test(digits)) {
+    throw new AppError(400, `El CCI debe tener ${CCI_DIGITS} dígitos`, undefined, "INVALID_PAYMENT_ACCOUNT_CCI");
+  }
+  return digits;
+};
+
 /**
  * Valida la cuenta por la que se mueve un dinero (pago recibido, ingreso o
  * egreso de caja, reposición a un trabajador) y devuelve su id, o null si es
