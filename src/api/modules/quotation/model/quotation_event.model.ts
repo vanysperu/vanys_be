@@ -36,7 +36,13 @@ export type QuotationEventAction =
   | "dispatch_guide_voided"
   // Producto no aceptado por el cliente o reactivado (Sprint 2, 14-nov).
   | "item_excluded"
-  | "item_included";
+  | "item_included"
+  // Estado cambiado a mano por un administrador, saltando el flujo normal
+  // (pedido del usuario, 21-nov).
+  | "status_forced"
+  // Mockups (diseños) subidos o quitados de la cotización (21-nov).
+  | "mockup_added"
+  | "mockup_removed";
 
 export interface QuotationEventAttributes {
   id: number;

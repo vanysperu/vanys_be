@@ -97,7 +97,7 @@ const MONEY_BLOCKED_TARGETS: Partial<Record<QuotationStatus, string>> = {
 // manual. Rechazar/cancelar con plata o compras de por medio exige primero
 // resolver eso (anular los pagos, revisar las compras) — nunca es automático.
 // `quotation` ya viene leída con lock dentro de `transaction`.
-const assertNoMoneyInvolved = async (quotation: QuotationModel, action: string, transaction: Transaction) => {
+export const assertNoMoneyInvolved = async (quotation: QuotationModel, action: string, transaction: Transaction) => {
   if (Number(quotation.total_paid) > 0) {
     throw new QuotationHasMoneyInvolvedError(
       `No se puede ${action}: esta cotización ya tiene pagos registrados. Anula los pagos primero.`

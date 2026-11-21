@@ -7,6 +7,7 @@ import {
   changeItemStageValidator,
   itemExclusionValidator,
   changeStatusValidator,
+  forceStatusValidator,
   completeQuotationValidator,
   quotationBoardValidator,
   createQuotationExpenseValidator,
@@ -37,6 +38,7 @@ import {
 } from "../controllers/quotation.controller";
 import { completeQuotationController } from "../controllers/complete.controller";
 import { setItemExclusionController } from "../controllers/item_exclusion.controller";
+import { forceQuotationStatusController } from "../controllers/force_status.controller";
 import { quotationBoardController } from "../controllers/board.controller";
 import { getQuotationProfitController } from "../controllers/profit.controller";
 import { quotationResetPreviewController } from "../controllers/reset_preview.controller";
@@ -88,6 +90,8 @@ router.put("/:id/reset", verifyAccess, requireSystemRole, resetQuotationValidato
 router.post("/create", verifyAccess, createQuotationValidator, allValidator, createQuotationController);
 router.put("/update/:id", verifyAccess, updateQuotationValidator, allValidator, updateQuotationController);
 router.put("/status/:id", verifyAccess, changeStatusValidator, allValidator, changeQuotationStatusController);
+// Cambio de estado a mano (cualquier estado): solo administradores (21-nov).
+router.put("/force-status/:id", verifyAccess, forceStatusValidator, allValidator, forceQuotationStatusController);
 router.put("/item/:itemId/stage", verifyAccess, changeItemStageValidator, allValidator, changeItemStageController);
 // Producto no aceptado por el cliente (o reactivado), sin editar la cotización.
 router.put("/item/:itemId/excluded", verifyAccess, itemExclusionValidator, allValidator, setItemExclusionController);

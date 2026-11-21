@@ -215,6 +215,16 @@ export const changeStatusValidator = [
     .withMessage("La cuenta seleccionada no es válida"),
 ];
 
+// Cambio de estado a mano por un administrador (21-nov): cualquier estado
+// salvo "Pendiente de cotizar" (el service lo explica), con motivo opcional.
+export const forceStatusValidator = [
+  paramQuotationIdValidator,
+  body("status")
+    .isIn(QUOTATION_STATUSES.filter((status) => status !== "quote_requested"))
+    .withMessage("Estado inválido"),
+  body("note").optional({ values: "null" }).isString().isLength({ max: 500 }).withMessage("Máximo 500 caracteres").trim(),
+];
+
 export const changeItemStageValidator = [
   param("itemId")
     .not()
