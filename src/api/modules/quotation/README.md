@@ -372,3 +372,48 @@ corregir pagos; un Gestor recibe 403).
 - Una compra cuenta como costo aunque la haya pagado un trabajador (el costo existe).
 - `projected_profit` = subtotal − gastos − compras + IGV recuperable (cuando se cobre todo).
 - Cálculo en `services/find/profit.service.ts`; tipos en `types/profit.types.ts`.
+
+## Pedidos del 21-nov-2026
+
+### Endpoints nuevos
+| Método | Ruta                                 | Acción                                   | Recurso RBAC                          |
+|--------|--------------------------------------|------------------------------------------|---------------------------------------|
+| PUT    | /quotation/force-status/:id          | cambiar a cualquier estado (admins)      | cotizacion.forceStatus.button         |
+| GET    | /quotation/:id/mockups               | diseños de la cotización (paginado)      | cotizacion.mockups.list.endpoint      |
+| POST   | /quotation/:id/mockups               | subir diseño (imagen o PDF, 5 MB)        | cotizacion.mockups.upload.button      |
+| GET    | /quotation/mockup/:mockupId/file     | archivo del diseño (solo con sesión)     | cotizacion.mockups.file.endpoint      |
+| PATCH  | /quotation/mockup/:mockupId/disable  | quitar diseño (soft)                     | cotizacion.mockups.disable.button     |
+| GET    | /quotation/export                    | listado en Excel (mismos filtros)        | cotizacion.export.button              |
+
+### Botones/acciones vinculadas (nuevos)
+- cotizacion.forceStatus.button — selector "Cambiar estado" del detalle (roles con `payment.update.button`).
+- cotizacion.mockups.upload.button / cotizacion.mockups.disable.button — pestaña "Diseños".
+- cotizacion.export.button — "Exportar Excel" en Cotizaciones.
+
+### Cambio de estado a mano (`force_status.service.ts`)
+- Cualquier estado salvo "Pendiente de cotizar"; nunca el mismo. Salta el paso a paso del flujo normal.
+- Sigue la regla del dinero: con pagos o compras vivas no se rechaza, cancela, vence ni vuelve a Pendiente
+  (409 `QUOTATION_HAS_MONEY`).
+- Salir de "Pendiente de cotizar" (salvo a Rechazada) exige la cotización completa.
+- Volver a Pendiente da una vigencia nueva (si no, el job la vencería enseguida).
+- Saltar a Entregada/Finalizada descuenta el stock como la entrega normal (sin duplicar).
+- Finalizada por este camino no registra factura (podría duplicarla): avisa si no tiene ninguna.
+- Volver atrás desde una entrega no devuelve la mercadería: se avisa en la respuesta (`warnings`).
+- Evento `status_forced` con desde, hacia y motivo. Alcance de escritura (un admin con tienda, en la suya).
+
+### Descuento por producto (migración 20261121100000)
+- `quotation_item.discount_type` (`percent` | `final_price`), `discount_value` y `list_unit_price`.
+- `unit_price` es SIEMPRE el precio final y `subtotal = unit_price × cantidad`: totales, IGV, estadísticas y
+  ganancia no cambian. `percent`: 0 < % < 100; `final_price`: precio unitario final menor al de lista
+  (400 `INVALID_DISCOUNT`).
+- Al editar, el descuento se recalcula sobre el precio de lista pactado (no sobre el catálogo actual).
+- El PDF muestra "P. lista" y "Desc." solo si algún producto lleva descuento, y el ahorro total.
+
+### Mockups (migración 20261121100100)
+- Tabla `quotation_mockup` (archivo en MEDIUMBLOB, producto opcional, soft-delete). Solo los ve el equipo:
+  nunca salen en el PDF ni en el enlace. Hasta 40 por cotización. Eventos `mockup_added` / `mockup_removed`.
+
+### Enlace público
+- `/c/<código>` abre el PDF mismo (el frontend valida el enlace con la vista JSON, que registra "visto",
+  y redirige a `/api/public/q/<código>/pdf`). El PDF público aplica las mismas reglas (borrada o
+  "Pendiente de cotizar" = 404) y se descarga como `cotizacion-0001.pdf`.

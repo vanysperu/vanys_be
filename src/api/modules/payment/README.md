@@ -119,3 +119,7 @@ ni anular.
   patas. Las respuestas traen `kind` y `adjusted_period`. Sin caja
   configurada, igual que la fase 1. Detalle: `cash_movement/README.md`.
 - `GET /payment/list` trae `corrections_count` por pago.
+
+## Pedidos del 21-nov-2026
+- `GET /payment/export` (botón `payment.export.button`): Pagos en Excel con los mismos filtros del listado
+  (`controllers/list_filters.ts`, compartido con `/payment/list`) y el total vigente al final.

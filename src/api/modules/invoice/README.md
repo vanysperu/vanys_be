@@ -128,3 +128,7 @@ de la factura.
   se arma con esas compras (`invoice.description` guarda el texto de la primera y
   queda de respaldo si se anulan todas).
 - Fechas `created_at`/`file_uploaded_at` salen como `{ date, time }` (Lima).
+
+## Pedidos del 21-nov-2026
+- `GET /invoice/export` (botón `invoice.export.button`): Facturas en Excel con los mismos filtros del listado
+  (`controllers/list_filters.ts`, compartido con `/invoice/list`).

@@ -295,6 +295,61 @@ Validación:
 - Al subir 1.8.0: el `.env` de producción necesita `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
   (generarlas UNA vez y no cambiarlas). La migración `20261118100000` crea `push_subscription`.
 
+## Pedidos del 21-nov — 1.9.0 / 0.9.0 (rama `feature/pedidos-21-nov`, sale de `main` 1.8.2)
+
+Plan aprobado por el usuario (decisiones: descuento **por producto**, % o **precio unitario final**;
+préstamos **simple + cobros + Caja**; cambiar a cualquier estado **solo admins y Super Admin**; Excel de
+cotizaciones, Caja y pagos, facturas e IGV, inventario y compras; **sharp** para las fotos del PDF; mockups
+**solo para el equipo**).
+
+| Repo | Commit | Qué |
+|---|---|---|
+| grulla_be | `86ec6ff` | Precio vaciado al editar = sin precio (técnica valida "al menos uno" sobre el resultado) |
+| grulla_be | `a9f266b` | Seeder: «No aceptado» para todo rol que edita cotizaciones |
+| grulla_be | `cd9f760` | PDF público con las reglas de la vista (borrada / pendiente de cotizar = 404) |
+| grulla_be | `71e421d` | `PUT /quotation/force-status/:id` (admins), reglas del dinero, stock, vigencia, evento `status_forced` |
+| grulla_be | `4cc4f8a` | Descuento por producto (migración 20261121100000), PDF con P. lista / Desc. |
+| grulla_be | `400c15a` | `GET /cash-movement/igv-breakdown` (totales = recuadro de Caja) |
+| grulla_be | `59fce19` | Mockups privados (migración 20261121100100, tabla `quotation_mockup`) |
+| grulla_be | `22f7f37` | Excel (`core/excel`, worker_thread, tope 20 000 filas) de 7 listados; filtros compartidos lista/Excel |
+| grulla_be | `e2d2a56` | PDF de la orden de compra con foto (sharp 0.35.5), `core/pdf` compartido con la cotización |
+| grulla_be | `08cb9c2` | Módulo `loan` (migración 20261121100200) + Caja (fuente `loan`) + Estadísticas (interés = ingreso) |
+| grulla_fe | `40624ad` | Precios vaciados = null; un listener: la rueda/touchpad ya no cambia los inputs numéricos |
+| grulla_fe | `d703e7c` | «No aceptado» deshabilitado con motivo; `/c/<código>` abre el PDF; WhatsApp "Enviar PDF y enlace"; selector "Cambiar estado" |
+| grulla_fe | `accf94d` | Descuento por producto en el formulario y el detalle |
+| grulla_fe | `6f41003` | Caja: "Ver cómo se calculó" el IGV (cuenta, barras y tablas) |
+| grulla_fe | `9eef4a3` | Pestaña "Diseños" (subir, ver, descargar, quitar) |
+| grulla_fe | `7028f84` | `ExportExcelButton` en 6 pantallas y en el diálogo del IGV |
+| grulla_fe | `44d6d0e` | Botón PDF en Órdenes de compra; `PdfPreviewDialog` compartido |
+| grulla_fe | `97f0c37` | Pantalla Préstamos (Finanzas) y la fuente "Préstamo" en Caja |
+| grulla_fe | `95e9e89` | e2e `pedidos-21-nov` (empresa desechable, `--no-deps`) |
+
+Migraciones nuevas: `20261121100000` (descuento), `20261121100100` (mockups), `20261121100200` (préstamos).
+Seeders nuevos: `20261121100100` … `20261121100700` (RBAC; idempotentes, por código). Librería nueva:
+**sharp 0.35.5** (anotada en CLAUDE.md, verificar `@img/sharp-linux-x64` en el ensayo del release).
+
+Validación (21-nov, instancia aparte 4762/4262 sobre `grulla_s2_dev`, con un admin de reemplazo para no
+cerrar la sesión de admin.qa):
+- **jest completo:** 76/77 suites, 711 pruebas en verde (1 omitida a propósito). La única que falla,
+  `receivables-advance-reminders`, ya fallaba antes de los cambios (el admin de reemplazo queda fuera del
+  selector de 100 usuarios). Suites nuevas: product-price-clear, public-quotation-pdf, quotation-force-status,
+  quotation-item-discount, igv-breakdown, quotation-mockups, excel-export, purchase-order-pdf, loan.
+- **e2e nuevo `pedidos-21-nov`:** 5/5 (empresa desechable, `--no-deps`). Sin el arreglo, Chromium bajaba
+  un input numérico con foco de 1000 a 995 con la rueda; con el arreglo queda en 1000.
+- **PDF de la cotización:** mismo texto y mismos trazos (streams de dibujo comparados) antes y después de
+  pasar fuentes/encabezado a `core/pdf`, en 3 cotizaciones reales.
+- type-check de los dos repos y build de producción del frontend en verde.
+
+Notas para el usuario:
+- «No aceptado» ya estaba (1.8.2): se ocultaba si la cotización tenía un solo producto, estaba cerrada o el
+  rol no tenía el permiso. Ahora se ve deshabilitado con el motivo. Confirmar que producción tenga 1.8.2+.
+- WhatsApp: `wa.me` no adjunta archivos. "Enviar PDF y enlace" usa el menú Compartir del equipo (Android,
+  iPhone, Windows con WhatsApp de escritorio). Mandarlo sin intervención solo con la API de WhatsApp Business
+  (de pago); no se propone ahora.
+- IGV: el de ventas sale de lo COBRADO en cotizaciones con IGV (no de facturas emitidas, que no tienen
+  monto). Una cotización hecha sin IGV y facturada con IGV no suma (lo encontró el análisis BEQ del 21-nov).
+- El detalle del IGV está en Caja; en Cierres no (su alcance es de empresa y el de Caja es por tienda).
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

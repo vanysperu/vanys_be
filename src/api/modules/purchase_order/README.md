@@ -125,3 +125,16 @@ su estado (`pending`/`purchased`) se calcula solo a partir de sus items.
   agregaron en la migración
   `20261011100100-add-funding-source-to-purchase-order-item-purchase.js`
   (antes toda compra se asumía pagada con plata de la empresa).
+
+## Pedidos del 21-nov-2026
+
+| Método | Ruta                      | Acción                                        | Recurso RBAC                   |
+|--------|---------------------------|-----------------------------------------------|--------------------------------|
+| GET    | /purchase-order/:id/pdf   | PDF: qué comprar, con foto y datos            | purchase_order.pdf.button      |
+| GET    | /purchase-order/export    | órdenes en Excel (una fila por producto)      | purchase_order.export.button   |
+
+- El PDF (`services/pdf/purchase_order_pdf.service.ts`) lleva foto, nombre, SKU, descripción, código, color,
+  cantidad, lo comprado y el estado de cada producto. Las fotos (WEBP) se convierten a JPG con `sharp`
+  (`product_photos.ts`), una vez por producto; si una falla, el PDF sale igual. Respeta
+  `product_images_enabled`. Mismo alcance de lectura que el detalle de la orden.
+- Fuentes, estilos base y encabezado compartidos con el PDF de la cotización en `core/pdf/pdf_shared.ts`.

@@ -123,3 +123,7 @@ anular la guía se anula esa salida (`cancelStockDocument`). Ver el README de `d
 `tests/inventory.test.ts` (D5, D14, costo promedio, dos salidas simultáneas,
 transferencia con tránsito y recepción parcial, anulación y kardex, lotes FEFO
 y aviso de vencimiento, salida al entregar, alcance del Gestor).
+
+## Pedidos del 21-nov-2026
+- `GET /inventory/stock/export` (botón `inventory.stock.export.button`): el stock en Excel (una columna por
+  almacén y el total; el costo promedio solo si el usuario puede ver costos), con los mismos filtros.

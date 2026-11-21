@@ -233,3 +233,23 @@ para varios meses en una sola tanda de consultas agrupadas:
   max(balance, 0)` y `net_after_igv = result − igv_payable`.
 - Es una **estimación con criterio de caja** para saber cuánto apartar; el monto oficial lo
   determina el contador con los comprobantes (la pantalla lo dice).
+
+## Pedidos del 21-nov-2026
+
+### Endpoints nuevos
+| Método | Ruta                                   | Acción                                     | Recurso RBAC                              |
+|--------|----------------------------------------|--------------------------------------------|-------------------------------------------|
+| GET    | /cash-movement/igv-breakdown           | cómo se calculó el IGV del mes             | cash_movement.igvBreakdown.button         |
+| GET    | /cash-movement/igv-breakdown/export    | ese detalle en Excel                       | cash_movement.igvBreakdown.export.button  |
+| GET    | /cash-movement/export                  | Caja en Excel (mismos filtros + resumen)   | cash_movement.export.button               |
+
+### Detalle del IGV (`services/find/igv_breakdown.service.ts`)
+- Cada cobro del mes con su IGV (débito) y cada factura de compra con su IGV (crédito), y la cuenta final.
+- Los totales salen de `getPeriodFinances` (el recuadro de Caja) y las consultas de detalle usan los mismos
+  fragmentos SQL (`IGV_*` en `period_finance.ts`): los dos números nunca se separan. Hasta 1000 líneas por
+  lado (`truncated`), los totales siempre son del mes completo.
+
+### Préstamos en Caja (fuente `loan`, módulo loan)
+- La salida del préstamo y, de cada cobro, el capital y el interés como filas separadas (`loan.part`).
+- El capital va a `transfers` en el resumen (no es ingreso ni egreso: los cierres siguen cuadrando); el
+  interés es ingreso (también en el resultado del mes y en Estadísticas). No se corrigen desde Caja.
