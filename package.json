@@ -13,6 +13,7 @@
     "build": "tsc --build && node scripts/copy-database-files.js",
     "db:reset-factory": "node scripts/reset-to-factory.js",
     "db:seed-qa": "node scripts/seed-qa-fixtures.js",
+    "e2e:full-server": "node scripts/e2e-full-server.js",
     "release": "node scripts/package-release.js",
     "db:upgrade-production": "node scripts/upgrade-production.js",
     "api-key": "node scripts/api-key.js",

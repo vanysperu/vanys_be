@@ -354,6 +354,65 @@ Notas para el usuario:
   monto). Una cotización hecha sin IGV y facturada con IGV no suma (lo encontró el análisis BEQ del 21-nov).
 - El detalle del IGV está en Caja; en Cierres no (su alcance es de empresa y el de Caja es por tienda).
 
+### Cuentas bancarias con CCI y la cuenta "Pruebas" de producción (21-nov)
+
+- Cuenta de pago bancaria: número del banco (`ref1`) + **CCI** de 20 dígitos (`ref3`, migración
+  `20261121100300`), los dos en la cotización (PDF). Una cuenta de pago ya no se puede crear sin empresa.
+- Producción: se borró la cuenta id 32 "Pruebas" (Yape, sin empresa, les salía a todas). Respaldo y
+  reversión en `cargas\borrar-cuenta-pruebas-2026-11-21\`.
+
+### E2E del sistema completo (21-nov)
+
+Pedido del usuario: una prueba Playwright de punta a punta sobre una base local propia.
+
+- **Cómo se corre:** `npm run test:e2e:full` en grulla_fe. Playwright levanta su propio backend
+  (`grulla_be/scripts/e2e-full-server.js`) y su propio Vite. Los puertos están en el bloque `E2E_*` del
+  `.env` del backend: base `grulla_e2e_local`, backend 4770, frontend 4270. Nunca reutiliza un servidor
+  ya levantado.
+- **La base:** se crea si no existe, se migra y vuelve a fábrica en cada corrida (solo queda el Super Admin
+  `admin@acme.test`). El lanzador se niega si el nombre no termina en `_local`/`_test`, si es la base de
+  desarrollo (`PROY_BD`) o si `NODE_ENV=production`. `grulla_s2_dev` no se toca.
+- **El recorrido** (`e2e/full/sistema-completo.spec.ts`, 22 pasos en orden, todo por la interfaz):
+  1. **Super Admin:** empresa → tienda → admin y gestor con su invitación. Los dos activan su cuenta por el
+     enlace, que sirve una sola vez.
+  2. **Admin:**
+     - cuenta bancaria con CCI;
+     - saldo inicial de Caja;
+     - cliente, producto con personalización y técnica;
+     - cotización con 10 % de descuento (S/ 265.50);
+     - PDF y enlace del cliente;
+     - aceptada con adelanto por transferencia;
+     - diseño;
+     - estados;
+     - orden de compra para el gestor.
+  3. **Gestor:**
+     - ve la cotización de su tienda;
+     - registra la compra con factura pendiente;
+     - no ve "Cambiar estado" ni entra a Estadísticas.
+  4. **Admin:**
+     - registra la factura de la compra;
+     - genera el PDF de la orden;
+     - cambia el estado a mano a "Lista para entregar";
+     - entrega, cobra el saldo y finaliza.
+  5. **Caja:**
+     - registra un gasto;
+     - el IGV del mes cuadra: 40.50 − 18.00 = 22.50;
+     - descarga el Excel de Caja y el del IGV.
+  6. **Cierre del recorrido:**
+     - un préstamo con su cobro aparece en Caja;
+     - Estadísticas muestra sus gráficas;
+     - se descarga el Excel de cotizaciones;
+     - 17 vistas del admin cargan sin errores de consola.
+- **Resultado:** 5 corridas. Dieron 22/22 en verde la 2, la 4 y la 5, en ~3 min cada una. Las 2 últimas
+  ya tenían el cambio de abajo.
+  - En la 1 y la 3, la pestaña del admin quedó en blanco: en la 1 se congeló 19 min en el paso 11 y en la
+    3 se quedó en `/pagos` en el paso 22.
+  - Causa probable: poca memoria. Este equipo tiene 7.3 GB de RAM y 1.3 GB libres, y la prueba tenía 3
+    pestañas abiertas además del backend y Vite. A mano la app nunca se congeló.
+  - Cambio: la pestaña del Super Admin se cierra después del paso 4 y la del gestor después del 14.
+  - La prueba ahora imprime si una pestaña se cae, si la app tira un error o si falla una petición. En las
+    2 corridas finales no apareció ninguno.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde
