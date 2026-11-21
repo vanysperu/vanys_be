@@ -26,6 +26,7 @@ import {
   updatePurchaseOrderItemStatusController,
 } from "../controllers/purchase_order.controller";
 import { exportPurchaseOrdersController } from "../controllers/export.controller";
+import { purchaseOrderPdfController } from "../controllers/pdf.controller";
 
 export const router: Router = Router();
 
@@ -45,6 +46,8 @@ router.get(
   listPurchaseCorrectionsController
 );
 router.get("/find/:id", verifyAccess, purchaseOrderIdValidator, allValidator, getPurchaseOrderController);
+// PDF de la orden: qué comprar, con foto del producto (21-nov).
+router.get("/:id/pdf", verifyAccess, purchaseOrderIdValidator, allValidator, purchaseOrderPdfController);
 router.post("/create", verifyAccess, createPurchaseOrderValidator, allValidator, createPurchaseOrderController);
 router.put(
   "/item/:itemId/status",

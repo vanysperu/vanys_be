@@ -1069,6 +1069,15 @@ sistema.
   aprobada por el usuario el 14-nov-2026 para las notificaciones al teléfono
   (Web Push estándar, sin servicios de terceros). No subir a la 4.x sin
   probarla: salió el 6-nov-2026.
+- **sharp 0.35.5** (fijada), aprobada por el usuario el 21-nov-2026 para el
+  PDF de la orden de compra: las fotos de producto se guardan en WEBP y
+  @react-pdf/renderer solo dibuja PNG/JPG, así que se convierten a JPG al
+  armar el PDF. Binario nativo: el lockfile trae `@img/sharp-linux-x64` para
+  Hostinger; verificarlo en el ensayo de cada release.
+- **SheetJS (`xlsx`) también para ESCRIBIR** (21-nov-2026): los reportes en
+  Excel de los listados (pedido del usuario) se arman con la misma librería ya
+  aprobada, siempre en un `worker_thread` (`src/core/excel`), con tope de
+  20 000 filas por reporte.
 - Todo código nuevo (variables, campos, tablas, endpoints) va en inglés,
   con comentarios en español — ver sección 9.
 - Al crear cualquier tabla nueva: incluir `company_id` (y `business_unit_id`

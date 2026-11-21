@@ -1,8 +1,7 @@
-import path from "path";
-import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { createElement } from "react";
 import { DataBase } from "../../../../../database";
-import { ASSETS_DIR } from "../../../../../config/paths";
+import { pdfCompanyHeader, pdfMoney, PDF_BASE_STYLES, registerPdfFonts } from "../../../../../core/pdf/pdf_shared";
 import { loadCompanyAssetDataUri } from "../../../uploads/services/find/company_asset.service";
 import {
   formatDateOnlyEsPe,
@@ -89,21 +88,8 @@ interface QuotationPdfData {
   brandColor: string;
 }
 
-// Helvetica (la fuente por defecto de PDF) no trae tildes/ñ — se veían mal
-// ("Próceres" salía como "Prýceres"). Roboto sí las tiene; se registra una
-// sola vez, con el archivo guardado en <raíz del proyecto>/assets/fonts
-// (fuera de src/) para que exista igual en dev (ts-node) y en producción
-// (tsc compila a dist/, no copia archivos que no son .ts). Se resuelve desde
-// la raíz real del proyecto, no desde process.cwd(): en el hosting el
-// proceso puede arrancar en otra carpeta.
-const FONTS_DIR = path.join(ASSETS_DIR, "fonts");
-Font.register({
-  family: "Roboto",
-  fonts: [
-    { src: path.join(FONTS_DIR, "Roboto-Regular.ttf"), fontWeight: "normal" },
-    { src: path.join(FONTS_DIR, "Roboto-Bold.ttf"), fontWeight: "bold" },
-  ],
-});
+// Fuentes Roboto (tildes/ñ): se registran en core/pdf/pdf_shared.ts.
+registerPdfFonts();
 
 // Las imágenes (logo, QR) se embeben como data URI en base64 —
 // @react-pdf/renderer intentaba cargar la ruta absoluta de disco directo
@@ -112,50 +98,12 @@ Font.register({
 // async/por ruta de archivo dentro de la librería). Ahora salen de la base
 // (company_asset), ver loadCompanyAssetDataUri.
 
-const money = (value: number) => `S/ ${Number(value).toFixed(2)}`;
+const money = pdfMoney;
 
 const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 9, fontFamily: "Roboto", color: "#1F2430" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  logo: { width: 90, height: 90, objectFit: "contain" },
-  companyBlock: { alignItems: "flex-end", maxWidth: 260 },
-  companyName: { fontSize: 13, fontWeight: 700, marginBottom: 2 },
-  small: { fontSize: 8.5, color: "#5B6072" },
-  // El color de fondo real se aplica inline con el brandColor de la
-  // empresa (ver usos de `styles.titleBar` más abajo) — este solo define la
-  // forma/tipografía.
-  titleBar: {
-    color: "#FFFFFF",
-    padding: 10,
-    borderRadius: 4,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  titleText: { fontSize: 14, fontWeight: 700 },
-  statusBadge: { fontSize: 9, backgroundColor: "rgba(255,255,255,0.2)", paddingVertical: 3, paddingHorizontal: 8, borderRadius: 3 },
-  section: { marginBottom: 14 },
-  // Color real también inline con brandColor (ver usos de `styles.sectionTitle`).
-  sectionTitle: { fontSize: 9.5, fontWeight: 700, marginBottom: 4, textTransform: "uppercase" },
+  // Estilos compartidos con los demás PDF (core/pdf/pdf_shared.ts).
+  ...PDF_BASE_STYLES,
   infoGrid: { flexDirection: "row", justifyContent: "space-between" },
-  table: { borderWidth: 1, borderColor: "#E4E4E9", borderRadius: 3 },
-  // Gris azulado neutro (el lila anterior venía de la paleta vieja de Grulla).
-  // gap: sin espacio entre columnas, un "Producto" largo que llegaba a
-  // ocupar todo su ancho se pegaba directo con el texto de "Técnica" al
-  // lado, sin separación visual entre ambos (bug reportado por QA: "se
-  // junta el Producto con la Técnica").
-  tableHeaderRow: { flexDirection: "row", backgroundColor: "#EEF1F6", paddingVertical: 6, paddingHorizontal: 6, gap: 6 },
-  tableRow: {
-    flexDirection: "row",
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#EEEEF2",
-    gap: 6,
-  },
-  th: { fontSize: 8.5, fontWeight: 700, color: "#5B6072" },
-  td: { fontSize: 9 },
   colProduct: { flex: 2.2 },
   // Código del producto (pedido explícito del usuario): el del color elegido o,
   // si el item no tiene, el SKU del producto.
@@ -220,7 +168,6 @@ const styles = StyleSheet.create({
     paddingTop: 3,
   },
   termsText: { fontSize: 8, color: "#5B6072", lineHeight: 1.4, flex: 1 },
-  footer: { position: "absolute", bottom: 24, left: 32, right: 32, fontSize: 7.5, color: "#8A8F9C", textAlign: "center" },
 });
 
 // Términos y condiciones: cada línea es una tarjeta (parseTermsLines en
@@ -254,34 +201,13 @@ const QuotationDocument = (props: { data: QuotationPdfData }) => {
       // Horizontal (pedido explícito del usuario): la tabla de productos tiene
       // más columnas y así no se aprieta. Los términos entran de a 3 por fila.
       { size: "A4", orientation: "landscape", style: styles.page },
-      // Encabezado: logo + datos de la empresa
-      createElement(
-        View,
-        { style: styles.headerRow },
-        logoDataUri ? createElement(Image, { src: logoDataUri, style: styles.logo }) : createElement(View, {}),
-        createElement(
-          View,
-          { style: styles.companyBlock },
-          // La dirección de la TIENDA tiene prioridad (se configura en
-          // Tiendas, sección "Dirección"); si esa tienda no tiene
-          // dirección cargada, se cae a la dirección de la empresa
-          // (pedido explícito del usuario). Nunca se muestran las dos —
-          // una sola línea de dirección, sin ambigüedad.
-          createElement(Text, { style: styles.companyName }, data.company?.business_name ?? ""),
-          data.company?.ruc && createElement(Text, { style: styles.small }, `RUC: ${data.company.ruc}`),
-          (() => {
-            const resolvedAddress = data.businessUnit?.address || data.company?.address;
-            return resolvedAddress && createElement(Text, { style: styles.small }, resolvedAddress);
-          })(),
-          data.company?.phone && createElement(Text, { style: styles.small }, `Tel: ${data.company.phone}`),
-          data.businessUnit &&
-            createElement(
-              Text,
-              { style: [styles.small, { marginTop: 3 }] },
-              `Tienda: ${data.businessUnit.business_code}`,
-            ),
-        ),
-      ),
+      // Encabezado: logo + datos de la empresa (compartido, core/pdf).
+      pdfCompanyHeader({
+        logoDataUri,
+        company: data.company,
+        storeAddress: data.businessUnit?.address,
+        storeCode: data.businessUnit?.business_code,
+      }),
       // Barra de título
       createElement(
         View,
