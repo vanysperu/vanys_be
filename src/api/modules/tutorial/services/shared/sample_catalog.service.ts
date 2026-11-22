@@ -28,6 +28,8 @@ const SAMPLE_CLIENTS = [
   { name: "Ana Torres", document_type: "1", document_number: "45678912", email: null, phone: "998877665", address: null },
 ];
 
+// Manejan stock: sin efecto si la empresa no tiene inventario; con inventario,
+// la lección de movimientos puede darles ingreso.
 const SAMPLE_PRODUCTS: ProductWriteInput[] = [
   {
     name: "Polo de algodón",
@@ -38,7 +40,7 @@ const SAMPLE_PRODUCTS: ProductWriteInput[] = [
     price_half_thousand: 13,
     price_thousand: 12,
     requires_customization: true,
-    tracks_stock: false,
+    tracks_stock: true,
   },
   {
     name: "Taza de cerámica 11 oz",
@@ -47,7 +49,7 @@ const SAMPLE_PRODUCTS: ProductWriteInput[] = [
     price_unit: 12,
     price_hundred: 9.5,
     requires_customization: true,
-    tracks_stock: false,
+    tracks_stock: true,
   },
   {
     name: "Libreta A5",
@@ -56,7 +58,7 @@ const SAMPLE_PRODUCTS: ProductWriteInput[] = [
     price_unit: 9,
     price_hundred: 7.5,
     requires_customization: false,
-    tracks_stock: false,
+    tracks_stock: true,
   },
 ];
 
@@ -65,6 +67,9 @@ const SAMPLE_TECHNIQUES = [
   { name: "Sublimación", description: "Impresión a todo color", price_unit: 4, price_hundred: 3 },
   { name: "Serigrafía", description: "Un color por pasada", price_unit: 3.5, price_hundred: 2.5 },
 ];
+
+// Un proveedor (lo usan las lecciones de stock de proveedores y compras).
+const SAMPLE_SUPPLIER = { name: "Importadora Andina SAC", document_type: 6, document_number: "20501234567" };
 
 // CCI de ejemplo con sus 20 dígitos (mismo formato que una cuenta real).
 const SAMPLE_BANK_ACCOUNT = { name: "BCP Soles (práctica)", ref1: "191-0000000-0-00", ref3: "00219100000000000000" };
@@ -103,6 +108,22 @@ export const createSampleCatalog = async ({
   for (const product of SAMPLE_PRODUCTS) {
     await createProductRecord({ companyId, input: product, actorId, transaction });
   }
+  await DataBase.instance.supplier.create(
+    {
+      id: 0,
+      company_id: companyId,
+      ...SAMPLE_SUPPLIER,
+      trade_name: null,
+      email: null,
+      phone: null,
+      address: null,
+      is_carrier: false,
+      mtc_registration: null,
+      active: true,
+      ...audit,
+    },
+    { transaction }
+  );
   await DataBase.instance.variable_general.create(
     {
       id: 0,

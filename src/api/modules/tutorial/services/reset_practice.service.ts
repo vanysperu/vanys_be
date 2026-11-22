@@ -4,6 +4,7 @@ import { PracticeSessionResult } from "../types/tutorial.types";
 import { resolvePracticeOwner } from "./shared/practice_owner.service";
 import { openPracticeSession } from "./shared/practice_session.service";
 import { createPracticeWorkspace, retireWorkspace, upsertPracticeUser, usableWorkspace } from "./shared/practice_workspace.service";
+import { syncPracticeFeatures } from "./shared/practice_features.service";
 
 // POST /tutorial/practice/reset: "Reiniciar práctica". La empresa de práctica
 // actual se deshabilita (soft) y la persona sigue en una nueva, con los
@@ -21,6 +22,12 @@ export const resetPracticeService = async (user: IToken): Promise<PracticeSessio
     const current = existing ? await usableWorkspace(existing, owner, transaction) : null;
     if (current) await retireWorkspace(current, owner.realUserId, transaction);
     const fresh = await createPracticeWorkspace({ owner, transaction });
+    await syncPracticeFeatures({
+      realCompanyId: owner.realCompanyId,
+      practiceCompanyId: fresh.companyId,
+      actorId: owner.realUserId,
+      transaction,
+    });
     return upsertPracticeUser({ owner, existing, workspace: fresh, transaction });
   });
 

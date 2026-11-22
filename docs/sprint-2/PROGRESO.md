@@ -480,6 +480,47 @@ orden y repetir. Cada rol ve solo las lecciones que puede hacer (según `/access
   Sin la columna `company.is_practice`, Caja y Estadísticas fallan en desarrollo. Producción la aplica sola al
   arrancar.
 
+### Modo enseñanza: todos los módulos (22-nov)
+
+**Pedido del usuario.** "Faltan módulos todavía por generar su aprendizaje". Se agregaron **23 lecciones**; el
+curso queda en **33**, agrupadas en "Aprender" por sección.
+
+**Lecciones nuevas.**
+- **Primeros pasos:** el panel principal.
+- **Ventas:** órdenes de compra (PDF con fotos y registrar compra), proveedores, stock de proveedores y anuncios.
+- **Finanzas:** saldo inicial y cierres de caja, pagos recibidos, por cobrar, facturas de compra, deudas a
+  personal, préstamos y estadísticas.
+- **Configuración:** datos de la empresa en el PDF, usuarios con invitación, tiendas, flujo de producción, listas
+  generales, recordatorios y avisos en el teléfono.
+- **Inventario y logística:** almacenes, entradas de stock y kardex, vehículos y conductores, y la guía de
+  remisión de un pedido.
+
+**Cambios en el backend.**
+- **Funcionalidades contratadas.** La práctica copia las de la empresa real (inventario, guías, stock de
+  proveedores). Las lecciones de esos módulos solo aparecen a quien los tiene.
+- **Preparaciones nuevas:** `ready_quotation`, `purchase_order`, `pending_invoice_purchase`, `employee_debt` y
+  `warehouse`. Así cada lección arranca con lo que necesita, en cualquier orden.
+- **Sin correos.** Desde una empresa de práctica no sale ningún correo (`enqueueEmail`): ni invitaciones, ni
+  enlaces de contraseña, ni cotizaciones.
+- **Sin ocupar correos reales.** Los usuarios creados en la práctica guardan su correo con la marca `+practica-N`.
+- **Ejemplos:** se agregó un proveedor, y los productos de ejemplo manejan stock.
+
+**Motor (frontend).**
+- Lleva el elemento a la vista cuando aparece. Antes, al llegar desde una pantalla desplazada, el paso podía
+  quedar fuera de la vista.
+- La tarjeta nunca se ubica fuera de la pantalla y tiene un botón "Muéstrame dónde".
+- En ventanas grandes, la tarjeta va al costado (más angosta) o arriba, nunca sobre los botones de guardar.
+- Los pasos de "cerrar" pueden esperar a que la ventana aparezca.
+- La mano queda fuera del borde iluminado y el cuadro no la tapa (pedido del usuario).
+
+**Pruebas.**
+- `e2e/full/modo-ensenanza-modulos.spec.ts`: 25 pruebas.
+  - Las 23 lecciones con una empresa que tiene todas las funcionalidades.
+  - 33 lecciones para el admin.
+  - El gestor solo ve las de su rol y practica inventario con un almacén preparado.
+  - En la práctica, el correo del usuario creado tiene la marca y el real no se ocupa.
+- Ayudantes compartidos en `e2e/full/tutorialHelpers.ts`.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

@@ -4,16 +4,21 @@ import { nowUtc } from "../../../../../utils/dateUtils";
 import { sealSecret } from "../../../../../core/security/secretBox";
 import { EmailTemplateName, EnqueueEmailInput } from "../../types/email.types";
 import { scheduleEmailDispatch } from "./dispatch.service";
+import { isPracticeCompany } from "../../../../../core/rbac/practiceScope";
 
 /**
  * Deja un correo en la cola. Si va dentro de una transacción, se manda recién
  * cuando esta se confirma (si se revierte, el correo tampoco existe). Las
  * variables de la plantilla se guardan cifradas: llevan enlaces de contraseña.
+ *
+ * Modo enseñanza (21-nov): desde una empresa de práctica NUNCA sale un correo
+ * (invitaciones, enlaces de contraseña, cotizaciones): no se encola y devuelve 0.
  */
 export async function enqueueEmail<T extends EmailTemplateName>(
   input: EnqueueEmailInput<T>,
   transaction?: Transaction
 ): Promise<number> {
+  if (await isPracticeCompany(input.companyId, transaction)) return 0;
   const now = nowUtc();
   const row = await DataBase.instance.email_outbox.create(
     {

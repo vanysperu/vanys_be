@@ -5,6 +5,7 @@ import { AppError } from "../../../../../core/errors/AppError";
 import { getUserTenantInfo } from "../../../users/services";
 import { enqueueEmail } from "../../../email/services/outbox/enqueue.service";
 import { isEmailConfigured } from "../../../email/services/providers/resolve_provider";
+import { isPracticeCompany } from "../../../../../core/rbac/practiceScope";
 import { PasswordLinkPurpose } from "../../model/password_reset_token.model";
 import {
   buildPasswordLinkUrl,
@@ -103,5 +104,7 @@ export async function issuePasswordLink({
     transaction
   );
 
-  return { url, expiresAt, emailConfigured: isEmailConfigured() };
+  // En la práctica no sale el correo: la pantalla muestra el enlace para copiarlo.
+  const sendsEmail = isEmailConfigured() && !(await isPracticeCompany(companyId, transaction));
+  return { url, expiresAt, emailConfigured: sendsEmail };
 }

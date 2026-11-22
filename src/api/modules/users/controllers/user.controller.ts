@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { practiceSafeEmail } from "../../../../core/rbac/practiceScope";
 import { Request, Response } from "express";
 import { IToken } from "../../../interfaces/IToken.interface";
 import { utcToBusinessParts } from "../../../../utils/dateUtils";
@@ -105,6 +106,8 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
   // suya (ver services/create y auth/services/password_link). Antes nacía con
   // "123456": quien supiera su correo podía entrar antes que él.
   const unusablePassword = randomBytes(32).toString("base64");
+  // Modo enseñanza: en la empresa de práctica el correo no ocupa el real.
+  const storedEmail = await practiceSafeEmail(email, resolvedCompanyId);
 
   let result;
   try {
@@ -113,8 +116,8 @@ export const createUserController = asyncHandler(async (req: Request, res: Respo
         roles,
         name,
         paternal_lastname,
-        email,
-        username: email,
+        email: storedEmail,
+        username: storedEmail,
         password: unusablePassword,
         document_number,
         document_type,

@@ -4,6 +4,7 @@ import { formatSoles } from "../../../../../core/utils/money";
 import { IToken } from "../../../../interfaces/IToken.interface";
 import { enqueueEmail } from "../../../email/services/outbox/enqueue.service";
 import { isEmailConfigured } from "../../../email/services/providers/resolve_provider";
+import { isPracticeCompany } from "../../../../../core/rbac/practiceScope";
 import { quotationCode } from "../../../invoice/services/shared/drive_copy";
 import { logQuotationEvent } from "../timeline/quotation_event.service";
 import { assertShareable, buildPublicQuotationUrl, ensurePublicLink, findReadableQuotation } from "./public_link.shared";
@@ -82,6 +83,8 @@ export async function sendQuotationEmailService(
       transaction,
     });
 
-    return { emailConfigured: isEmailConfigured(), includesLink };
+    // En la práctica no sale el correo (enqueueEmail no lo encola).
+    const sendsEmail = isEmailConfigured() && !(await isPracticeCompany(quotation.company_id, transaction));
+    return { emailConfigured: sendsEmail, includesLink };
   });
 }

@@ -6,7 +6,15 @@ export const LESSON_CODE_PATTERN = /^[a-z0-9-]{2,60}$/;
 
 // Datos que una lección necesita antes de empezar (una cotización lista para
 // esa parte del proceso), creados en la empresa de práctica.
-export const LESSON_PREPARATIONS = ["pending_quotation", "accepted_quotation"] as const;
+export const LESSON_PREPARATIONS = [
+  "pending_quotation",
+  "accepted_quotation",
+  "ready_quotation",
+  "purchase_order",
+  "pending_invoice_purchase",
+  "employee_debt",
+  "warehouse",
+] as const;
 export type LessonPreparation = (typeof LESSON_PREPARATIONS)[number];
 
 export interface PracticeSessionResult {

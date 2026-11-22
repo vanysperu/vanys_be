@@ -17,7 +17,7 @@ guarda el avance y maneja la **empresa de práctica**.
 |--------|------|--------|--------------|
 | POST | /tutorial/practice/start | Entrar a la empresa de práctica (la crea la primera vez); devuelve la sesión del usuario de práctica | tutorial.practice.start.endpoint |
 | POST | /tutorial/practice/reset | Reiniciar la práctica: la actual se deshabilita (soft) y se crea una nueva con los ejemplos | tutorial.practice.reset.endpoint |
-| POST | /tutorial/practice/prepare | Dejar lista una cotización para una lección (`pending_quotation` / `accepted_quotation`); solo dentro de la práctica | tutorial.practice.prepare.endpoint |
+| POST | /tutorial/practice/prepare | Dejar listos los datos de una lección; solo dentro de la práctica. Ver "Preparaciones" | tutorial.practice.prepare.endpoint |
 | GET | /tutorial/progress | Avance de la persona real | tutorial.progress.list.endpoint |
 | PUT | /tutorial/progress/:code | Guardar el paso seguro o la lección completada | tutorial.progress.save.endpoint |
 | GET | /tutorial/team-progress | Avance del equipo, paginado | tutorial.teamProgress.button |
@@ -53,6 +53,30 @@ guarda el avance y maneja la **empresa de práctica**.
   Una lección completada queda completada aunque se repita.
 - `prepare` usa los servicios normales del sistema (`createQuotation`, `changeQuotationStatus`, con la mitad de
   adelanto en efectivo). Así cada lección se puede hacer en cualquier orden y repetir.
+
+## Preparaciones (`POST /tutorial/practice/prepare`)
+
+| Preparación | Qué deja listo | La usan |
+|---|---|---|
+| `pending_quotation` | Una cotización pendiente | Envíala a tu cliente; El cliente aceptó |
+| `accepted_quotation` | Aceptada con la mitad de adelanto en efectivo | Producción; Compras; Pagos; Por cobrar |
+| `ready_quotation` | Llevada paso a paso hasta "Lista para entregar" | Guía de remisión |
+| `purchase_order` | Aceptada y con su orden de compra encargada a la persona | Órdenes de compra |
+| `pending_invoice_purchase` | Lo anterior y una compra con "la factura llega después" | Facturas |
+| `employee_debt` | Lo anterior y una compra pagada con plata de la persona | Deudas a personal |
+| `warehouse` | Un almacén en la tienda de práctica, si no hay ninguno (solo con inventario) | Entradas de stock (un gestor no crea almacenes) |
+
+## Más reglas de la práctica
+- **Funcionalidades contratadas.** La empresa de práctica copia las de la empresa real (inventario, guías,
+  stock de proveedores) al entrar y al reiniciar (`practice_features.service.ts`). Cada quien aprende lo que
+  su empresa usa.
+- **No sale ningún correo.** `enqueueEmail` no encola nada de una empresa de práctica: ni invitaciones, ni
+  enlaces de contraseña, ni cotizaciones. Las pantallas lo dicen ("el correo no está configurado") y muestran el
+  enlace para copiar.
+- **No se ocupa ningún correo real.** El correo de un usuario creado en la práctica se guarda como
+  `nombre+practica-N@dominio` (`practiceSafeEmail`), porque el correo es único en todo el sistema.
+- **Ejemplos de la práctica:** además de clientes, productos (que manejan stock), técnicas y la cuenta con CCI,
+  hay un proveedor.
 
 ## Campos especiales
 - `tutorial_progress`: `status` (`in_progress` | `completed`), `step_index` y `completed_at`.
