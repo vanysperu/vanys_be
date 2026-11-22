@@ -67,6 +67,12 @@ const getCompanyThemeColor = async (companyId: number | null): Promise<string> =
   return company?.theme_color || DEFAULT_THEME_COLOR;
 };
 
+// Modo enseñanza (21-nov): ¿la empresa del usuario es una empresa de práctica?
+const companyIsPractice = async (companyId: number): Promise<boolean> => {
+  const company = await DataBase.instance.company.findOne({ where: { id: companyId }, attributes: ["is_practice"] });
+  return Boolean(company?.is_practice);
+};
+
 export const getMyAccess = async (
   userId: number,
   companyId: number | null = null,
@@ -77,13 +83,14 @@ export const getMyAccess = async (
   const roleIds = roles.map((role) => role.id);
   const roleName = roles.length > 0 ? roles.map((role) => role.name).join(", ") : null;
 
-  const [themeColor, businessUnitName, companyName, igvRate, productImagesEnabled, features] = await Promise.all([
+  const [themeColor, businessUnitName, companyName, igvRate, productImagesEnabled, features, isPractice] = await Promise.all([
     getCompanyThemeColor(companyId),
     getBusinessUnitName(businessUnitId),
     getCompanyName(companyId),
     getIgvRate(companyId),
     companyId ? companyProductImagesEnabled(companyId) : Promise.resolve(false),
     companyId ? listEnabledFeatures(companyId) : Promise.resolve([]),
+    companyId ? companyIsPractice(companyId) : Promise.resolve(false),
   ]);
 
   if (roleIds.length === 0) {
@@ -101,6 +108,7 @@ export const getMyAccess = async (
       igvRate,
       productImagesEnabled,
       features,
+      isPractice,
     };
   }
 
@@ -203,5 +211,6 @@ export const getMyAccess = async (
     igvRate,
     productImagesEnabled,
     features,
+    isPractice,
   };
 };

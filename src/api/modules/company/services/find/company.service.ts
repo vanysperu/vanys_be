@@ -20,8 +20,10 @@ const getCompaniesList = async (options: CompanyListOptions): Promise<PaginatedR
     // poder reactivarlas. Si se forzara is_deleted:false acá, una empresa
     // deshabilitada desaparecería para siempre y no habría forma de
     // reactivarla desde la UI.
+    // Modo enseñanza (21-nov): las empresas de práctica nunca salen aquí (ni en
+    // los selectores de empresa, que usan este mismo listado).
     const queryOptions: FindAndCountOptions<CompanyAttributes> = {
-      where: { ...where },
+      where: { ...where, is_practice: false },
       order: [[orderBy, orderDir]],
       limit,
       offset: getOffset(page, limit),

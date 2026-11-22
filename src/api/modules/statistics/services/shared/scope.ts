@@ -2,6 +2,7 @@ import { QueryTypes } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { QuotationStatus } from "../../../quotation/model/quotation.model";
 import { StatisticsScope } from "../../types/statistics.types";
+import { excludePracticeCompaniesSql } from "../../../../../core/rbac/practiceScope";
 
 // "Ganada": el cliente aceptó y la cotización siguió su curso.
 export const WON_STATUSES: QuotationStatus[] = [
@@ -27,16 +28,19 @@ export const EMISSION_DATE_SQL = "DATE(CONVERT_TZ(q.created_at, '+00:00', '-05:0
 export const QUOTATION_SCOPE_SQL = `q.is_deleted = false
   AND q.status <> 'quote_requested'
   AND (:companyId IS NULL OR q.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("q.company_id")}
   AND (:businessUnitId IS NULL OR q.business_unit_id = :businessUnitId)`;
 
 // Alcance para dinero (pagos y gastos vía su cotización `q`) — EXACTAMENTE el
 // mismo filtro que usa Caja, para que los totales de ambos módulos cuadren.
 export const MONEY_SCOPE_SQL = `(:companyId IS NULL OR q.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("q.company_id")}
   AND (:businessUnitId IS NULL OR q.business_unit_id = :businessUnitId)`;
 
 // Movimientos manuales de caja `cm` (mismo filtro que Caja).
 export const CASH_SCOPE_SQL = `cm.is_deleted = false
   AND (:companyId IS NULL OR cm.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("cm.company_id")}
   AND (:businessUnitId IS NULL OR cm.business_unit_id = :businessUnitId)`;
 
 export const scopeReplacements = (scope: StatisticsScope) => ({

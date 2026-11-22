@@ -49,6 +49,9 @@ export interface UserAttributes {
   // derivaba vía business_unit_id, lo que obligaba a asignar SIEMPRE una
   // tienda; ahora un "admin de empresa" puede quedar sin tienda propia.
   company_id?: number | null;
+  // Modo enseñanza (21-nov): usuario de práctica de este usuario real. No
+  // entra con contraseña: su sesión la abre el usuario real desde "Aprender".
+  practice_of_user_id?: number | null;
 
   is_deleted: boolean;
   created_at: Date;
@@ -216,6 +219,11 @@ export function UserFactory(sequelize: Sequelize): UserStatic {
       },
 
       company_id: {
+        type: DataTypes.BIGINT,
+        allowNull: true,
+      },
+
+      practice_of_user_id: {
         type: DataTypes.BIGINT,
         allowNull: true,
       },

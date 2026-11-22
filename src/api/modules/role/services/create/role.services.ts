@@ -18,6 +18,13 @@ const DEFAULT_RESOURCE_CODES = [
   "reminder.due.endpoint",
   "reminder.read.endpoint",
   "reminder.recipients.endpoint",
+  // Modo enseñanza (21-nov): todo rol puede aprender a usar el sistema.
+  "tutorial.view",
+  "tutorial.practice.start.endpoint",
+  "tutorial.practice.reset.endpoint",
+  "tutorial.practice.prepare.endpoint",
+  "tutorial.progress.list.endpoint",
+  "tutorial.progress.save.endpoint",
 ];
 
 const grantDefaultResources = async (roleId: number, createdBy: number | undefined, transaction: Transaction) => {

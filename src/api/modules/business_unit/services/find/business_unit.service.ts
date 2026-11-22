@@ -1,4 +1,4 @@
-import { FindAndCountOptions } from "sequelize";
+import { FindAndCountOptions, literal, Op } from "sequelize";
 import { DataBase } from "../../../../../database";
 import { IListOptions } from "../../../../interfaces/IListOptions.interface";
 import { BusinessUnitAttributes } from "../../models/business_unit.models";
@@ -18,7 +18,12 @@ const getBusinessUnitsList = async (
   try {
     const { where, page, limit, orderBy, orderDir, companyId } = options;
 
-    const companyWhere = companyId === null || companyId === undefined ? {} : { company_id: companyId };
+    // Sin empresa elegida (Super Administrador): todas las tiendas, menos las de
+    // las empresas de práctica del modo enseñanza (21-nov).
+    const companyWhere =
+      companyId === null || companyId === undefined
+        ? { company_id: { [Op.notIn]: literal("(SELECT c.id FROM company c WHERE c.is_practice = true)") } }
+        : { company_id: companyId };
 
     // Igual que en company.service.ts: no forzar is_deleted:false acá, o una
     // tienda deshabilitada desaparecería para siempre sin forma de

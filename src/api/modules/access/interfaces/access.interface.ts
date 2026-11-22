@@ -61,4 +61,7 @@ export interface MyAccessResponse {
   // Funcionalidades contratadas por la empresa del usuario (Sprint 2,
   // company_feature). Vacío para el Super Administrador (sin empresa).
   features: string[];
+  // Modo enseñanza (21-nov): la sesión es la de un usuario de práctica (su
+  // empresa es una empresa de práctica). El front muestra la franja y las lecciones.
+  isPractice: boolean;
 }

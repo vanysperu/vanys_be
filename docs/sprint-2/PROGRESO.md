@@ -413,6 +413,73 @@ Pedido del usuario: una prueba Playwright de punta a punta sobre una base local 
   - La prueba ahora imprime si una pestaña se cae, si la app tira un error o si falla una petición. En las
     2 corridas finales no apareció ninguno.
 
+## Modo enseñanza — 1.10.0 / 0.10.0 (21-nov, rama `feature/modo-ensenanza`, sale de `feature/pedidos-21-nov`)
+
+**Pedido del usuario.** Una cuenta tutorial con animaciones de "presiona aquí" que **obligan** a hacer cada paso,
+como en los videojuegos, para que el cliente aprenda a usar su sistema. Debía quedar en el mismo sistema y todo
+limpio. El usuario dejó a criterio el orden y pidió hacerlo todo de una vez.
+
+**Cómo funciona.**
+- **Entrada.** Menú → **Aprender** (`/aprender`), o el perfil → "Aprender a usar el sistema".
+- **Empresa de práctica.** "Entrar a la práctica" abre la empresa de práctica de esa persona:
+  - una por persona, con clientes, productos, técnicas y una cuenta con CCI de ejemplo;
+  - un usuario de práctica con los **mismos roles** que la persona.
+- **Lecciones.** Dentro de la práctica, cada lección:
+  - oscurece la pantalla y deja iluminado solo lo que hay que tocar, con una mano animada y una tarjeta
+    "Paso X de N";
+  - bloquea los clics fuera de la zona iluminada y la tecla Escape;
+  - espera la acción real para avanzar (se abrió la ventana, se eligió, salió "Cotización creada");
+  - si se cierra una ventana a mitad, vuelve sola al último paso posible.
+- **Avance.** Se guarda con la cuenta real, y el administrador ve el "Avance del equipo".
+- **Franja de práctica.** Siempre visible, con tres botones: "Lecciones", "Reiniciar práctica" y "Volver a mi
+  cuenta".
+
+**Las 10 lecciones, en orden.**
+1. Conoce el sistema
+2. Tu primera cotización
+3. Envíala a tu cliente
+4. El cliente aceptó: adelanto y pagos
+5. Diseño, producción y entrega
+6. Compras del pedido
+7. Tus clientes
+8. Productos y técnicas
+9. Caja e IGV del mes
+10. Tus cuentas para cobrar
+
+Las lecciones 3 a 6 piden al backend una cotización lista (pendiente o aceptada), así se pueden hacer en cualquier
+orden y repetir. Cada rol ve solo las lecciones que puede hacer (según `/access/me`).
+
+**Limpio.**
+- La práctica es otra empresa, así que el aislamiento multiempresa ya la separa de los datos reales.
+- Las empresas de práctica no salen en las listas de empresas, tiendas y usuarios del Super Administrador, ni en
+  sus estadísticas de plataforma ni en Caja de todas las empresas.
+- En las pantallas solo se agregaron marcas invisibles (`data-tour`) en el formulario de cotización y en la
+  tarjeta del tablero.
+
+**Archivos.**
+- Backend: módulo `tutorial` (README); migración `20261121100400`; seeder `20261121100800`; `core/rbac/practiceScope.ts`.
+- Frontend: `src/modules/tutorial/` (motor en `components/TutorialOverlay.tsx`, lecciones en `lessons/`).
+
+**Validación.**
+- **Prueba nueva** `e2e/full/modo-ensenanza.spec.ts`, 14 de 14 en verde. Cubre:
+  - las 10 lecciones completas como las haría una persona;
+  - que fuera de la luz no se puede tocar nada;
+  - que reiniciar deja la práctica como nueva y conserva el avance;
+  - que vuelve a la cuenta real;
+  - que la empresa real queda sin rastros;
+  - que el Super Administrador no ve las empresas de práctica;
+  - que el gestor practica con sus permisos.
+- **E2E completo** (`npm run test:e2e:full`), 36 de 36 en dos corridas seguidas.
+  - Ahora corre contra el **build de producción** (`vite build` + `vite preview`).
+  - Con el servidor de desarrollo, Chromium a veces se quedaba sin recursos cargando cientos de archivos sueltos
+    (`ERR_INSUFFICIENT_RESOURCES`) y una pantalla quedaba en blanco. Esa era la causa de las capturas en blanco de
+    antes.
+- **Arreglos que salieron de la prueba.** La tarjeta del paso se confundía con las ventanas del sistema y tapaba
+  las opciones de un buscador abierto. Las dos cosas quedaron corregidas.
+- **Pendiente en `grulla_s2_dev`.** Esta rama necesita `npx sequelize-cli db:migrate` y el seeder `20261121100800`.
+  Sin la columna `company.is_practice`, Caja y Estadísticas fallan en desarrollo. Producción la aplica sola al
+  arrancar.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

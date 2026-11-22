@@ -1,3 +1,5 @@
+import { excludePracticeCompaniesSql } from "../../../../../core/rbac/practiceScope";
+
 // Qué es dinero que REALMENTE entra o sale de la empresa. Caja y Estadísticas
 // usan exactamente estos fragmentos (texto fijo del código, nunca valores
 // del usuario), para que sus totales cuadren siempre.
@@ -29,6 +31,7 @@ export const REIMBURSEMENT_ALLOCATIONS_FROM_SQL = `employee_debt_payment p
 
 export const REIMBURSEMENT_SCOPE_SQL = `p.is_deleted = false
   AND (:companyId IS NULL OR p.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("p.company_id")}
   AND (:businessUnitId IS NULL OR COALESCE(rq.business_unit_id, ed.business_unit_id) = :businessUnitId)`;
 
 // Patas de ajuste del cierre de caja (alias `e`, tabla cash_adjustment_entry),
@@ -43,6 +46,7 @@ export const ADJUSTMENT_ENTRY_FROM_SQL = `cash_adjustment_entry e
 // una pata es la de su efecto original (en una reposición, la de cada
 // asignación), así Caja filtrada por tienda sigue cuadrando.
 export const ADJUSTMENT_ENTRY_SCOPE_SQL = `(:companyId IS NULL OR e.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("e.company_id")}
   AND (:businessUnitId IS NULL OR e.business_unit_id = :businessUnitId)`;
 
 // Préstamos a personas (módulo loan, 21-nov). Préstamo `l` y sus cobros `lp`.
@@ -51,6 +55,7 @@ export const ADJUSTMENT_ENTRY_SCOPE_SQL = `(:companyId IS NULL OR e.company_id =
 // usan estos mismos filtros, para que sus totales cuadren.
 export const LOAN_SCOPE_SQL = `l.active = 1
   AND (:companyId IS NULL OR l.company_id = :companyId)
+  AND ${excludePracticeCompaniesSql("l.company_id")}
   AND (:businessUnitId IS NULL OR l.business_unit_id = :businessUnitId)`;
 export const LOAN_PAYMENT_FROM_SQL = "loan_payment lp INNER JOIN loan l ON l.id = lp.loan_id";
 export const LOAN_PAYMENT_SCOPE_SQL = `lp.active = 1 AND ${LOAN_SCOPE_SQL}`;

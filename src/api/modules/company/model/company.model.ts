@@ -43,6 +43,10 @@ export interface CompanyAttributes {
   // sistema, en su Google Drive o en ambos.
   invoice_storage_system?: boolean;
   invoice_storage_drive?: boolean;
+  // Modo enseñanza (21-nov): empresa de práctica de otra empresa real. Se
+  // oculta en las listas de plataforma; nada de lo que pasa aquí toca la real.
+  is_practice?: boolean;
+  practice_of_company_id?: number | null;
 
   is_deleted?: boolean;
   created_at: Date;
@@ -195,6 +199,15 @@ export function CompanyFactory(sequelize: Sequelize): CompanyStatic {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,
+      },
+      is_practice: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      practice_of_company_id: {
+        type: DataTypes.BIGINT,
+        allowNull: true,
       },
       is_deleted: {
         type: DataTypes.BOOLEAN,

@@ -188,6 +188,10 @@ const getUsersList = async (
         -- null) no debe desaparecer del listado de su empresa solo porque
         -- bu.company_id sale NULL (ver getUserTenantInfo, mismo criterio).
         AND ( :companyId IS NULL OR COALESCE(bu.company_id, u.company_id) = :companyId )
+        -- Modo enseñanza (21-nov): los usuarios de práctica no salen en la lista
+        -- de todas las empresas (Super Administrador). Dentro de la empresa de
+        -- práctica sí ("Asignado a" de las órdenes de compra usa esta lista).
+        AND ( :companyId IS NOT NULL OR u.practice_of_user_id IS NULL )
         AND ( :businessUnitId IS NULL OR u.business_unit_id = :businessUnitId )
         AND ( :fullName IS NULL OR :fullName = '' OR LOWER(CONCAT_WS(' ', u.name, u.paternal_lastname, u.maternal_lastname)) LIKE CONCAT('%', LOWER(:fullName), '%') )
         AND ( :userStatus = -1 OR u.status = :userStatus )
