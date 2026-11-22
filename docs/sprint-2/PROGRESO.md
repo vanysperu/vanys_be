@@ -521,6 +521,24 @@ curso queda en **33**, agrupadas en "Aprender" por sección.
   - En la práctica, el correo del usuario creado tiene la marca y el real no se ocupa.
 - Ayudantes compartidos en `e2e/full/tutorialHelpers.ts`.
 
+## Release 1.10.0 / 0.10.0 (22-nov) — `main` adelantado, zip armado
+
+Pedido del usuario: "sube todo y prepara el zip". Guía para subirlo:
+[RELEASE-1.10.md](RELEASE-1.10.md). Trae los pedidos del 21-nov, el CCI y el modo enseñanza.
+
+Validación antes del zip:
+- **E2E del sistema completo** (build de producción): 61/61.
+- **jest completo** (instancia 4762 sobre `grulla_s2_dev`, admin de reemplazo después deshabilitado): 78/78
+  suites, 717 pruebas, 1 omitida.
+- **Ensayo de la actualización** (`grulla_ensayo_local`, ya borrada):
+  1. Copia de `grulla_s2_dev` vuelta al estado de producción 1.8.2 (lo que tiene su `SequelizeMeta`).
+  2. `db:upgrade-production` listó 5 migraciones y 8 seeders.
+  3. El build arrancó con `NODE_ENV=production`, aplicó solo esos 13 cambios y respondió `/api/health`.
+  4. Estructura y recursos quedaron idénticos a desarrollo.
+  - Las vueltas atrás de los pedidos del 21-nov corrieron sin errores.
+- **`grulla_s2_dev`** ya tiene la migración 20261121100400 y el seeder 20261121100800.
+- **sharp:** el lockfile trae `@img/sharp-linux-x64` 0.35.5.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

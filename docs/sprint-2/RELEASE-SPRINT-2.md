@@ -1,5 +1,8 @@
 # Release del Sprint 2 — cómo subirlo a producción
 
+> **Versión vigente: 1.10.0 → ver [RELEASE-1.10.md](RELEASE-1.10.md).** Este documento queda como
+> referencia de la 1.8.0 (variables de entorno, cron y primera subida del sprint).
+
 > Versión **1.8.0** (backend) / **0.8.0** (frontend), rama `feature/notificaciones-push` (incluye todo
 > lo de la 1.7.0). La 1.7.0 sola, sin notificaciones, sale de `feature/sprint-2`.
 > Lo validado antes de subir está en la sección 6. Lo de SUNAT (emisión directa de la guía) **no**
