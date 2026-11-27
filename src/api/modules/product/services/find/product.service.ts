@@ -5,7 +5,7 @@ import { ProductAttributes } from "../../model/product.model";
 import { buildPaginationMeta, getOffset, PaginatedResult } from "../../../../../core/utils/paginate";
 import { buildBusinessDateRange, resolveIsDeletedFilter } from "../../../../../core/utils/listFilters";
 import { ProductDto, toProductDtos } from "../shared/product_mapper";
-import { productSearchConditions } from "../shared/product_search";
+import { companyFilterSql, productSearchConditions } from "../shared/product_search";
 
 interface ProductListOptions extends IListOptions<ProductAttributes> {
   companyId?: number | null;
@@ -38,17 +38,19 @@ const SORTABLE_COLUMNS = new Set(["created_at", "name", "sku", "price_unit", "up
 
 // Filtro por color: subconsulta sobre product_color con el valor ESCAPADO
 // (nunca interpolado tal cual).
-const colorWhere = (color: string | undefined): WhereOptions<ProductAttributes> => {
+const colorWhere = (color: string | undefined, companyId?: number | null): WhereOptions<ProductAttributes> => {
   if (!color) return {};
   const pattern = DataBase.instance.sequelize.escape(`%${color}%`);
-  return { id: { [Op.in]: literal(`(SELECT pc.product_id FROM product_color pc WHERE pc.name LIKE ${pattern})`) } };
+  return {
+    id: { [Op.in]: literal(`(SELECT pc.product_id FROM product_color pc WHERE ${companyFilterSql("pc", companyId)}pc.name LIKE ${pattern})`) },
+  };
 };
 
 // Subconsulta "productos con un código de proveedor que contiene el texto",
 // con el valor ESCAPADO (nunca interpolado tal cual).
-const productIdsWithCode = (text: string) =>
+const productIdsWithCode = (text: string, companyId?: number | null) =>
   literal(
-    `(SELECT pcode.product_id FROM product_code pcode WHERE pcode.code LIKE ${DataBase.instance.sequelize.escape(`%${text}%`)})`
+    `(SELECT pcode.product_id FROM product_code pcode WHERE ${companyFilterSql("pcode", companyId)}pcode.code LIKE ${DataBase.instance.sequelize.escape(`%${text}%`)})`
   );
 
 const getProductsList = async (options: ProductListOptions): Promise<PaginatedResult<ProductDto>> => {
@@ -65,8 +67,8 @@ const getProductsList = async (options: ProductListOptions): Promise<PaginatedRe
   if (companyId !== null && companyId !== undefined) conditions.push({ company_id: companyId });
   // La búsqueda general cubre nombre, SKU, códigos de proveedores y colores, y
   // entiende plurales y varias palabras (ver product_search.ts).
-  if (searchTerm) conditions.push(...productSearchConditions(searchTerm));
-  if (options.code) conditions.push({ id: { [Op.in]: productIdsWithCode(options.code) } });
+  if (searchTerm) conditions.push(...productSearchConditions(searchTerm, undefined, companyId));
+  if (options.code) conditions.push({ id: { [Op.in]: productIdsWithCode(options.code, companyId) } });
   if (name) conditions.push({ name: { [Op.like]: `%${name}%` } });
   if (sku) conditions.push({ sku: { [Op.like]: `%${sku}%` } });
   const isDeleted = resolveIsDeletedFilter(status);
@@ -75,7 +77,7 @@ const getProductsList = async (options: ProductListOptions): Promise<PaginatedRe
   if (createdAt) conditions.push({ created_at: createdAt });
   if (options.productCategoryId) conditions.push({ category_id: options.productCategoryId });
   if (options.productSubcategoryId) conditions.push({ subcategory_id: options.productSubcategoryId });
-  if (options.color) conditions.push(colorWhere(options.color));
+  if (options.color) conditions.push(colorWhere(options.color, companyId));
 
   // Desempate por id: productos creados en la misma tanda comparten
   // created_at y, sin él, una página podía repetir o saltar productos.

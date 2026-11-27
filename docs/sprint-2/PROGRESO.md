@@ -592,6 +592,69 @@ Las pruebas ahora corren a 1366×768. Con `E2E_API_DELAY_MS=900` se simula el ho
 - Arreglo en `grulla_fe/vite.config.ts`: la letra de la unidad va en mayúscula.
 - `scripts/package-release.js` ahora aborta si el bundle no trae exactamente una copia de React.
 
+## Colores vivos y velocidad — 1.10.1 / 0.10.1 (27-nov, rama `fix/aprender-guias`)
+
+Pedido del usuario: "revisa el sistema; mejora la interfaz en colores y animaciones, colores vivos tipo
+WordPress; siempre piensa en la rapidez; revisa si la base tiene todos los índices".
+
+**Colores (sin perder la marca: menú azul marino, naranja de acento):**
+- Tonos vivos en `index.css` (`--tone-*`, con versión oscura) y sus clases en `lib/tones.ts`.
+- Azul de acción más vivo (`--primary` #1d4ed8) y fondo con un toque de color (`.app-backdrop`).
+- Cada sección del menú tiene su color (`menuConfig.ts`): Ventas naranja, Finanzas verde, Inventario
+  turquesa, etc. El título de cada pantalla (`PageHeader`) muestra el ícono de su sección en ese color,
+  solo, sin tocar las pantallas.
+- Tarjetas de resumen con barra de color e ícono: Caja (mes), Estadísticas, Inicio. `StatTile` tiene
+  `tone`/`icon` opcionales.
+- Tablero de cotizaciones con el borde del color de cada estado. Lecciones con el color de su sección.
+- Los montos usan la letra del sistema con cifras alineadas (antes, una letra de máquina de escribir).
+
+**Animaciones, todas en CSS (solo opacidad y transform; se apagan con "menos movimiento"):**
+- Entrada suave de cada pantalla.
+- Tarjetas que suben al pasar el mouse.
+- Botones que se hunden al presionarlos.
+- Tarjetas de resumen que entran una tras otra.
+
+**Velocidad:**
+- **Sesión.** Cada request validaba la sesión con 5 consultas en serie, una de ellas un UPDATE que recorría
+  toda la tabla `token` (sin índice). Ahora:
+  - el token tiene índice;
+  - roles, empresa y permiso se piden en paralelo;
+  - `last_request_at` se guarda a lo más una vez por minuto.
+- **Compresión** de respuestas (`compression` 1.8.2, que CLAUDE.md §8 exige).
+- **Índices** (migración `20261127100000`, idempotente, con vuelta atrás probada). Hay 12; el más
+  importante es el del token. También:
+  - cotizaciones por empresa y fecha de cambio;
+  - catálogos activos;
+  - historial;
+  - pagos por cotización.
+  - Detalle en la auditoría de este día.
+- **Consultas:**
+  - el buscador de productos filtra códigos y colores por empresa (antes recorría las dos tablas más
+    grandes, de todas las empresas, en cada tecla);
+  - la lista de usuarios cruza `general_variable` con su categoría.
+- **Frontend:**
+  - el diálogo de cotización pide sus listas al abrirse (antes, 4 pedidos en cada carga de la app);
+  - el modo enseñanza y el diálogo se descargan recién al usarse (entrada inicial de 321 a 270 KB gzip);
+  - sin la transición que esperaba 0,36 s entre pantallas y montaba dos veces;
+  - sin animación por fila en las tablas;
+  - caché de 30 min;
+  - los catálogos fijos no se recargan al navegar;
+  - logo del menú en WebP (47 a 9,5 KB);
+  - fuentes sin pesos sin usar.
+- **Recordatorios:** "Yo" va primero en "¿Para quién?". Con más de 200 personas en la empresa quedaba fuera
+  del tope de la lista.
+
+**Validación:**
+- jest: 78/78 suites (717 pruebas, 1 omitida), en una instancia aparte sobre `grulla_s2_dev` con admin de
+  reemplazo, después deshabilitado.
+- E2E completo: 61/61.
+- `grulla_s2_dev` ya tiene la migración 20261127100000.
+
+Pendientes que se dejaron a propósito:
+- Caché de permisos por usuario (necesita invalidarse al cambiar roles).
+- Filtros de fecha con `CONVERT_TZ` que no usan índice (Estadísticas, Facturas, Por cobrar).
+- Borrar tokens vencidos.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

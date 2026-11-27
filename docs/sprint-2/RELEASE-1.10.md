@@ -1,8 +1,14 @@
 # Release 1.10.0 — cómo subirlo a producción
 
-> **1.10.1 / 0.10.1 (26-nov):** arreglos del modo enseñanza (ver PROGRESO.md, "Arreglos del modo
-> enseñanza"). No trae migraciones, seeders ni variables nuevas. Se sube igual que abajo: zip en hPanel y
-> reiniciar. Después, probar "Aprender" → "Entrar a la práctica" → una lección → "Volver a mi cuenta".
+> **1.10.1 / 0.10.1 (26 y 27-nov):** arreglos del modo enseñanza, colores vivos y velocidad (ver
+> PROGRESO.md, "Arreglos del modo enseñanza" y "Colores vivos y velocidad").
+> - **Una migración:** `20261127100000-performance-indexes` (12 índices; la app la aplica sola al
+>   arrancar, en segundos). No hay seeders ni variables nuevas.
+> - **Una librería nueva en el servidor:** `compression` (comprime las respuestas). Hostinger la instala
+>   sola desde el lockfile.
+> - Se sube igual que abajo: zip en hPanel y reiniciar.
+> - Después, probar "Aprender" → "Entrar a la práctica" → una lección → "Volver a mi cuenta", y que las
+>   pantallas se vean con sus colores.
 
 > Versión **1.10.0** (backend) / **0.10.0** (frontend), rama `main` (= `feature/modo-ensenanza`, que incluye
 > los pedidos del 21-nov). Producción está en **1.8.2**. Lo validado está en la sección 6.

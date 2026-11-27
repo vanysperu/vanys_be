@@ -22,10 +22,15 @@ const queryRecipients = async ({
   companyId,
   search,
   userId,
+  firstUserId,
 }: {
   companyId: number | null;
   search?: string;
   userId?: number;
+  // Va primero en la lista (quien está avisando: "Yo"). Con más de 200
+  // personas en la empresa, antes podía quedar fuera del tope y el formulario
+  // no encontraba "Yo" (27-nov).
+  firstUserId?: number;
 }): Promise<RecipientRow[]> => {
   const conditions = [
     "u.is_deleted = false",
@@ -49,7 +54,7 @@ const queryRecipients = async ({
     `SELECT u.id, u.name, u.paternal_lastname, u.email, u.company_id
      FROM \`user\` u
      WHERE ${conditions.join(" AND ")}
-     ORDER BY u.name ASC, u.paternal_lastname ASC
+     ORDER BY (u.id = :firstUserId) DESC, u.name ASC, u.paternal_lastname ASC
      LIMIT 200`,
     {
       type: QueryTypes.SELECT,
@@ -59,6 +64,7 @@ const queryRecipients = async ({
         // Valor bindeado (nunca interpolado): el % va dentro del parámetro.
         search: search ? `%${search}%` : null,
         userId: userId ?? null,
+        firstUserId: firstUserId ?? null,
       },
     }
   )) as RecipientRow[];
@@ -66,7 +72,7 @@ const queryRecipients = async ({
 
 // Usuarios de la MISMA empresa del que avisa (is_system: de todas).
 const findEligibleRecipients = ({ actor, search, userId }: { actor: IToken; search?: string; userId?: number }) =>
-  queryRecipients({ companyId: actor.isSystem ? null : actor.companyId, search, userId });
+  queryRecipients({ companyId: actor.isSystem ? null : actor.companyId, search, userId, firstUserId: actor.userId });
 
 // Todos los usuarios de una empresa que pueden ver recordatorios: avisos que
 // genera el sistema para "toda la empresa" (ej. un pedido de la web con

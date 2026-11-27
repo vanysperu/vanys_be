@@ -111,7 +111,7 @@ export function publicCatalogConditions(filter: PublicCatalogFilter): WhereOptio
   // ningún parámetro lo pueda abrir.
   const conditions: WhereOptions<ProductAttributes>[] = [{ company_id: companyId }, { is_deleted: false }];
 
-  if (filter.search) conditions.push(...productSearchConditions(filter.search, catalogSearchMatches(companyId)));
+  if (filter.search) conditions.push(...productSearchConditions(filter.search, catalogSearchMatches(companyId), companyId));
   if (filter.skus) conditions.push({ sku: { [Op.in]: filter.skus } });
   // Una categoría deshabilitada no se lista: filtrar por ella no trae nada.
   if (filter.categoryId) {

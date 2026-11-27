@@ -174,8 +174,10 @@ const getUsersList = async (
     const qSelect = `
       SELECT {{columns}}
       FROM user u
-      LEFT JOIN general_variable dt ON u.document_type = dt.prefix_id
-      LEFT JOIN general_variable g ON u.gender = g.prefix_id
+      -- Con la categoría (27-nov): usa el índice (category, prefix_id) y evita
+      -- tomar el nombre de otra lista que repita el mismo código.
+      LEFT JOIN general_variable dt ON dt.category = 'document_type' AND u.document_type = dt.prefix_id
+      LEFT JOIN general_variable g ON g.category = 'gender' AND u.gender = g.prefix_id
       INNER JOIN user_role ur ON u.id = ur.user_id
       INNER JOIN role r ON ur.role_id = r.id
       LEFT JOIN business_unit bu ON u.business_unit_id = bu.id

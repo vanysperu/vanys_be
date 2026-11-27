@@ -10,6 +10,9 @@ import { getUserTenantInfo } from "../api/modules/users/services";
 import { JwtPayload } from "../helpers/generate-jwt";
 import { userHasViewAllBusinessUnitsGrant } from "../core/rbac/businessUnitScope";
 
+// Cada cuánto se actualiza token.last_request_at como máximo.
+const LAST_REQUEST_EVERY_MS = 60_000;
+
 const opts: StrategyOptions = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
   secretOrKey: config.SECRET_HIDDEN_KEY!,
@@ -59,7 +62,15 @@ export default new Strategy(opts, async (payload: JwtPayload, done) => {
       return done(customError, false);
     }
 
-    const respRoles = await getUserRolesAndRoutes(token.user_id);
+    // Velocidad (27-nov): roles, empresa/tienda y el permiso "ver todas las
+    // tiendas" se piden a la vez, no uno tras otro (cada request pasa por aquí).
+    // El permiso se pide como si no fuera de plataforma y abajo se combina con
+    // isSystem (un usuario de plataforma siempre lo tiene).
+    const [respRoles, tenantInfo, hasViewAllGrant] = await Promise.all([
+      getUserRolesAndRoutes(token.user_id),
+      getUserTenantInfo(token.user_id),
+      userHasViewAllBusinessUnitsGrant(Number(token.user_id), false),
+    ]);
 
     const rolesId = JSON.parse(respRoles[0]?.roles ?? "[]") as number[];
     const allowedRoutes = JSON.parse(respRoles[0]?.routes ?? "[]") as AllowedRoute[];
@@ -74,8 +85,6 @@ export default new Strategy(opts, async (payload: JwtPayload, done) => {
       customError.message = "Permisos insuficientes";
       return done(customError, false);
     }
-
-    const tenantInfo = await getUserTenantInfo(token.user_id);
 
     // Revocación en caliente: aunque el JWT siga vigente, si deshabilitan al
     // usuario (o su tienda/empresa, salvo que sea is_system) el acceso se
@@ -92,12 +101,14 @@ export default new Strategy(opts, async (payload: JwtPayload, done) => {
       return done(customError, false);
     }
 
-    await updateLastRequest({ uuid: payload._key });
+    // Último uso de la sesión: a lo más una vez por minuto. Antes era un UPDATE
+    // en cada request (y sin índice en uuid recorría toda la tabla token).
+    // Nadie necesita la hora exacta: solo informa cuándo se usó la sesión.
+    if (Date.now() - new Date(token.last_request_at).getTime() >= LAST_REQUEST_EVERY_MS) {
+      await updateLastRequest({ uuid: payload._key });
+    }
 
-    const canViewAllBusinessUnits = await userHasViewAllBusinessUnitsGrant(
-      Number(token.user_id),
-      tenantInfo.isSystem
-    );
+    const canViewAllBusinessUnits = tenantInfo.isSystem || hasViewAllGrant;
 
     const user: IToken = {
       userId: Number(token.user_id),

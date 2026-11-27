@@ -2,6 +2,7 @@ import express, { Router, Application, Response, Request, NextFunction } from "e
 
 import passport from "passport";
 import morgan from "morgan";
+import compression from "compression";
 import cors from "cors";
 import http from "http";
 
@@ -255,6 +256,11 @@ export default class Server {
     this._app.disable("x-powered-by");
     this._app.set("trust proxy", resolveTrustProxy());
 
+    // Compresión gzip/brotli de las respuestas (CLAUDE.md §8, "activa siempre";
+    // faltaba, visto el 27-nov): el JS del frontend pesa ~3,5 veces menos y los
+    // listados JSON ~80 % menos. Antes que todo, así cubre la API y el frontend.
+    // PDF, Excel e imágenes ya vienen comprimidos y se dejan tal cual.
+    this._app.use(compression());
     this._app.use(securityHeaders);
     this._app.use(cors(resolveCorsOptions()));
     // "combined" (formato Apache, con IP y user-agent) es lo útil para
