@@ -1,5 +1,9 @@
 # Release 1.10.0 — cómo subirlo a producción
 
+> **1.10.1 / 0.10.1 (26-nov):** arreglos del modo enseñanza (ver PROGRESO.md, "Arreglos del modo
+> enseñanza"). No trae migraciones, seeders ni variables nuevas. Se sube igual que abajo: zip en hPanel y
+> reiniciar. Después, probar "Aprender" → "Entrar a la práctica" → una lección → "Volver a mi cuenta".
+
 > Versión **1.10.0** (backend) / **0.10.0** (frontend), rama `main` (= `feature/modo-ensenanza`, que incluye
 > los pedidos del 21-nov). Producción está en **1.8.2**. Lo validado está en la sección 6.
 

@@ -539,6 +539,59 @@ Validación antes del zip:
 - **`grulla_s2_dev`** ya tiene la migración 20261121100400 y el seeder 20261121100800.
 - **sharp:** el lockfile trae `@img/sharp-linux-x64` 0.35.5.
 
+## Arreglos del modo enseñanza — 1.10.1 / 0.10.1 (26-nov, rama `fix/aprender-guias`)
+
+Pedido del usuario, tras probarlo en producción (1.10.0): "las guías no funcionan bien, no están bien
+posicionadas, piden dar clic en cosas que al final no dejan, y no hay manera de volver a la cuenta normal".
+
+**Cómo se buscó.** Las pruebas E2E hacían clic directo en cada elemento, a 1280×720 y con el servidor
+local instantáneo, así que no veían lo que ve una persona. Se agregó una auditoría
+(`e2e/full/tutorialAudit.ts`) que, en cada paso, revisa:
+- que lo iluminado esté en pantalla;
+- que el cuadro de la lección no lo tape;
+- que un clic en el centro de la luz llegue de verdad al elemento.
+
+Las pruebas ahora corren a 1366×768. Con `E2E_API_DELAY_MS=900` se simula el hosting lento y con
+`E2E_HUMAN_PAUSE_MS=1500` el tiempo de leer cada paso.
+
+**Volver a la cuenta real:**
+- La franja naranja queda fija arriba; antes se iba con el scroll.
+- Sus botones (Lecciones, Reiniciar, Volver a mi cuenta) funcionan aunque haya una lección en curso; antes el
+  bloqueo de la lección también los bloqueaba.
+- "Volver a mi cuenta" también está:
+  - en el menú del perfil, en lugar de "Salir", que cerraba la sesión de práctica y mandaba al login;
+  - en "Aprender";
+  - al terminar cada lección.
+- "Conoce el sistema" termina mostrando dónde está ese botón.
+- El cuadro dice "Salir" con texto; antes era solo una X.
+
+**El cuadro de la lección:**
+- Evita también la ventana abierta y los avisos, no solo lo iluminado. Antes podía tapar el "Guardar" de una
+  ventana o quedar debajo de un aviso.
+- Si no cabe sin tapar lo que hay que tocar, se achica solo al título ("Ver instrucciones").
+- Se puede minimizar a mano.
+- En el celular, si tapa sí o sí, va arriba.
+- La luz y su borde ya no se salen de la pantalla.
+
+**Clics que no dejaban:**
+- El botón flotante "+" se esconde durante las lecciones, salvo en "Conoce el sistema": tapaba el
+  "Guardar" de Flujo de producción.
+- Flujo de producción: "Ponle nombre" y "Guarda los cambios" pasan a ser dos pasos. Antes se iluminaba
+  toda la pantalla.
+- Kardex: se iluminan los filtros, no toda la pantalla.
+- Con el servidor lento, la lección ya no retrocede sola: el tiempo para "no encuentro dónde seguir" no
+  corre mientras el sistema carga o guarda.
+- Los pasos de PDF avanzan al abrirse la ventana; antes esperaban a que cargara el PDF.
+- Recordatorios: si se presionaba "Programar" antes de que cargara la lista de personas, el aviso "Elige a
+  quién avisar" se quedaba aunque "Yo" ya estuviera elegido.
+
+**Build en blanco (encontrado de paso):**
+- Rolldown (Vite 8) metía React dos veces cuando Windows daba la carpeta como `c:` y como `C:` (VS Code abre
+  la terminal en minúscula), y la app quedaba en blanco.
+- El zip 1.10.0 salió bien por casualidad.
+- Arreglo en `grulla_fe/vite.config.ts`: la letra de la unidad va en mayúscula.
+- `scripts/package-release.js` ahora aborta si el bundle no trae exactamente una copia de React.
+
 ## Para revisar con el usuario
 
 - Motivos por caso (confirmar con el contador): la precarga usa 01 desde una cotización y 04 desde

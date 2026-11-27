@@ -71,14 +71,25 @@ const PRODUCTION_BUILD_ENV = { NODE_ENV: "production" };
 // React de desarrollo, el empaquetado se aborta en vez de publicarlo.
 const REACT_DEV_BUILD_MARKER = "Download the React DevTools";
 
+// React se crea con este objeto interno (minificado): debe haber UNO solo. Dos
+// copias dejan la app en blanco ("Cannot read properties of null (reading
+// 'useCallback')"); pasó el 26-nov cuando Windows daba la carpeta como "c:" y
+// "C:" a la vez (arreglado en grulla_fe/vite.config.ts; esto lo vigila).
+const REACT_INSTANCE_MARKER = /H:null,A:null,T:null/g;
+
 const assertProductionFrontendBundle = () => {
   const assetsDir = path.join(FRONTEND_ROOT, "dist", "assets");
-  const devFiles = fs
+  const bundles = fs
     .readdirSync(assetsDir)
     .filter((file) => file.endsWith(".js"))
-    .filter((file) => fs.readFileSync(path.join(assetsDir, file), "utf8").includes(REACT_DEV_BUILD_MARKER));
+    .map((file) => ({ file, code: fs.readFileSync(path.join(assetsDir, file), "utf8") }));
+  const devFiles = bundles.filter(({ code }) => code.includes(REACT_DEV_BUILD_MARKER)).map(({ file }) => file);
   if (devFiles.length > 0) {
     throw new Error(`el frontend se compiló con React en modo desarrollo (${devFiles.join(", ")})`);
+  }
+  const reactCopies = bundles.reduce((count, { code }) => count + (code.match(REACT_INSTANCE_MARKER) ?? []).length, 0);
+  if (reactCopies !== 1) {
+    throw new Error(`el frontend trae ${reactCopies} copias de React (debe ser 1): la app quedaría en blanco`);
   }
 };
 
